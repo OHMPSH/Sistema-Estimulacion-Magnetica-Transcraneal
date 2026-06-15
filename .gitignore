@@ -1,0 +1,30 @@
+# ── Node modules ────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Variables de entorno (NUNCA subir a Git) ─────────────────
+.env
+**/.env
+!**/.env.example
+
+# ── Build de Vite ────────────────────────────────────────────
+dist/
+frontend/dist/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── OS / Editor ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ── Certificados TLS (generados localmente) ──────────────────
+nginx/ssl/
+*.key
+*.crt
+*.pem
