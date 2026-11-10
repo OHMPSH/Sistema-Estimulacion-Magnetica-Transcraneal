@@ -31,3 +31,6 @@ nginx/ssl/
 
 # ── Firmware: credenciales de la Pico W (Wi-Fi y token) ──────
 firmware/secretos.py
+
+# ── Python (pruebas del firmware en el PC) ───────────────────
+__pycache__/

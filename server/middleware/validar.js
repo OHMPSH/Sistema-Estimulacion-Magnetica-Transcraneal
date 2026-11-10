@@ -26,6 +26,9 @@ import { errorDePassword, LONGITUD_MAXIMA } from '../services/passwords.js';
 import { MAX_LECTURAS_LOTE, tsDispositivoValido } from '../services/conversionSensor.js';
 
 const MODOS = ['DC', 'AC'];
+/** Lo que la Pico informa en el latido (firmware/main.py) */
+export const ESTADOS_PICO = ['espera', 'homing', 'midiendo', 'error'];
+const MAX_ERROR_PICO = 300;
 const ORIGENES = ['sim', 'hw'];
 
 const esEnteroPositivo = v => Number.isSafeInteger(v) && v > 0;
@@ -174,8 +177,14 @@ export function validarLatido(req, res, next) {
   if (typeof body !== 'object' || Array.isArray(body)) {
     return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
   }
-  const { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts } = body;
+  const { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts, estado, error } = body;
   const errores = [];
+  if (estado !== undefined && !ESTADOS_PICO.includes(estado)) {
+    errores.push(`estado debe ser uno de: ${ESTADOS_PICO.join(', ')}`);
+  }
+  if (error !== undefined && error !== null && (typeof error !== 'string' || error.length > MAX_ERROR_PICO)) {
+    errores.push(`error debe ser un texto de hasta ${MAX_ERROR_PICO} caracteres, o null`);
+  }
   if (firmware !== undefined && (typeof firmware !== 'string' || firmware.length > 40)) {
     errores.push('firmware debe ser un texto de hasta 40 caracteres');
   }
@@ -189,7 +198,7 @@ export function validarLatido(req, res, next) {
     errores.push('ts_dispositivo_ms debe ser un epoch en milisegundos (UTC), o 0 si la Pico aún no sincronizó su reloj');
   }
   if (errores.length > 0) return rechazar(res, 422, errores);
-  req.latido = { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts || null };
+  req.latido = { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts || null, estado, error: error || null };
   next();
 }
 

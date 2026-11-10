@@ -62,6 +62,12 @@ function Shell() {
         tema={tema} onCambiarTema={cambiarTema} onCerrarSesion={cerrarSesion} />
 
       <main id="contenido" className="main-container" tabIndex={-1}>
+        {dispositivo.estado?.enLinea && dispositivo.estado.errorPico && (
+          <div className="aviso-pico" role="alert">
+            <i className="bi bi-exclamation-triangle" aria-hidden="true" />
+            <span><strong>La Pico W informa un error:</strong> {dispositivo.estado.errorPico}</span>
+          </div>
+        )}
         {vista === 'dashboard' && <DashboardPage usuario={usuario} medicion={medicion} />}
         {vista === 'historial' && <HistorialPage usuario={usuario} />}
         {vista === 'configuracion' && (

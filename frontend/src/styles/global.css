@@ -194,6 +194,7 @@ a { color: var(--guinda-bright); }
 .estado-indicador { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--emerald); flex-shrink: 0; }
 .status-dot.offline { background: var(--peligro); }
+.status-dot.aviso { background: var(--aviso); }
 
 /* ── Menú lateral ───────────────────────────────────────────── */
 .menu-capa { position: fixed; inset: 0; z-index: 1060; background: rgba(0, 0, 0, 0.55); display: flex; }
@@ -484,6 +485,10 @@ table.tms-table tbody tr.new-row td { animation: fila-nueva .6s ease-out; }
 .campo-config { display: flex; flex-direction: column; }
 .aviso-lectura { display: flex; gap: 8px; align-items: center; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-bright); border-radius: 8px; padding: 8px 12px; }
 .estado-dispositivo { margin: 8px 0 12px; }
+.aviso-pico { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px;
+  color: var(--text-primary); background: color-mix(in srgb, var(--aviso) 12%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--aviso) 55%, transparent); }
+.aviso-pico .bi { color: var(--aviso); margin-top: 2px; }
 .crear-usuario { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
 .campo-tms, .form-control.campo-tms, .form-select.campo-tms {
   background-color: var(--bg-surface); color: var(--text-primary);

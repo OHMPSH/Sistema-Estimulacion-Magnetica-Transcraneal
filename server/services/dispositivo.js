@@ -7,13 +7,16 @@
  *   registrarLatido(disp, datos, ip) — guarda el latido (en memoria siempre;
  *                              en la BD como máximo una vez cada 30 s si
  *                              nada importante cambió)
- *   estadoPublico()          — {enLinea, ultimoLatido, firmware, rssi, ip, ...}
+ *   estadoPublico()          — {enLinea, ultimoLatido, firmware, rssi, ip, estadoPico, errorPico, ...}
+ *
+ * estadoPico ('espera' | 'homing' | 'midiendo' | 'error') y errorPico los
+ * manda el firmware en cada latido; se difunden por SSE cuando cambian.
  *   generarToken() / revocarToken() / cambiarActivo(activo)
  *
- * Un temporizador de 1 s compara el último latido con
- * dispositivo.umbral_desconexion_s. Cuando la Pico pasa de en línea a
- * sin señal, o al revés, se difunde el evento SSE `dispositivo` con el
- * estado. En modo simulación el estado se sigue calculando; es la
+ * Cada latido de la Pico se difunde por SSE (evento `dispositivo`), para
+ * que el navegador tenga siempre la hora del último latido. Además, un
+ * temporizador de 1 s compara el último latido con
+ * dispositivo.umbral_desconexion_s y difunde el paso a sin señal. En modo simulación el estado se sigue calculando; es la
  * interfaz la que no lo muestra.
  *
  * El sistema tiene una sola mesa de medición: el estado sigue al
@@ -64,6 +67,9 @@ export function estadoPublico() {
     ip:           disp.ip ?? null,
     uptime_s:     disp.uptime_s ?? null,
     desfase_ms:   desfaseMs,
+    // Lo que informa el firmware en el latido (solo en memoria; null si no lo manda)
+    estadoPico:   disp.estado_pico ?? null,
+    errorPico:    disp.error_pico ?? null,
     umbral_desconexion_s: obtener('dispositivo').umbral_desconexion_s,
   };
 }
@@ -101,7 +107,7 @@ export function detener() {
 /**
  * Registra un latido de la Pico.
  * @param {object} d      el dispositivo autenticado (req.dispositivo)
- * @param {object} datos  { firmware, rssi, uptime_s, ts_dispositivo_ms } ya validados
+ * @param {object} datos  { firmware, rssi, uptime_s, ts_dispositivo_ms, estado, error } ya validados
  * @param {string} ip
  */
 export async function registrarLatido(d, datos, ip) {
@@ -121,7 +127,12 @@ export async function registrarLatido(d, datos, ip) {
     rssi:     datos.rssi ?? null,
     uptime_s: datos.uptime_s ?? null,
     ip:       ip ?? null,
+    estado_pico: datos.estado ?? null,
+    error_pico:  datos.error ?? null,
   };
+  const cambioDeEstado = esPrincipal && (
+    (anterior.estado_pico ?? null) !== actualizado.estado_pico
+    || (anterior.error_pico ?? null) !== actualizado.error_pico);
 
   // Desfase entre relojes (sin descontar la latencia de la red, que en el hotspot es de decenas de ms)
   if (datos.ts_dispositivo_ms) {
@@ -145,8 +156,12 @@ export async function registrarLatido(d, datos, ip) {
     disp = actualizado;
     if (enLineaDifundido !== true) {
       console.log(`[dispositivo] ${disp.nombre} en línea (${disp.ip ?? 'IP desconocida'}, firmware ${disp.firmware ?? '?'}).`);
-      difundirEstado();
+    } else if (cambioDeEstado && disp.error_pico) {
+      console.log(`[dispositivo] ${disp.nombre} informa un error: ${disp.error_pico}`);
     }
+    // Se difunde en CADA latido: el navegador calcula "sin señal" con el último
+    // latido que conoce, así que necesita recibirlos todos (uno cada 5 s, poco tráfico)
+    difundirEstado();
   }
 }
 

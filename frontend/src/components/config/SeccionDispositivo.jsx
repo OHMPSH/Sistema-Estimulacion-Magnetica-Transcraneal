@@ -45,6 +45,7 @@ export function SeccionDispositivo({ esAdmin, zona }) {
             <dl className="session-stats">
               <div><dt>Dispositivo</dt><dd>{estado?.nombre ?? '—'}</dd></div>
               <div><dt>Conexión</dt><dd role="status" aria-live="polite">{texto}</dd></div>
+              <div><dt>Error informado</dt><dd>{estado?.enLinea && estado.errorPico ? estado.errorPico : '—'}</dd></div>
               <div><dt>Último latido</dt><dd className="cifra">{estado?.ultimoLatido ? `${fechaHora(estado.ultimoLatido, zona)} (hace ${duracionCorta(segundos)})` : '—'}</dd></div>
               <div><dt>IP</dt><dd className="cifra">{estado?.ip ?? '—'}</dd></div>
               <div><dt>Firmware</dt><dd className="cifra" translate="no">{estado?.firmware ?? '—'}</dd></div>
