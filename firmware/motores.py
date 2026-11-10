@@ -10,7 +10,7 @@
 # Palabra de 32 bits por segmento (el PIO la lee de derecha a izquierda):
 #   bits  0–14  pasos del segmento − 1   (hasta 32 768)
 #   bit   15    DIR
-#   bits 16–31  espera Y; periodo de cada paso = Y + 14 µs
+#   bits 16–31  espera Y; periodo de cada paso = 2·Y + 7 µs (pulso simétrico)
 #
 # Rampa trapezoidal: acelera de VEL_INICIO a VEL_MAX con ACEL, crucero y
 # frena con la misma rampa. Los movimientos de la mesa son generadores
@@ -30,7 +30,15 @@ except ImportError:      # CPython (pruebas de la lógica pura)
     rp2 = None
 
 FREQ_SM = 1_000_000          # 1 ciclo = 1 µs
-CICLOS_FIJOS_PASO = 14       # set[9] + set + mov + (y+1) + jmp  →  y + 14
+# Pulso simétrico: PUL pasa (y + 3) µs en alto y (y + 4) en bajo. Con los 3,3 V de
+# la Pico, el optoacoplador del TB6600 no responde bien a pulsos cortos de 10 µs.
+def periodo_de(y):
+    """µs por paso con la espera Y: set + mov + (y+1) + set + mov + (y+1) + jmp."""
+    return 2 * y + 7
+
+
+def y_para(periodo_us):
+    return int((periodo_us - 7) / 2 + 0.5)
 CICLOS_FIJOS_SEGMENTO = 18   # out x + out pins [15] + out isr
 MAX_PASOS_SEGMENTO = 1 << 15
 MAX_Y = 0xFFFF
@@ -74,7 +82,7 @@ def perfil(pasos, v_max, acel, v_ini, f_max=config.FRECUENCIA_MAX_HZ, tramos=24)
 
     segmentos = []
     for n, v in tramos_v:
-        y = int(FREQ_SM / v + 0.5) - CICLOS_FIJOS_PASO
+        y = y_para(FREQ_SM / v)
         y = max(0, min(MAX_Y, y))
         if segmentos and segmentos[-1][1] == y:
             segmentos[-1] = (segmentos[-1][0] + n, y)
@@ -93,7 +101,7 @@ def perfil(pasos, v_max, acel, v_ini, f_max=config.FRECUENCIA_MAX_HZ, tramos=24)
 def codificar(segmentos, bit_dir):
     """Palabras para el PIO y duración total en µs."""
     palabras = array("I", [((y << 16) | (bit_dir << 15) | (n - 1)) for n, y in segmentos])
-    duracion = sum(n * (y + CICLOS_FIJOS_PASO) + CICLOS_FIJOS_SEGMENTO for n, y in segmentos)
+    duracion = sum(n * periodo_de(y) + CICLOS_FIJOS_SEGMENTO for n, y in segmentos)
     return palabras, duracion
 
 
@@ -104,7 +112,7 @@ def pasos_hechos(segmentos, t_us):
         t_us -= CICLOS_FIJOS_SEGMENTO
         if t_us <= 0:
             break
-        periodo = y + CICLOS_FIJOS_PASO
+        periodo = periodo_de(y)
         dados = min(n, int(t_us // periodo))
         hechos += dados
         t_us -= dados * periodo
@@ -123,11 +131,14 @@ if rp2:
         out(pins, 1)       [15]    # DIR, y 16 µs de preparación (el TB6600 pide ≥ 5 µs)
         out(isr, 16)               # espera Y (el ISR se usa como registro de reserva)
         label("paso")
-        set(pins, 1)       [9]     # PUL alto 10 µs (el TB6600 pide ≥ 2,5 µs)
-        set(pins, 0)
+        set(pins, 1)               # PUL alto la mitad del periodo
         mov(y, isr)
-        label("espera")
-        jmp(y_dec, "espera")
+        label("alto")
+        jmp(y_dec, "alto")
+        set(pins, 0)               # y bajo la otra mitad
+        mov(y, isr)
+        label("bajo")
+        jmp(y_dec, "bajo")
         jmp(x_dec, "paso")
 
 _DMA_ABORT = 0x50000444

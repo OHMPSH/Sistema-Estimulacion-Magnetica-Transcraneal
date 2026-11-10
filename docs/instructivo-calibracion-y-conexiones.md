@@ -278,13 +278,17 @@ INVERTIR_Z = False
 PIN_ENA = 16                # None si no conectaste ENA (sección 4.2)
 USAR_Z = True               # False si todavía no hay motor en Z
 
-VELOCIDAD_MM_S = 10.0       # bájala si el motor vibra o se salta pasos
+MEDIO_PERIODO_US = 1000     # µs en alto y otros tantos en bajo; MÁS GRANDE = MÁS LENTO
+RAMPA_PASOS = 0             # pulsos para acelerar y frenar (0 = sin rampa)
 ```
 
 - **`PASOS_POR_MM_*`**: el **factor de conversión** de cada eje. Es lo que vas a corregir.
 - **`INVERTIR_*`**: cámbialo a `True` si el eje se mueve en sentido contrario al que pides.
 - **`PIN_ENA`**: pon `None` si dejaste ENA sin conectar.
 - **`USAR_Z`**: `False` si todavía no hay motor en Z. Entonces el programa solo pide X e Y.
+- **`MEDIO_PERIODO_US`**: cada pulso pasa este tiempo en alto y otro igual en bajo (pulso simétrico). Con 1000 µs son 500 pulsos/s: 10 mm/s con 50 pulsos/mm. Si el motor vibra o se salta pasos, súbelo (1500, 2000). Con 1/8 de micropaso (200 pulsos/mm), unos 250 µs dan la misma velocidad.
+
+> Los pulsos deben ser largos y simétricos: con los 3,3 V de la Pico, el optoacoplador del TB6600 no responde bien a pulsos cortos (de 10 µs), y el motor solo vibra.
 
 ### 5.3 Cómo funciona
 
@@ -399,8 +403,9 @@ El requisito de la tesis es un error menor que ±1 mm. Con una buena calibració
 | El motor hace fuerza pero no gira | Los 3,3 V no alcanzan para el optoacoplador de PUL, o PUL−/DIR− no van a GND | Revisa las conexiones de la sección 4.1; si siguen bien, usa el 74HCT245 (4.2) |
 | El motor vibra o zumba sin avanzar | Bobinas mal emparejadas | Identifica los pares con el multímetro (4.3) |
 | Se mueve al revés | Sentido del eje | `INVERTIR_X = True` (o el eje que sea) |
+| Vibra con el programa de calibración pero se movía con otro programa | Pulsos demasiado cortos o rápidos | Sube `MEDIO_PERIODO_US` (por ejemplo, 1500 o 2000) |
 | Avanza la mitad, el doble, etc. | Los micropasos del DIP no coinciden con el factor | Revisa SW1–SW3 (1/8) o recalcula el factor teórico (6.1) |
-| No vuelve exactamente al origen | Pasos perdidos (velocidad alta) o juego en la tuerca | Baja `VELOCIDAD_MM_S` (por ejemplo a 5). Si la diferencia es siempre la misma y solo al cambiar de sentido, es juego: el firmware final lo compensa con `HOLGURA_MM` |
+| No vuelve exactamente al origen | Pasos perdidos (velocidad alta) o juego en la tuerca | Sube `MEDIO_PERIODO_US` (más lento) o usa una rampa (`RAMPA_PASOS = 100`). Si la diferencia es siempre la misma y solo al cambiar de sentido, es juego: el firmware final lo compensa con `HOLGURA_MM` |
 | El motor se calienta mucho | Corriente demasiado alta | Baja la corriente con SW4–SW6 |
 | Error `ImportError: no module named 'machine'` | Thonny ejecuta en la computadora | Selecciona el intérprete «MicroPython (Raspberry Pi Pico)» (5.1) |
 | Thonny no responde al ejecutar | El firmware `main.py` sigue corriendo | Pulsa Detener antes de F5 |

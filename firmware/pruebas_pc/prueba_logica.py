@@ -50,16 +50,16 @@ class Perfil(unittest.TestCase):
 
     def test_velocidades(self):
         seg = motores.perfil(20000, 4000, 20000, 400)
-        crucero = min(y for _, y in seg) + motores.CICLOS_FIJOS_PASO
-        self.assertAlmostEqual(1e6 / crucero, 4000, delta=10)
-        self.assertAlmostEqual(1e6 / (seg[0][1] + motores.CICLOS_FIJOS_PASO), 400, delta=80)
+        crucero = motores.periodo_de(min(y for _, y in seg))
+        self.assertAlmostEqual(1e6 / crucero, 4000, delta=20)   # resolución de 2 µs
+        self.assertAlmostEqual(1e6 / motores.periodo_de(seg[0][1]), 400, delta=80)
         # Nunca por encima de la frecuencia máxima del TB6600
         seg = motores.perfil(20000, 50000, 1e7, 400)
-        self.assertGreaterEqual(min(y for _, y in seg) + motores.CICLOS_FIJOS_PASO, 1e6 / config.FRECUENCIA_MAX_HZ - 1)
+        self.assertGreaterEqual(motores.periodo_de(min(y for _, y in seg)), 1e6 / config.FRECUENCIA_MAX_HZ - 1)
 
     def test_constante_y_lenta(self):
         seg = motores.perfil(500, 200, 20000, 200)
-        self.assertEqual(seg, [(500, 5000 - motores.CICLOS_FIJOS_PASO)])
+        self.assertEqual(seg, [(500, motores.y_para(5000))])
         seg = motores.perfil(10, 1, 20000, 1)          # 1 paso/s no cabe en 16 bits: se satura
         self.assertEqual(seg[0][1], motores.MAX_Y)
 
@@ -73,7 +73,7 @@ class Perfil(unittest.TestCase):
         self.assertEqual(w >> 16, seg[0][1])
         self.assertEqual(motores.pasos_hechos(seg, dur), 40003)
         self.assertEqual(motores.pasos_hechos(seg, 0), 0)
-        periodo = seg[0][1] + motores.CICLOS_FIJOS_PASO
+        periodo = motores.periodo_de(seg[0][1])
         self.assertEqual(motores.pasos_hechos(seg, motores.CICLOS_FIJOS_SEGMENTO + 10 * periodo + 1), 10)
 
 
