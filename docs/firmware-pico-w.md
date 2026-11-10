@@ -1,6 +1,6 @@
 # Firmware de la Raspberry Pi Pico W — protocolo con el servidor TMS
 
-Este documento describe cómo la **Raspberry Pi Pico W** (RP2040) envía las lecturas del magnetómetro **HMC5883L** al servidor de la Raspberry Pi 5. El ejemplo de referencia en MicroPython está en [`firmware/pico_w_cliente_ejemplo.py`](../firmware/pico_w_cliente_ejemplo.py), y el emulador que habla el mismo protocolo, en [`server/scripts/emular-pico.js`](../server/scripts/emular-pico.js).
+Este documento describe cómo la **Raspberry Pi Pico W** (RP2040) envía las lecturas del magnetómetro **HMC5883L** al servidor de la Raspberry Pi 5. El firmware completo (motores TB6600, homing, barrido y calibración) está en [`firmware/`](../firmware/README.md); el ejemplo anterior, en [`firmware/pico_w_cliente_ejemplo.py`](../firmware/pico_w_cliente_ejemplo.py), y el emulador que habla el mismo protocolo, en [`server/scripts/emular-pico.js`](../server/scripts/emular-pico.js).
 
 Supuesto vigente (pendiente de confirmar): **la Pico W conoce la posición** del sensor y manda `xMM`, `yMM` y `zMM` con cada lectura.
 
@@ -18,7 +18,8 @@ La Pico solo hace dos peticiones HTTP, siempre con su token:
 - La URL base es `https://<servidor>/api` detrás de Nginx (producción) o `http://<ip>:4000/api` en desarrollo.
 - Cabeceras: `Content-Type: application/json` y `Authorization: Bearer <TOKEN>`.
 - El servidor **nunca** llama a la Pico: la Pico pregunta en cada latido. No hace falta abrir puertos en la Pico.
-- Si el latido deja de llegar durante `umbral_desconexion_s` (15 s por defecto), el dashboard muestra "Pico W sin señal hace N s".
+- Cada latido se difunde a los navegadores (evento SSE `dispositivo`), así que el dashboard muestra «Pico W en línea» mientras lleguen, en modo real y en simulación. Si el latido deja de llegar durante `umbral_desconexion_s` (15 s por defecto), muestra «Pico W sin señal hace N s».
+- `estado` y `error` se guardan solo en memoria (no en la base) y se pierden al reiniciar el servidor hasta el siguiente latido.
 
 ### 1.1 Latido
 
@@ -27,7 +28,7 @@ POST /api/dispositivo/latido
 Authorization: Bearer 3rLx…Q
 Content-Type: application/json
 
-{ "firmware": "pico-tms-1.0", "rssi": -58, "uptime_s": 1234, "ts_dispositivo_ms": 1794294867727 }
+{ "firmware": "pico-tms-1.0", "rssi": -58, "uptime_s": 1234, "ts_dispositivo_ms": 1794294867727, "estado": "espera", "error": null }
 ```
 
 Todos los campos son opcionales, pero si vienen deben tener el tipo correcto (422 si no):
@@ -38,6 +39,8 @@ Todos los campos son opcionales, pero si vienen deben tener el tipo correcto (42
 | `rssi` | entero −127..0 | intensidad de la señal Wi-Fi en dBm (`wlan.status('rssi')`) |
 | `uptime_s` | entero ≥ 0 | segundos desde que arrancó la Pico |
 | `ts_dispositivo_ms` | epoch en ms (UTC) | hora de la Pico ya sincronizada por NTP; `0` si todavía no sincroniza |
+| `estado` | `espera`, `homing`, `midiendo` o `error` | lo que está haciendo; el dashboard lo muestra junto a «Pico W en línea» |
+| `error` | texto ≤ 300 o `null` | motivo del error (zona fuera del recorrido, sensor, final de carrera…); el dashboard lo muestra como aviso |
 
 Respuesta:
 

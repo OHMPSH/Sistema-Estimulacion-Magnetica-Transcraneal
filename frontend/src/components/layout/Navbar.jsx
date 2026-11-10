@@ -1,14 +1,17 @@
 /**
  * components/layout/Navbar.jsx
  * Barra superior: botón ☰ del menú lateral, nombre del sistema,
- * etiqueta SIMULACIÓN (muy visible en ese modo), estado del servidor y,
- * solo en modo real, el estado de la Pico W. Los estados siempre llevan
+ * etiqueta SIMULACIÓN (muy visible en ese modo), estado del servidor y
+ * el de la Pico W (en los dos modos: en simulación también manda su
+ * latido, y así se ve que está conectada). Los estados siempre llevan
  * texto además del punto de color y se anuncian con aria-live.
  */
 import React, { forwardRef } from 'react';
 
 export const Navbar = forwardRef(function Navbar({ online, modoOperacion, dispositivo, onAbrirMenu, menuAbierto }, refBoton) {
   const enLineaPico = Boolean(dispositivo?.estado?.enLinea);
+  const errorPico = enLineaPico ? dispositivo.estado.errorPico : null;
+  const clasePico = !enLineaPico ? ' offline' : errorPico ? ' aviso' : '';
   return (
     <header className="tms-navbar">
       <div className="navbar-brand-block">
@@ -40,9 +43,9 @@ export const Navbar = forwardRef(function Navbar({ online, modoOperacion, dispos
           <span><span className="texto-largo">Servidor </span>{online ? 'en línea' : 'sin conexión'}</span>
         </div>
 
-        {modoOperacion === 'real' && dispositivo && (
-          <div className="estado-indicador" role="status" aria-live="polite">
-            <span className={`status-dot${enLineaPico ? '' : ' offline'}`} aria-hidden="true" />
+        {dispositivo && (
+          <div className="estado-indicador" role="status" aria-live="polite" title={errorPico ?? undefined}>
+            <span className={`status-dot${clasePico}`} aria-hidden="true" />
             <span translate="no">{dispositivo.texto}</span>
           </div>
         )}

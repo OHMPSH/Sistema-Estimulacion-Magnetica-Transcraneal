@@ -87,6 +87,12 @@ test('validarLatido: 400 si no es objeto, 422 con tipos incorrectos', () => {
   espera(correr(v.validarLatido, { body: { ts_dispositivo_ms: 123 } }), 422);
   assert.equal(correr(v.validarLatido, { body: { ts_dispositivo_ms: 0 } }).req.latido.ts_dispositivo_ms, null);
   assert.equal(correr(v.validarLatido, { body: undefined }).siguio, true);
+  espera(correr(v.validarLatido, { body: { estado: 'durmiendo' } }), 422);
+  espera(correr(v.validarLatido, { body: { error: 5 } }), 422);
+  espera(correr(v.validarLatido, { body: { error: 'x'.repeat(301) } }), 422);
+  const ok = correr(v.validarLatido, { body: { estado: 'error', error: 'X: la zona no cabe' } });
+  assert.deepEqual([ok.req.latido.estado, ok.req.latido.error], ['error', 'X: la zona no cabe']);
+  assert.equal(correr(v.validarLatido, { body: { estado: 'midiendo', error: null } }).req.latido.error, null);
 });
 
 test('validarLoteDispositivo: 400 de forma, 422 de tamaño', () => {

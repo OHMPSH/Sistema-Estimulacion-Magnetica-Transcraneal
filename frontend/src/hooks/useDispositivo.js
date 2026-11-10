@@ -4,11 +4,12 @@
  * Estado de la Pico W (Fase 4).
  *   - Lo carga de GET /api/dispositivo/estado al montar.
  *   - Lo actualiza con el evento `dispositivo` del SSE (el servidor lo
- *     difunde al pasar de en línea a sin señal, o al revés).
+ *     difunde con cada latido y al pasar a sin señal).
  *   - Recalcula cada segundo el texto "hace N s" sin pedir nada al servidor.
  *
  * Devuelve { estado, segundos, texto, recargar }:
- *   texto: "Pico W en línea · hace 2 s" | "Pico W sin señal hace 40 s" | "Pico W nunca conectada"
+ *   texto: "Pico W en línea · midiendo" (o "· hace 2 s" si el firmware no informa su estado)
+ *          | "Pico W sin señal hace 40 s" | "Pico W nunca conectada"
  * ─────────────────────────────────────────────────────────────
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -23,12 +24,20 @@ export function duracionCorta(seg) {
   return `${Math.floor(seg / 86400)} d`;
 }
 
+/** Lo que informa el firmware en el latido (estadoPico) */
+export const ESTADOS_PICO = {
+  espera: 'en espera',
+  homing: 'volviendo al origen',
+  midiendo: 'midiendo',
+  error: 'con error',
+};
+
 export function textoDispositivo(estado, segundos) {
   if (!estado || !estado.ultimoLatido) return 'Pico W nunca conectada';
   if (!estado.activo) return 'Pico W desactivada';
-  return estado.enLinea
-    ? `Pico W en línea · hace ${duracionCorta(segundos)}`
-    : `Pico W sin señal hace ${duracionCorta(segundos)}`;
+  if (!estado.enLinea) return `Pico W sin señal hace ${duracionCorta(segundos)}`;
+  const actividad = ESTADOS_PICO[estado.estadoPico];
+  return actividad ? `Pico W en línea · ${actividad}` : `Pico W en línea · hace ${duracionCorta(segundos)}`;
 }
 
 export function useDispositivo() {

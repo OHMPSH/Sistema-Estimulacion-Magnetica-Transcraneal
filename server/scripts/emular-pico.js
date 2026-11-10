@@ -96,6 +96,7 @@ async function latido() {
   const { status, json } = await post('/dispositivo/latido', {
     firmware: 'emulador-1.0', rssi: -40 - Math.round(azar() * 30),
     uptime_s: Math.round((Date.now() - inicio) / 1000), ts_dispositivo_ms: Date.now(),
+    estado: sesion && !sesion.terminada ? 'midiendo' : 'espera',
   });
   if (status === 401) { log('✗ 401: token inválido o dispositivo desactivado. Genera otro token como admin.'); process.exit(2); }
   if (!json?.ok) { log(`latido respondió ${status}: ${json?.error ?? '?'}`); return; }

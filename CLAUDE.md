@@ -74,8 +74,14 @@ PT/
 ├── deploy/tms-server.service     ← unit de systemd (usuario tms, Restart=on-failure)
 ├── docs/fase7-revision-diseno.md ← revisión de interfaz, plan de diseño y contrastes
 ├── docs/prompts-sesiones.md      ← prompts de cada fase pendiente
+├── docs/instructivo-calibracion-y-conexiones.md ← cableado de los 3 TB6600 con pines físicos y calibración de pasos/mm
 ├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, HMC5883L (X, Z, Y; −4096), hotspot
-├── firmware/pico_w_cliente_ejemplo.py ← ejemplo en MicroPython (referencia, sin probar en hardware)
+├── firmware/                     ← firmware MicroPython de la Pico W (2026-11-10; guía en firmware/README.md):
+│                                    config.py, main.py, red.py, cliente.py, sensor.py, motores.py (PIO + DMA, TB6600),
+│                                    barrido.py, led.py, registro.py, banco.py (prueba de banco y calibración),
+│                                    prueba_calibracion.py (independiente, para Thonny: X/Y/Z en mm y regreso al origen),
+│                                    secretos_ejemplo.py (secretos.py está en .gitignore), pruebas_pc/ (stubs y tests en CPython)
+│                                    y pico_w_cliente_ejemplo.py (el ejemplo anterior, solo referencia)
 ├── nginx/tms.conf                ← NO TOCAR
 ├── server/                       ← Node.js + Express (ESM, "type":"module")
 │   ├── server.js                 ← entrada: dotenv, testConnection, iniciarServicios y listen
@@ -204,11 +210,11 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `POST /api/sesiones/:id/restaurar` | admin | Quita el borrado lógico; difunde `{tipo:'restaurada'}` | 200, 404, 409 si no estaba eliminada |
 | `GET /api/sesiones/:id/csv` | sesión | CSV en streaming con encabezado `# clave: valor` y columnas con unidades (7.4) | 200, 404 (también si está eliminada) |
 | `POST /api/mediciones` | — | **Retirada** (Fase 4): responde 410 e indica la ruta de la Pico | 410 |
-| `GET /api/dispositivo/estado` | sesión | `{ok, existe, enLinea, ultimoLatido, firmware, rssi, ip, uptime_s, tieneToken, activo, desfase_ms, umbral_desconexion_s}` | 200 |
+| `GET /api/dispositivo/estado` | sesión | `{ok, existe, enLinea, ultimoLatido, firmware, rssi, ip, uptime_s, tieneToken, activo, desfase_ms, umbral_desconexion_s, estadoPico, errorPico}` | 200 |
 | `POST /api/dispositivo/token` | admin | Genera el token (32 bytes base64url) y lo devuelve **una vez**; reemplaza al anterior | 201 |
 | `DELETE /api/dispositivo/token` | admin | Revoca el token | 200, 404 |
 | `PATCH /api/dispositivo {activo}` | admin | Activa o desactiva la Pico | 200, 400, 404 |
-| `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
+| `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?, estado?, error?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
 | `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
 | `GET /api/sesiones/:id/mediciones` | sesión | Mediciones en JSON, con `seq`, crudos y `saturado` | 200, 404 (también si está eliminada) |
 
@@ -362,6 +368,14 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Paso libre** (ver 7.0): migración 006, `erroresDePaso`, `indicePlano`, campo del panel, filtro del historial y paso predeterminado numérico en Configuración › Barrido. `opciones` de `GET /configuracion` ahora trae `pasos_sugeridos_mm`, `paso_min_mm` y `max_puntos_sesion` (antes `pasos_mm`). Los colores de los planos se repiten cada 5 (`clasePlano`). 54 tests unitarios y 6 de integración. ⚠ **La migración 006 NO se aplicó en la base local** (el clasificador de permisos lo bloqueó): hay que ejecutarla con `sudo mysql tms_db < server/migrations/006_paso_libre.sql`; sin ella, un paso decimal se trunca en la base. Se verificó contra una MariaDB temporal (migración idempotente, simulador con 12,5 mm, Pico emulada con 7,5 mm, filtro del historial).
 - **Zona de muestreo por sesión y límites de la base** (ver 7.0): migración 007, `mallaDeZona`/`limitesDeBarrido`/`erroresDeZona` (servidor y frontend), `zonaDeSesion`/`mallaDeSesion` en `config/barrido.js`, mallas rectangulares en el mapa 3D, la superficie y la gráfica de líneas; CSV con `# zona_mm`; latido con `zona_mm`, `grid_nx` y `grid_ny` (ya no `grid_n`). 55 tests unitarios y 7 de integración. ⚠ **La migración 007 tampoco se aplicó en la base local**: ejecuta la 006 y luego la 007 (`sudo mysql tms_db < server/migrations/007_zona_muestreo.sql`). Sin la 007 el servidor falla al crear sesiones (no existen las columnas de zona). Verificado contra una MariaDB temporal (esquema migrado = `setup_db.sql`, migración idempotente, sesión 40 × 20 × 10, Pico emulada 30 × 15 × 5, límites de la base 422).
 - **Login obligatorio al entrar:** cada pestaña nueva y cada navegador recién abierto piden usuario y contraseña. La marca `tms_login_pestana` vive en `sessionStorage` (por pestaña; sobrevive a la recarga, así que recargar a mitad de un barrido no saca al usuario). La cookie ya no lleva `Max-Age`, y al iniciar sesión el servidor borra la sesión de login anterior de ese navegador.
+
+**Firmware de la Pico W (2026-11-10, pedido por el usuario):**
+- Hardware confirmado: NEMA 17 con drivers **TB6600** y sensor **HMC5883L**. Los pines, micropasos, recorridos, finales de carrera, modo de Z y la posición de la bobina siguen como `PENDIENTE` en `firmware/config.py`.
+- Diseño: bucle cooperativo en `main.py`; homing y barrido son generadores. Los pulsos los genera el PIO (1 MHz) y un canal DMA le pasa los segmentos de la rampa, así que un lote sale mientras la mesa se mueve (necesita MicroPython ≥ 1.22). Coordenadas: `x_máquina = X_BOBINA_MM − zona.x/2 + xMM` y `z_máquina = Z_CERO_MM + zMM` (Z_CERO_MM es una constante de calibración agregada; vale 0 por defecto).
+- Reanudación con `lecturas_por_punto = N`: el seq s es la lectura (s − 1) % N del punto (s − 1) // N.
+- Verificado solo en el PC (`firmware/pruebas_pc/`): 9 pruebas de lógica (la malla coincide punto por punto con `services/geometria.js`) y el firmware completo contra el servidor con una MariaDB temporal: 2 × 2 × 1, 2 lecturas por punto con reinicio a mitad (60 seq sin huecos ni duplicados), caída de Wi-Fi, parada del operador, zona fuera del recorrido y 401. **Sin probar en la Pico ni con la mesa.**
+- Segunda vuelta (aprobada por el usuario el mismo día): el latido acepta `estado` (`espera`/`homing`/`midiendo`/`error`) y `error` (≤ 300), guardados solo en memoria y expuestos como `estadoPico`/`errorPico`; la Navbar muestra la Pico **en los dos modos** («en línea · midiendo», punto amarillo con error) y la página un aviso con el error. **Corregido un fallo previo:** el servidor solo difundía `event: dispositivo` en los cambios en línea ↔ sin señal, y el navegador marcaba «sin señal» 15 s después aunque llegaran latidos; ahora se difunde en cada latido.
+- Firmware: watchdog **apagado por defecto** (`USAR_WATCHDOG = False`, decisión del usuario: no quiere que la Pico se reinicie al detener el programa). El homing deja la mesa en **0, 0, 0** (el origen está `HOMING_SEPARACION_MM` delante del disparo del final; `Z_CERO_MM` y `MARGEN_ORIGEN_MM` pasan a 0). Al completar, detener o fallar una sesión, la mesa vuelve a 0, 0, 0. LED: parpadeo desde que se alimenta, **fijo** con el servidor conectado, tres destellos con error, parpadeo lento con 401. Verificado en el navegador con el firmware corriendo en el PC (en línea en simulación, aviso de zona fuera del recorrido, «midiendo», Detener → origen).
 
 **Notas que deja la Fase 8 (pendientes y mejoras futuras):**
 - ⚠ **Contraseña publicada:** el `.env` local usa `DB_PASSWORD=tms_password`, que aparece en el historial de git (commit `22d3e7f`, quitada en `010cb13`). No se reescribió el historial. En la Raspberry usa otra contraseña (COMANDOS.md 3.1); si el repositorio es público, cámbiala también en local.
