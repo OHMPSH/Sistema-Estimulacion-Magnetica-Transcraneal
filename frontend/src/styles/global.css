@@ -262,3 +262,19 @@ table.tms-table tbody tr.new-row td { animation: row-in .4s ease-out; }
 @media (max-width: 576px) {
   .navbar-usuario-nombre, .navbar-usuario-rol { display: none; }
 }
+
+/* ── Fase 3: parámetros de la medición y modo de operación ─── */
+.mode-btn.selected-param { background: rgba(192,35,63,.12); border-color: var(--guinda-bright); color: var(--text-primary); box-shadow: 0 0 12px var(--guinda-glow); }
+.mode-btn:disabled { cursor: not-allowed; opacity: .55; }
+.mode-btn:focus-visible, .modo-operacion select:focus-visible { outline: 2px solid var(--guinda-bright); outline-offset: 2px; }
+.modo-operacion { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; border-radius: 4px; padding: 2px 8px; border: 1px solid; display: inline-flex; align-items: center; }
+.modo-operacion.modo-simulacion { color: var(--yellow); border-color: rgba(255,230,0,.45); background: rgba(255,230,0,.08); }
+.modo-operacion.modo-real { color: var(--emerald); border-color: rgba(0,255,163,.45); background: rgba(0,255,163,.08); }
+.modo-operacion select { background: transparent; color: inherit; border: none; font: inherit; letter-spacing: inherit; cursor: pointer; padding: 0; }
+.modo-operacion select option { background: var(--bg-card); color: var(--text-primary); }
+.modo-operacion select:disabled { cursor: not-allowed; }
+.resumen-medicion { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+.resumen-medicion dt { color: var(--text-secondary); font-weight: 500; }
+.resumen-medicion dd { margin: 0; color: var(--text-primary); font-family: var(--font-mono); }
+.session-tag.salina { border-color: rgba(255,140,0,.35); color: var(--orange); background: rgba(255,140,0,.07); }
+.session-tag.hw { border-color: rgba(0,255,163,.35); color: var(--emerald); background: rgba(0,255,163,.07); }

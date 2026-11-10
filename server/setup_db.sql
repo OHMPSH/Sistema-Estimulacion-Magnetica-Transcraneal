@@ -12,9 +12,10 @@
 --   • Tabla:         mediciones — lecturas del sensor Hall
 --   • Tabla:         usuarios       — personas que entran al dashboard
 --   • Tabla:         sesiones_login — sesiones de usuario (cookie tms_sesion)
+--   • Tabla:         configuracion  — parámetros del sistema (valores por defecto)
 --
 -- Después de ejecutarlo, crea el primer administrador:
---   cd server && npm run crear-admin
+--   cd server && npm run crear-admin -- --predeterminado   (admin / admin)
 -- ═══════════════════════════════════════════════════════════════
 
 -- Crear la base de datos si no existe
@@ -47,7 +48,10 @@ USE tms_db;
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS sesiones (
   id            INT          AUTO_INCREMENT PRIMARY KEY,  -- identificador único
-  modo          ENUM('DC','AC') NOT NULL,                 -- tipo de medición
+  modo          ENUM('DC','AC') NOT NULL,                 -- velocidad: DC rápida, AC normal
+  origen        ENUM('sim','hw') NOT NULL DEFAULT 'sim',  -- simulador del servidor o Pico W
+  paso_mm       TINYINT UNSIGNED NOT NULL DEFAULT 5,      -- paso en X, Y y Z: 5, 10 o 20 mm
+  medio         ENUM('campo_magnetico','solucion_salina') NOT NULL DEFAULT 'campo_magnetico',
   iniciada_en   DATETIME     NOT NULL,                    -- cuándo empezó
   terminada_en  DATETIME     NULL                         -- cuándo terminó (NULL si activa)
 );
@@ -126,5 +130,34 @@ CREATE TABLE IF NOT EXISTS sesiones_login (
 
 CREATE INDEX IF NOT EXISTS idx_sesiones_login_usuario ON sesiones_login(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_sesiones_login_expira  ON sesiones_login(expira_en);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLA: configuracion
+-- Una fila por grupo de parámetros. El servidor la carga al arrancar
+-- y la mantiene en memoria; solo un admin la cambia.
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS configuracion (
+  clave           VARCHAR(40)  NOT NULL PRIMARY KEY,
+  valor           JSON         NOT NULL,
+  actualizado_en  DATETIME     NOT NULL,                     -- UTC
+  actualizado_por INT          NULL,                         -- NULL = valor por defecto
+
+  CONSTRAINT fk_configuracion_usuario
+    FOREIGN KEY (actualizado_por) REFERENCES usuarios(id)
+    ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO configuracion (clave, valor, actualizado_en) VALUES
+  ('modo_operacion', '"simulacion"', UTC_TIMESTAMP()),
+  ('barrido',        '{"grid_size_mm":60,"z_max_mm":20,"standoff_mm":5,"paso_predeterminado_mm":5}', UTC_TIMESTAMP()),
+  ('sensor',         '{"modelo":"HMC5883L","rango_ga":1.9,"lsb_por_ga":820,"lecturas_por_punto":1,"offset_ut":{"x":0,"y":0,"z":0}}', UTC_TIMESTAMP()),
+  ('simulacion',     '{"ms_por_punto":{"DC":60,"AC":120},"semilla":12345,"ruido_sigma_ut":0.25,"radio_bobina_mm":25,"campo_centro_ut":120,"prob_hueco":0,"prob_saturacion":0}', UTC_TIMESTAMP()),
+  ('dispositivo',    '{"intervalo_latido_s":5,"umbral_desconexion_s":15}', UTC_TIMESTAMP()),
+  ('visualizacion',  '{"ventana_grafica":80,"filas_tabla":60,"decimales":3,"escala_superficie":"Jet","rotacion_auto":true,"reducir_animaciones":false}', UTC_TIMESTAMP()),
+  ('datos',          '{"zona_horaria":"America/Mexico_City"}', UTC_TIMESTAMP());
+
+-- Índices para los filtros del historial
+CREATE INDEX IF NOT EXISTS idx_sesiones_iniciada ON sesiones(iniciada_en);
+CREATE INDEX IF NOT EXISTS idx_sesiones_filtros  ON sesiones(modo, paso_mm, medio, origen);
 
 SELECT 'Base de datos TMS creada correctamente.' AS resultado;

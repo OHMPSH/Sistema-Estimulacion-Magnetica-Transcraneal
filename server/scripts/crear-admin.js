@@ -21,6 +21,15 @@
  * obliga a elegir una contraseña nueva. Además se cierran las
  * sesiones de login que tuviera abiertas.
  *
+ * Acceso predeterminado (decisión del usuario, 2026-11-09):
+ *
+ *   npm run crear-admin -- --predeterminado
+ *
+ * deja el usuario admin con la contraseña "admin", SIN cambio
+ * obligatorio. No cumple la longitud mínima de 8 caracteres a
+ * propósito, y funciona también en producción. Cualquiera que esté
+ * en la misma red y la conozca entra como administrador.
+ *
  * Requiere que existan las tablas (setup_db.sql o la migración 002).
  * ─────────────────────────────────────────────────────────────
  */
@@ -35,6 +44,8 @@ dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 const USUARIO = 'admin';
 const NOMBRE  = 'Administrador';
+const PASSWORD_PREDETERMINADA = 'admin';
+const PREDETERMINADO = process.argv.includes('--predeterminado');
 
 /**
  * Pregunta algo por la terminal sin mostrar lo que se escribe.
@@ -97,29 +108,33 @@ async function main() {
   // Se importan aquí, después de cargar el .env, porque la conexión
   // a la base lee sus credenciales al importarse.
   const { hashPassword, errorDePassword } = await import('../services/passwords.js');
-  const password = await obtenerPassword(errorDePassword);
+  const password = PREDETERMINADO ? PASSWORD_PREDETERMINADA : await obtenerPassword(errorDePassword);
+  const debeCambiar = !PREDETERMINADO;
+  if (PREDETERMINADO) {
+    console.log('[crear-admin] Acceso predeterminado: usuario "admin", contraseña "admin", sin cambio obligatorio.');
+  }
 
   const { default: pool } = await import('../config/database.js');
   const Usuario     = await import('../models/Usuario.js');
   const SesionLogin = await import('../models/SesionLogin.js');
 
   try {
-    const hash      = await hashPassword(password);
+    const hash      = await hashPassword(password, { validar: !PREDETERMINADO });
     const existente = await Usuario.buscarPorUsuario(USUARIO);
 
     if (existente) {
-      await Usuario.restablecerComoAdmin(existente.id, hash);
+      await Usuario.restablecerComoAdmin(existente.id, hash, debeCambiar);
       const cerradas = await SesionLogin.borrarDeUsuario(existente.id);
       console.log(`[crear-admin] ✓ Contraseña de "${USUARIO}" restablecida (rol admin, activo).`);
       if (cerradas > 0) console.log(`[crear-admin]   Se cerraron ${cerradas} sesiones de login abiertas.`);
     } else {
       await Usuario.crear({
         usuario: USUARIO, nombre: NOMBRE, rol: 'admin',
-        hashPassword: hash, debeCambiarPassword: true,
+        hashPassword: hash, debeCambiarPassword: debeCambiar,
       });
       console.log(`[crear-admin] ✓ Usuario "${USUARIO}" creado con rol admin.`);
     }
-    console.log('[crear-admin]   Al entrar al dashboard se le pedirá cambiar la contraseña.');
+    if (debeCambiar) console.log('[crear-admin]   Al entrar al dashboard se le pedirá cambiar la contraseña.');
   } finally {
     await pool.end();
   }

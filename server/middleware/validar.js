@@ -15,11 +15,15 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { GRID_SIZE_MM, Z_LEVELS, B_MAX_UT } from '../config/barrido.js';
+import { tamanoPlacaMM } from '../config/barrido.js';
 import { ROLES, TEMAS } from '../config/roles.js';
+import { PASOS_MM, MEDIOS } from '../services/geometria.js';
+import { CLAVES } from '../services/validacionConfiguracion.js';
+import { obtener as obtenerConfiguracion } from '../services/configuracion.js';
 import { errorDePassword, LONGITUD_MAXIMA } from '../services/passwords.js';
 
 const MODOS = ['DC', 'AC'];
+const ORIGENES = ['sim', 'hw'];
 
 const esNumeroFinito = v => typeof v === 'number' && Number.isFinite(v);
 const esEnteroPositivo = v => Number.isSafeInteger(v) && v > 0;
@@ -38,19 +42,90 @@ export function validarIdSesion(req, res, next) {
   next();
 }
 
-/** body.modo → req.modo ('DC' | 'AC') */
-export function validarModo(req, res, next) {
-  const modo = req.body?.modo;
-  if (!MODOS.includes(modo)) {
-    return rechazar(res, 422, [`modo debe ser ${MODOS.join(' o ')}`]);
+/**
+ * body de POST /api/sesiones → req.nuevaSesion { modo, pasoMM, medio }
+ * (CLAUDE.md 7.0). Si faltan paso_mm o medio se usan los predeterminados.
+ */
+export function validarNuevaSesion(req, res, next) {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
   }
-  req.modo = modo;
+  const { modo, paso_mm: paso, medio } = body;
+  const errores = [];
+  if (!MODOS.includes(modo)) errores.push(`modo debe ser ${MODOS.join(' o ')}`);
+  if (paso !== undefined && !PASOS_MM.includes(paso)) {
+    errores.push(`paso_mm debe ser ${PASOS_MM.join(', ')} (0,5, 1 o 2 cm)`);
+  }
+  if (medio !== undefined && !MEDIOS.includes(medio)) errores.push(`medio debe ser ${MEDIOS.join(' o ')}`);
+  if (errores.length > 0) return rechazar(res, 422, errores);
+
+  req.nuevaSesion = {
+    modo,
+    pasoMM: paso ?? obtenerConfiguracion('barrido').paso_predeterminado_mm,
+    medio:  medio ?? 'campo_magnetico',
+  };
+  next();
+}
+
+/**
+ * Query de GET /api/sesiones → req.filtros { modo?, pasoMM?, medio?, origen? }
+ * Un valor vacío equivale a "sin filtro".
+ */
+export function validarFiltrosSesiones(req, res, next) {
+  const q = req.query;
+  const errores = [];
+  const filtros = {};
+  const texto = v => (typeof v === 'string' && v !== '' ? v : undefined);
+
+  const modo = texto(q.modo);
+  if (modo !== undefined) {
+    if (MODOS.includes(modo)) filtros.modo = modo; else errores.push(`modo debe ser ${MODOS.join(' o ')}`);
+  }
+  const paso = texto(q.paso_mm);
+  if (paso !== undefined) {
+    const n = /^\d+$/.test(paso) ? Number(paso) : NaN;
+    if (PASOS_MM.includes(n)) filtros.pasoMM = n; else errores.push(`paso_mm debe ser ${PASOS_MM.join(', ')}`);
+  }
+  const medio = texto(q.medio);
+  if (medio !== undefined) {
+    if (MEDIOS.includes(medio)) filtros.medio = medio; else errores.push(`medio debe ser ${MEDIOS.join(' o ')}`);
+  }
+  const origen = texto(q.origen);
+  if (origen !== undefined) {
+    if (ORIGENES.includes(origen)) filtros.origen = origen; else errores.push(`origen debe ser ${ORIGENES.join(' o ')}`);
+  }
+  if (errores.length > 0) return rechazar(res, 422, errores);
+  req.filtros = filtros;
+  next();
+}
+
+/**
+ * PUT /api/configuracion/:clave con cuerpo { valor }
+ *   → req.claveConfiguracion y req.valorConfiguracion
+ * Para las claves que son objetos, `valor` puede traer solo los campos
+ * que cambian. Las reglas de cada clave las aplica el servicio (422).
+ */
+export function validarClaveConfiguracion(req, res, next) {
+  const clave = req.params.clave;
+  if (!CLAVES.includes(clave)) {
+    return rechazar(res, 404, [`Clave de configuración desconocida: ${clave}. Válidas: ${CLAVES.join(', ')}`]);
+  }
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) || body.valor === undefined) {
+    return rechazar(res, 400, ['El cuerpo debe ser {"valor": …}']);
+  }
+  req.claveConfiguracion = clave;
+  req.valorConfiguracion = body.valor;
   next();
 }
 
 /**
  * body de POST /api/mediciones → req.medicion
  * Unidades: posiciones en mm, campo en μT.
+ * Aquí se revisan la forma y los tipos, y que x e y caigan en la placa
+ * vigente. El plano Z (que depende del paso de la sesión) y el rango
+ * del sensor los revisa services/ingesta.js, que también usa el simulador.
  */
 export function validarMedicion(req, res, next) {
   const body = req.body;
@@ -69,22 +144,20 @@ export function validarMedicion(req, res, next) {
 
   if (!esEnteroPositivo(sesionId)) errores.push('sesionId debe ser un entero positivo');
 
+  const placa = tamanoPlacaMM();
   for (const [nombre, v] of [['xMM', xMM], ['yMM', yMM]]) {
     if (!esNumeroFinito(v)) errores.push(`${nombre} debe ser un número`);
-    else if (v < 0 || v > GRID_SIZE_MM) errores.push(`${nombre} fuera de la placa (0 a ${GRID_SIZE_MM} mm): ${v}`);
+    else if (v < 0 || v > placa) errores.push(`${nombre} fuera de la placa (0 a ${placa} mm): ${v}`);
   }
-
-  const zIdx = esNumeroFinito(zMM) ? Z_LEVELS.indexOf(zMM) : -1;
-  if (zIdx === -1) errores.push(`zMM debe ser uno de los niveles ${Z_LEVELS.join(', ')} mm (recibido: ${zMM})`);
+  if (!esNumeroFinito(zMM)) errores.push('zMM debe ser un número');
 
   for (const [nombre, v] of [['bx', bx], ['by', by], ['bz', bz]]) {
     if (!esNumeroFinito(v)) errores.push(`${nombre} debe ser un número finito`);
-    else if (Math.abs(v) > B_MAX_UT) errores.push(`${nombre} fuera del rango aceptado (±${B_MAX_UT} μT): ${v}`);
   }
 
   if (errores.length > 0) return rechazar(res, 422, errores);
 
-  req.medicion = { sesionId, xMM, yMM, zMM, zIdx, bx, by, bz };
+  req.medicion = { sesionId, xMM, yMM, zMM, bx, by, bz };
   next();
 }
 

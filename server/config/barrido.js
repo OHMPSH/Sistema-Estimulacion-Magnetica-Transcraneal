@@ -1,23 +1,31 @@
 /**
  * config/barrido.js
  * ─────────────────────────────────────────────────────────────
- * Geometría del barrido y límites físicos que el servidor usa
- * para validar las mediciones. Deben coincidir con
- * frontend/src/constants/system.js.
+ * Geometría del barrido y límites físicos vigentes.
  *
- * (En la Fase 3 estos valores pasan a la tabla de configuración.)
+ * Desde la Fase 3 ya no hay constantes fijas: todo sale de la tabla
+ * `configuracion` (services/configuracion.js) y del paso de cada
+ * sesión (services/geometria.js, CLAUDE.md 7.0).
  * ─────────────────────────────────────────────────────────────
  */
 
-/** Tamaño de la placa en mm: x e y válidos van de 0 a este valor */
-export const GRID_SIZE_MM = 60;
+import { obtener } from '../services/configuracion.js';
+import { mallaDeBarrido } from '../services/geometria.js';
+import { limiteSensorUT } from '../services/validacionConfiguracion.js';
 
-/** Alturas válidas del sensor en mm (planos Z0..Z4) */
-export const Z_LEVELS = [0, 5, 10, 15, 20];
+/** Configuración de barrido vigente { grid_size_mm, z_max_mm, standoff_mm, paso_predeterminado_mm } */
+export const barridoVigente = () => obtener('barrido');
+
+/** Tamaño de la placa en mm: x e y válidos van de 0 a este valor */
+export const tamanoPlacaMM = () => obtener('barrido').grid_size_mm;
+
+/** Malla (ejes, planos Z y total de puntos) para un paso dado */
+export const mallaParaPaso = pasoMM => mallaDeBarrido(obtener('barrido'), pasoMM);
 
 /**
- * Valor absoluto máximo aceptado por componente, en μT.
- * El HMC5883L satura en ±8.1 Ga (= ±810 μT) en su rango más amplio;
- * se deja margen para no rechazar lecturas válidas cerca del límite.
+ * Valor absoluto máximo que puede reportar el sensor por componente,
+ * en µT: el fondo de escala del ADC con la ganancia vigente
+ * (2047 / lsb_por_ga × 100; 249,6 µT con 1,9 Ga). Una lectura por
+ * encima es una saturación o un error de la trama, y se rechaza.
  */
-export const B_MAX_UT = 1000;
+export const limiteCampoUT = () => limiteSensorUT(obtener('sensor'));

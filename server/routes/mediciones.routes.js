@@ -25,7 +25,9 @@ import {
   createMedicion,
   getMedicionesDeSesion,
 } from '../controllers/mediciones.controller.js';
-import { validarIdSesion, validarModo, validarMedicion } from '../middleware/validar.js';
+import {
+  validarIdSesion, validarNuevaSesion, validarFiltrosSesiones, validarMedicion,
+} from '../middleware/validar.js';
 import { requiereLogin, requiereRol } from '../middleware/auth.js';
 
 const router = Router();
@@ -42,13 +44,14 @@ router.get('/status', getStatus);
 router.get('/stream', conSesion, sseHandler);
 
 // Sesiones
-router.post  ('/sesiones',     operador,  validarModo,     iniciarSesion);    // crear
+router.post  ('/sesiones',     operador,  validarNuevaSesion, iniciarSesion);  // crear {modo, paso_mm?, medio?}
 router.put   ('/sesiones/:id', operador,  validarIdSesion, finalizarSesion);  // cerrar
-router.get   ('/sesiones',     conSesion,                  getSesiones);      // listar
+router.get   ('/sesiones',     conSesion, validarFiltrosSesiones, getSesiones); // listar (?modo&paso_mm&medio&origen)
 router.delete('/sesiones/:id', soloAdmin, validarIdSesion, deleteSesion);     // eliminar
 
 // Mediciones
-// POST /mediciones lo usa el simulador del navegador hasta la Fase 3.
+// POST /mediciones: 409 en modo simulación (el simulador está en el servidor).
+// En modo real la usan operador y admin hasta la Fase 4.
 router.post('/mediciones',              operador,  validarMedicion, createMedicion);         // insertar
 router.get ('/sesiones/:id/mediciones', conSesion, validarIdSesion, getMedicionesDeSesion);  // exportar
 

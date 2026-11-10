@@ -6,9 +6,8 @@
 import React, { useEffect, useRef } from 'react';
 // Solo el componente Modal de Bootstrap, empaquetado con Vite
 import Modal from 'bootstrap/js/dist/modal';
-import { TOTAL_POINTS, Z_LEVELS } from '../../constants/system.js';
 
-export function StopModal({ totalScanned, currentZIdx, elapsedSec, onConfirm }) {
+export function StopModal({ totalScanned, totalPuntos, currentZIdx, zLevels, elapsedSec, onConfirm }) {
   const modalRef = useRef(null);
   const bsModal  = useRef(null);
 
@@ -56,7 +55,7 @@ export function StopModal({ totalScanned, currentZIdx, elapsedSec, onConfirm }) 
               className="mt-3 p-3"
               style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}
             >
-              {totalScanned} pts · Z{currentZIdx} ({Z_LEVELS[currentZIdx]}mm) · {formatElapsed(elapsedSec)}
+              {totalScanned} / {totalPuntos} pts · Z{currentZIdx} ({zLevels[currentZIdx] ?? 0} mm) · {formatElapsed(elapsedSec)}
             </div>
           </div>
           <div className="modal-footer">

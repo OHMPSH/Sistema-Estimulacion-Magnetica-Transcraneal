@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Plot from 'react-plotly.js';
 
-const Superficie3D = React.memo(({ mediciones }) => {
+const Superficie3D = React.memo(({ mediciones, totalPuntos = 845 }) => {
   const zLevels = useMemo(() => {
     if (!mediciones) return [];
     return [...new Set(mediciones.map(m => m.z_mm || m.zMM))].sort((a, b) => a - b);
@@ -16,13 +16,13 @@ const Superficie3D = React.memo(({ mediciones }) => {
   useEffect(() => {
     if (!mediciones || mediciones.length === 0) return;
 
-    const totalPuntos = mediciones.length;
-    const ultimoPunto = mediciones[totalPuntos - 1];
+    const cantidad = mediciones.length;
+    const ultimoPunto = mediciones[cantidad - 1];
     const ultimoZ = ultimoPunto.z_mm !== undefined ? ultimoPunto.z_mm : ultimoPunto.zMM;
 
     setPlanoActivo((prevPlano) => {
-      // 1. Si termina el barrido completo (845 puntos), forzar a ver el Total
-      if (totalPuntos >= 845) {
+      // 1. Si termina el barrido completo (todos los puntos de la malla), forzar a ver el Total
+      if (cantidad >= totalPuntos) {
         return 'ALL';
       } 
       
@@ -39,11 +39,11 @@ const Superficie3D = React.memo(({ mediciones }) => {
       }
       return prevPlano;
     });
-  }, [mediciones.length]); 
+  }, [mediciones.length, totalPuntos]); 
 
   // ─────────────────────────────────────────────────────────
 
-  if (!mediciones || mediciones.length < 10) {
+  if (!mediciones || mediciones.length < 4) {
     return <div style={{ color: '#fff', padding: '20px' }}>Construyendo malla topográfica...</div>;
   }
 

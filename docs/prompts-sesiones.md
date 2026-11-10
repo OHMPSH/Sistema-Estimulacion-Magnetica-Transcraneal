@@ -3,6 +3,8 @@
 Cada bloque es un prompt completo para pegar en una **sesión nueva** de Claude Code abierta en esta carpeta (`PT/`). Ejecuta las fases **en orden**, porque cada una depende de la anterior. Haz tu commit al terminar cada fase y antes de abrir la siguiente.
 
 Todas las fases comparten estas reglas. Ya están dentro de cada prompt, así que no hace falta pegarlas aparte:
+- Para entrar al sistema (curl o navegador) se usa el acceso **admin / admin**, que ya existe y no se borra ni se cambia (CLAUDE.md, sección 1).
+- Los parámetros de cada medición (paso de 0,5, 1 o 2 cm; DC o AC; campo magnético o solución salina) se describen en CLAUDE.md 7.0.
 - Leer `CLAUDE.md` completo antes de empezar.
 - No hacer commits, no crear ramas y no tocar `nginx/tms.conf`.
 - No agregar librerías ni frameworks nuevos.
@@ -106,6 +108,7 @@ BACKEND
 1. Migración 003_configuracion.sql:
    - Crea la tabla configuracion(clave PK, valor JSON, actualizado_en, actualizado_por FK a usuarios NULL) con los valores por defecto de CLAUDE.md 7.2.
    - Agrega a sesiones la columna origen ENUM('sim','hw') NOT NULL DEFAULT 'sim'. Todas las sesiones existentes son simuladas.
+   - Agrega a sesiones paso_mm y medio como en CLAUDE.md 7.0 (las existentes quedan con 5 mm y campo magnético), con índices para filtrar.
    - Actualiza setup_db.sql.
 2. models/Configuracion.js y services/configuracion.js:
    - Carga la configuración al arrancar, antes del app.listen.
@@ -113,8 +116,7 @@ BACKEND
    - Al cambiar algo, difunde por SSE el evento configuracion.
    - Valida cada clave a mano:
      - El rango del sensor debe ser una de las 8 ganancias del HMC5883L, y lsb_por_ga se fija según la tabla. No se acepta un valor libre.
-     - grid_n entre 2 y 51.
-     - z_levels_mm ordenados y sin repetir.
+     - barrido: grid_size_mm y z_max_mm múltiplos de 20; paso_predeterminado_mm uno de 5, 10 o 20.
      - ms_por_punto entre 20 y 10000.
      - Probabilidades entre 0 y 1.
 3. config/barrido.js deja de exportar constantes fijas: lee del servicio de configuración. Ajusta validarMedicion para que use la configuración vigente.
@@ -125,12 +127,13 @@ BACKEND
 5. Saca el SSE del controlador a services/tiempoReal.js (clientes, broadcast y ping) y úsalo desde todos los controladores y servicios.
 6. services/ingesta.js: una única función registrarMedicion(...) que valida contra la configuración, calcula |B|, inserta con el modelo y difunde. La usan el controlador de POST /mediciones y el simulador. Más adelante la usará también la ingesta de la Pico.
 7. Reglas de sesión:
+   - POST /sesiones {modo, paso_mm?, medio?} (CLAUDE.md 7.0): 422 si el paso o el medio no son válidos. La sesión guarda los tres.
    - Solo una sesión abierta a la vez: POST /sesiones responde 409 si ya hay otra.
    - La sesión se crea con origen 'sim' o 'hw' según modo_operacion.
    - Al crear o cerrar una sesión se difunde el evento sesion {tipo:'iniciada'|'finalizada', sesion}.
    - Al arrancar el servidor, si quedó una sesión abierta de una ejecución anterior, se cierra y se registra en el log.
 8. services/simulador.js:
-   - Arranca al crear una sesión en modo simulación, con setTimeout encadenado (no setInterval) a ms_por_punto[modo]. Recorre x, luego y, luego z según la configuración de barrido y llama a registrarMedicion.
+   - Arranca al crear una sesión en modo simulación, con setTimeout encadenado (no setInterval) a ms_por_punto[modo]. Recorre x, luego y, luego z con la malla que da el paso de la sesión y llama a registrarMedicion.
    - Al terminar los puntos, cierra la sesión solo. Si alguien cierra la sesión con PUT, se detiene.
    - Física: campo de una espira circular de radio R en el plano z = 0, con integrales elípticas completas K(m) y E(m) calculadas por el método AGM. Usa las componentes Bz y Bρ de la forma estándar en coordenadas cilíndricas. Normaliza para que |B| en el centro con z = 0 sea campo_centro_ut. Usa z_real = zMM + standoff_mm y el centro de la placa en grid_size_mm/2. Documenta las fórmulas en comentarios.
    - Ruido gaussiano (Box–Muller) con σ igual a ruido_sigma_ut, y un generador mulberry32 sembrado con la semilla. Misma semilla, mismos datos.
@@ -138,12 +141,15 @@ BACKEND
    - Guarda en la sesión la semilla usada. Si todavía no existe la columna, déjalo anotado para la Fase 5 en CLAUDE.md.
 9. POST /mediciones en modo simulación responde 409 ("el sistema está en modo simulación"). En modo real, por ahora lo pueden usar operador y admin, y la Fase 4 lo cambia por la ingesta del dispositivo.
 10. GET /status agrega modo_operacion.
+11. GET /sesiones devuelve origen, paso_mm y medio, y acepta filtros opcionales ?modo=&paso_mm=&medio=&origen= (422 si un valor no es válido).
 
 FRONTEND (lo mínimo funcional; el menú y el diseño llegan en las Fases 6 y 7)
 1. Quita la simulación del navegador: generarMuestra y el setInterval de useAcquisition.js. Iniciar es POST /api/sesiones y Detener es PUT. Todo lo que se dibuja llega por SSE (eventos medicion y sesion), así que todas las personas conectadas ven lo mismo. Mantén las cinco vistas, con los mismos datos.
 2. Descarta los eventos medicion de una sesión que no sea la activa. Evita el doble inicio con un estado "iniciando" que desactive el botón.
-3. Lee la geometría (grid_n, z_levels, tamaño de placa) de GET /api/configuracion en lugar de constants/system.js, para que la barra de progreso y el total de puntos coincidan con la configuración.
-4. Muestra de forma provisional el modo actual (por ejemplo, una etiqueta SIMULACIÓN o REAL junto al estado del servidor) y, solo para admin, un selector provisional para cambiar el modo. El menú definitivo llega en la Fase 6.
+3. Barra de configuración de la medición en el panel de control: paso (0,5 / 1 / 2 cm), DC o AC y medio (campo magnético o solución salina con voltaje). Se envían en POST /api/sesiones.
+4. La geometría (malla, planos Z, total de puntos) sale del paso de la sesión activa y de GET /api/configuracion, no de constants/system.js. La barra de progreso, los KPI, el mapa 3D y la superficie usan esa geometría.
+5. Historial: muestra el paso, el medio y el origen de cada sesión y agrega filtros por paso y por medio (además del modo y la fecha que ya existen).
+6. Muestra de forma provisional el modo actual (por ejemplo, una etiqueta SIMULACIÓN o REAL junto al estado del servidor) y, solo para admin, un selector provisional para cambiar el modo. El menú definitivo llega en la Fase 6.
 
 TESTS (adelanta esta parte de la Fase 8)
 - server/tests/simulador.test.js con node:test:
@@ -161,7 +167,7 @@ VERIFICACIÓN
   - Cambiar el modo con una sesión abierta da 409.
   - Un PUT de configuración con valores inválidos da 422, y como no admin, 403.
   - En modo simulación, POST /mediciones da 409.
-  - La simulación completa genera 845 puntos y se cierra sola. Para no esperar, baja ms_por_punto temporalmente y restáuralo al terminar.
+  - La simulación completa genera 845 puntos con paso de 5 mm (147 con 1 cm y 32 con 2 cm) y se cierra sola. Para no esperar, baja ms_por_punto temporalmente y restáuralo al terminar.
 - En el navegador, con dos pestañas abiertas: las dos ven el mismo barrido en vivo. Al recargar una pestaña a mitad del barrido, sigue recibiendo los puntos nuevos; los anteriores llegan en la Fase 5.
 - npm test pasa.
 - Deja la configuración con sus valores por defecto, borra las sesiones de prueba y detén los procesos.
@@ -201,7 +207,7 @@ BACKEND
 5. GET /dispositivo/estado, para cualquier usuario con sesión: {enLinea, ultimoLatido, firmware, rssi, ip, uptime_s, tieneToken}.
 6. POST /dispositivo/latido (requiereDispositivo), con cuerpo {firmware, rssi, uptime_s, ts_dispositivo_ms}:
    - Actualiza el estado en memoria y en la BD, sin escribir en la BD más de una vez cada 30 s si nada cambió.
-   - Responde {ok, modo_operacion, sesion_activa: {id, modo, barrido, sensor} | null, servidor_ts_ms}.
+   - Responde {ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, barrido, sensor} | null, servidor_ts_ms}.
    - Calcula y registra el desfase entre el reloj de la Pico y el del servidor.
 7. services/dispositivo.js:
    - Un temporizador de 1 s compara el último latido con dispositivo.umbral_desconexion_s.
@@ -209,7 +215,7 @@ BACKEND
    - En modo simulación el estado se sigue calculando, pero la interfaz no lo muestra.
 8. POST /dispositivo/mediciones (requiereDispositivo), con cuerpo {sesionId, lecturas:[{seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms}]} y máximo 200 lecturas por lote:
    - Si el modo no es real o la sesión no está abierta, responde 409. Si la sesión es de origen 'sim', también 409.
-   - Valida cada lectura con las mismas reglas de posición y además: raw entero entre −4096 y 2047, y seq entero positivo.
+   - Valida cada lectura con las mismas reglas de posición (los planos Z de la sesión según su paso) y además: raw entero entre −4096 y 2047, y seq entero positivo.
    - Conversión: µT = raw / lsb_por_ga × 100 − offset_ut del eje. Si algún eje vale −4096, la lectura se marca saturado = 1, ese eje no se convierte (se guarda NULL o se documenta la decisión) y se guarda el crudo.
    - Inserta con INSERT IGNORE, o con ON DUPLICATE KEY sin efecto, a través de services/ingesta.js. Difunde solo las nuevas.
    - Responde {ok, aceptadas, duplicadas, rechazadas:[{seq, error}]}.
@@ -285,7 +291,7 @@ BACKEND
    - Índice (sesion_id, seq).
    - En sesiones: usuario_id (FK a usuarios, NULL en las antiguas), notas TEXT, puntos_esperados INT, puntos_recibidos INT, huecos JSON, config_barrido JSON, config_sensor JSON, config_simulacion JSON, version_software VARCHAR, version_firmware VARCHAR NULL, eliminada_en DATETIME NULL e índice en eliminada_en.
 2. services/version.js: al arrancar, lee la versión de server/package.json y, si existe .git, el commit actual con git rev-parse --short HEAD mediante child_process (sin depender de que funcione: si falla, usa 'desconocido'). Expón la versión en GET /status. Corrige la versión 3.0.0 que está fija en el controlador.
-3. Al crear una sesión, guarda usuario_id, las copias de la configuración vigente (barrido, sensor y, en simulación, simulacion, incluida la semilla), version_software, puntos_esperados (grid_n² × número de planos) y, en modo real, version_firmware tomada del último latido.
+3. Al crear una sesión, guarda usuario_id, las copias de la configuración vigente (barrido, sensor y, en simulación, simulacion, incluida la semilla), version_software, puntos_esperados (grid_n² × número de planos, según el paso de la sesión) y, en modo real, version_firmware tomada del último latido.
 4. Al cerrar una sesión, ya sea manualmente, al completarse o por el arranque del servidor: calcula puntos_recibidos y la lista de huecos (las posiciones de la malla sin lectura válida, como [{xMM, yMM, zMM}], hasta 1000) y guárdalos. Difunde el evento sesion con esos datos.
 5. Borrado lógico:
    - DELETE /sesiones/:id pone eliminada_en (solo admin).
@@ -302,7 +308,7 @@ BACKEND
    - Si res.write devuelve false, se espera el evento drain. Si un cliente acumula más de unos 1000 eventos pendientes, se cierra su conexión y se registra.
 9. GET /sesiones/:id/csv, generado en el servidor:
    - Content-Type text/csv; charset=utf-8 y Content-Disposition con el nombre tms_sesion_<id>_<fechaUTC>.csv.
-   - Encabezado con líneas "# clave: valor": id, modo, origen, iniciada y terminada en UTC, usuario, versión de software y firmware, puntos esperados y recibidos, cantidad de huecos, configuración de barrido y sensor (y de simulación si aplica), unidades y notas. Escapa los saltos de línea.
+   - Encabezado con líneas "# clave: valor": id, modo, paso_mm, medio, origen, iniciada y terminada en UTC, usuario, versión de software y firmware, puntos esperados y recibidos, cantidad de huecos, configuración de barrido y sensor (y de simulación si aplica), unidades y notas. Escapa los saltos de línea.
    - Columnas: timestamp_utc, ts_dispositivo_utc, seq, x_mm, y_mm, z_mm, bx_uT, by_uT, bz_uT, magnitud_uT, raw_x, raw_y, raw_z, saturado, sin redondear.
    - Ordenado por seq y luego por id.
    - Para sesiones grandes, escríbelo en streaming.
@@ -324,7 +330,7 @@ TESTS
 VERIFICACIÓN
 - Pídeme que ejecute la migración 005 o ejecútala si te lo confirmo.
 - Con curl:
-  - Una sesión simulada completa tiene puntos_recibidos = 845, ningún hueco y las copias de configuración y versión.
+  - Una sesión simulada completa tiene puntos_recibidos = 845 (paso de 5 mm; 147 o 32 con 1 o 2 cm), ningún hueco y las copias de configuración y versión.
   - Con prob_hueco 0.05 aparecen huecos y se listan bien.
   - El CSV tiene el encabezado y las columnas correctas y no muestra artefactos de float32 en las sesiones nuevas.
   - Borrado lógico y restauración funcionan con los roles correctos.
@@ -380,6 +386,7 @@ NAVBAR
 
 CONFIGURACIÓN (ConfiguracionPage)
 - Las secciones Barrido, Sensor, Simulación, Dispositivo, Visualización y Usuarios usan GET y PUT /api/configuracion/:clave y las rutas de usuarios y dispositivo.
+- Barrido incluye el paso predeterminado (0,5, 1 o 2 cm). La barra de configuración de la medición del dashboard (paso, DC/AC y medio, CLAUDE.md 7.0) se mantiene y se pule.
 - Formularios con <label> asociados, el error junto a cada campo, un botón "Guardar cambios" por sección que se desactiva solo mientras se guarda, y confirmación de guardado con aria-live.
 - Para quien no es admin, todo es de solo lectura.
 - Contenido de cada sección:
@@ -430,7 +437,8 @@ VERIFICACIÓN
 - En el navegador integrado, con el backend y Vite levantados:
   - login, menú (Esc, foco, ☰), cambio de tema en las tres opciones, persistencia al recargar;
   - modo simulación y modo real con el emulador de la Pico (indicador en línea y sin señal);
-  - un barrido completo con las cinco vistas;
+  - un barrido completo con las cinco vistas, con cada paso (0,5, 1 y 2 cm) y con los dos medios;
+  - los filtros del historial por modo, paso, medio y origen;
   - recarga a mitad del barrido;
   - historial y CSV;
   - todas las secciones de configuración como admin y como observador;

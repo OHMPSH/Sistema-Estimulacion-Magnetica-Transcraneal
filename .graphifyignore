@@ -1,0 +1,33 @@
+# .graphifyignore — lo que Graphify no debe analizar (sintaxis de .gitignore)
+
+# Dependencias y entornos
+node_modules/
+**/node_modules/
+.venv/
+venv/
+
+# Builds y cachés
+dist/
+build/
+.next/
+.vite/
+frontend/dist/
+
+# Archivos generados sin valor para el grafo
+package-lock.json
+**/package-lock.json
+
+# Secretos: los subagentes leen el contenido de los archivos
+.env
+**/.env
+*.pem
+*.key
+*.crt
+nginx/ssl/
+
+# Carpeta sobrante (se borra en la Fase 8)
+mnt/
+
+# Salida del propio Graphify y configuración local de Claude Code
+graphify-out/
+.claude/

@@ -3,7 +3,7 @@
  * Tabla de las últimas mediciones con highlight de fila nueva.
  */
 import React from 'react';
-import { Z_COLORS_HEX, Z_LEVELS } from '../../constants/system.js';
+import { Z_COLORS_HEX } from '../../constants/system.js';
 
 export function DataTable({ rows }) {
   return (

@@ -52,11 +52,15 @@ export function errorDePassword(password) {
 /**
  * Calcula el hash de una contraseña con una sal aleatoria nueva.
  * @param {string} password
+ * @param {object} [opciones]
+ * @param {boolean} [opciones.validar=true]  false solo para el acceso
+ *        predeterminado admin/admin de scripts/crear-admin.js, que no
+ *        cumple la longitud mínima por decisión del usuario.
  * @returns {Promise<string>} scrypt$N$r$p$salHex$hashHex
  * @throws {Error} si la contraseña no cumple las reglas
  */
-export async function hashPassword(password) {
-  const error = errorDePassword(password);
+export async function hashPassword(password, { validar = true } = {}) {
+  const error = validar ? errorDePassword(password) : (typeof password === 'string' && password ? null : 'Contraseña vacía');
   if (error) throw new Error(error);
 
   const sal  = randomBytes(BYTES_SAL);

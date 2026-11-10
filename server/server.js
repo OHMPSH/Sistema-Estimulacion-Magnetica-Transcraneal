@@ -13,6 +13,10 @@
  *   6. Verificar la conexión a MariaDB e iniciar el servidor HTTP
  *   7. Limpiar cada hora las sesiones de login expiradas
  *
+ * Antes de aceptar conexiones carga la configuración del sistema y
+ * cierra las sesiones de medición que quedaron abiertas de una
+ * ejecución anterior (Fase 3).
+ *
  * El acceso externo y HTTPS lo maneja Nginx (proxy inverso).
  * Este servidor solo escucha en 127.0.0.1 por seguridad.
  * ─────────────────────────────────────────────────────────────
@@ -21,6 +25,9 @@
 import 'dotenv/config';               // carga .env al proceso (debe ir primero)
 import express from 'express';
 import { testConnection } from './config/database.js';
+import { cargar as cargarConfiguracion } from './services/configuracion.js';
+import { inicializar as inicializarSesiones } from './services/sesiones.js';
+import configuracionRouter from './routes/configuracion.routes.js';
 import authRouter from './routes/auth.routes.js';
 import usuariosRouter from './routes/usuarios.routes.js';
 import medicionesRouter from './routes/mediciones.routes.js';
@@ -51,7 +58,7 @@ app.use(express.json({ limit: '100kb' }));
 //   /...      → producción (Nginx, con `proxy_pass http://127.0.0.1:4000/;`,
 //               quita el prefijo /api antes de reenviar)
 // Así funciona en ambos entornos sin modificar la configuración de Nginx.
-const routers = [authRouter, usuariosRouter, medicionesRouter];
+const routers = [authRouter, usuariosRouter, configuracionRouter, medicionesRouter];
 app.use('/api', routers);
 app.use('/', routers);
 
@@ -60,9 +67,24 @@ app.use(rutaNoEncontrada);
 app.use(manejadorErrores);
 
 // ── Arranque ──────────────────────────────────────────────────
-app.listen(PORT, HOST, async () => {
-  console.log(`\n[TMS] Servidor escuchando en http://${HOST}:${PORT} (${process.env.NODE_ENV || 'sin NODE_ENV'})`);
-  console.log('[TMS] API disponible en /api (desarrollo) y en / (detrás de Nginx)');
+async function arrancar() {
   await testConnection();
-  iniciarLimpiezaPeriodica();
-});
+  try {
+    await cargarConfiguracion();
+    await inicializarSesiones();
+  } catch (err) {
+    console.error('[TMS] ✗ No se pudo cargar la configuración o las sesiones:', err.message);
+    if (err.code === 'ER_NO_SUCH_TABLE') {
+      console.error('[TMS]   Falta una migración. Ejecuta: sudo mysql tms_db < server/migrations/003_configuracion.sql');
+    }
+    process.exit(1);
+  }
+
+  app.listen(PORT, HOST, () => {
+    console.log(`\n[TMS] Servidor escuchando en http://${HOST}:${PORT} (${process.env.NODE_ENV || 'sin NODE_ENV'})`);
+    console.log('[TMS] API disponible en /api (desarrollo) y en / (detrás de Nginx)');
+    iniciarLimpiezaPeriodica();
+  });
+}
+
+arrancar();

@@ -3,9 +3,11 @@
  * Vista de Mediciones Pasadas.
  * Los datos vienen de MariaDB (cargados en useAcquisition).
  * El botón Exportar CSV hace GET /api/sesiones/:id/mediciones.
+ * Cada sesión muestra su velocidad (DC/AC), paso, medio y origen, y
+ * se puede filtrar por cada uno (CLAUDE.md 7.0).
  */
 import React, { useState, useMemo } from 'react';
-import { TOTAL_POINTS, Z_LEVELS } from '../../constants/system.js';
+import { PASOS, MEDIOS, mallaDePaso, etiquetaPaso, etiquetaMedio, etiquetaMedioCorta } from '../../utils/geometria.js';
 import { apiFetch } from '../../api/cliente.js';
 
 function formatDuracion(inicio, fin) {
@@ -38,9 +40,10 @@ async function exportarCSV(sesionId) {
   }
 }
 
-function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
+function SesionCard({ sesion, numero, barrido, onDelete, puedeEliminar }) {
   const [abierta, setAbierta] = useState(false);
-  const pct      = Math.round(((sesion.total_puntos ?? 0) / TOTAL_POINTS) * 100);
+  const esperados = mallaDePaso(barrido, sesion.paso_mm ?? 5).totalPuntos;
+  const pct      = Math.round(((sesion.total_puntos ?? 0) / esperados) * 100);
   const fechaStr = new Date(sesion.iniciada_en).toLocaleString('es-MX', {
     dateStyle: 'short', timeStyle: 'medium',
   });
@@ -55,6 +58,9 @@ function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
           </div>
           <div className="session-meta">
             <span className={`session-tag ${sesion.modo.toLowerCase()}`}>{sesion.modo}</span>
+            <span className="session-tag">{etiquetaPaso(sesion.paso_mm)}</span>
+            <span className={`session-tag${sesion.medio === 'solucion_salina' ? ' salina' : ''}`}>{etiquetaMedioCorta(sesion.medio)}</span>
+            <span className={`session-tag${sesion.origen === 'hw' ? ' hw' : ''}`}>{sesion.origen === 'hw' ? 'Pico W' : 'Simulada'}</span>
             <span className="session-tag">{sesion.total_puntos ?? 0} pts · {pct}%</span>
             <span className="session-tag">{formatDuracion(sesion.iniciada_en, sesion.terminada_en)}</span>
           </div>
@@ -75,7 +81,7 @@ function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
             <div className="col-6 col-md-3">
               <div className="session-stat">
                 <strong>Puntos</strong><br />
-                {sesion.total_puntos ?? 0} / {TOTAL_POINTS}
+                {sesion.total_puntos ?? 0} / {esperados}
               </div>
             </div>
             <div className="col-6 col-md-3">
@@ -90,6 +96,30 @@ function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
               <div className="session-stat">
                 <strong>|B| mínimo</strong><br />
                 {sesion.min_magnitud ? Number(sesion.min_magnitud).toFixed(3) : '—'} μT
+              </div>
+            </div>
+            <div className="col-6 col-md-3">
+              <div className="session-stat">
+                <strong>Paso</strong><br />
+                {etiquetaPaso(sesion.paso_mm)} (X, Y y Z)
+              </div>
+            </div>
+            <div className="col-6 col-md-3">
+              <div className="session-stat">
+                <strong>Medio</strong><br />
+                {etiquetaMedio(sesion.medio)}
+              </div>
+            </div>
+            <div className="col-6 col-md-3">
+              <div className="session-stat">
+                <strong>Origen</strong><br />
+                {sesion.origen === 'hw' ? 'Pico W (real)' : 'Simulador'}
+              </div>
+            </div>
+            <div className="col-6 col-md-3">
+              <div className="session-stat">
+                <strong>Sesión</strong><br />
+                #{sesion.id}
               </div>
             </div>
             <div className="col-12">
@@ -117,15 +147,24 @@ function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
   );
 }
 
-export function HistorialPage({ sessions, onDelete, onRecargar, puedeEliminar = false }) {
-  const [filterMode, setFilterMode] = useState('');
-  const [filterDate, setFilterDate] = useState('');
+export function HistorialPage({ sessions, barrido, onDelete, onRecargar, puedeEliminar = false }) {
+  const [filterMode,   setFilterMode]   = useState('');
+  const [filterPaso,   setFilterPaso]   = useState('');
+  const [filterMedio,  setFilterMedio]  = useState('');
+  const [filterOrigen, setFilterOrigen] = useState('');
+  const [filterDate,   setFilterDate]   = useState('');
 
   const filtradas = useMemo(() => sessions.filter(s => {
-    if (filterMode && s.modo !== filterMode) return false;
-    if (filterDate && !s.iniciada_en?.startsWith(filterDate)) return false;
+    if (filterMode   && s.modo !== filterMode) return false;
+    if (filterPaso   && s.paso_mm !== Number(filterPaso)) return false;
+    if (filterMedio  && s.medio !== filterMedio) return false;
+    if (filterOrigen && s.origen !== filterOrigen) return false;
+    if (filterDate   && !s.iniciada_en?.startsWith(filterDate)) return false;
     return true;
-  }), [sessions, filterMode, filterDate]);
+  }), [sessions, filterMode, filterPaso, filterMedio, filterOrigen, filterDate]);
+
+  const estiloFiltro = { background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11 };
+  const limpiar = () => { setFilterMode(''); setFilterPaso(''); setFilterMedio(''); setFilterOrigen(''); setFilterDate(''); };
 
   return (
     <>
@@ -147,26 +186,46 @@ export function HistorialPage({ sessions, onDelete, onRecargar, puedeEliminar = 
           </div>
           <div className="col-auto">
             <select value={filterMode} onChange={e => setFilterMode(e.target.value)}
-              className="form-select form-select-sm"
-              style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              <option value="">Todos los modos</option>
+              className="form-select form-select-sm" aria-label="Filtrar por velocidad" style={estiloFiltro}>
+              <option value="">Todas las velocidades</option>
               <option value="DC">DC — Rápida</option>
               <option value="AC">AC — Normal</option>
             </select>
           </div>
           <div className="col-auto">
+            <select value={filterPaso} onChange={e => setFilterPaso(e.target.value)}
+              className="form-select form-select-sm" aria-label="Filtrar por paso" style={estiloFiltro}>
+              <option value="">Todos los pasos</option>
+              {PASOS.map(p => <option key={p.mm} value={p.mm}>Paso {p.etiqueta}</option>)}
+            </select>
+          </div>
+          <div className="col-auto">
+            <select value={filterMedio} onChange={e => setFilterMedio(e.target.value)}
+              className="form-select form-select-sm" aria-label="Filtrar por medio" style={estiloFiltro}>
+              <option value="">Todos los medios</option>
+              {MEDIOS.map(m => <option key={m.valor} value={m.valor}>{m.etiqueta}</option>)}
+            </select>
+          </div>
+          <div className="col-auto">
+            <select value={filterOrigen} onChange={e => setFilterOrigen(e.target.value)}
+              className="form-select form-select-sm" aria-label="Filtrar por origen" style={estiloFiltro}>
+              <option value="">Simuladas y reales</option>
+              <option value="sim">Solo simuladas</option>
+              <option value="hw">Solo Pico W</option>
+            </select>
+          </div>
+          <div className="col-auto">
             <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-              className="form-control form-control-sm"
-              style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11 }} />
+              className="form-control form-control-sm" aria-label="Filtrar por fecha (UTC)" style={estiloFiltro} />
           </div>
           <div className="col-auto">
             <button className="mode-btn" style={{ padding: '5px 12px' }}
-              onClick={() => { setFilterMode(''); setFilterDate(''); }}>
+              onClick={limpiar}>
               <i className="bi bi-x-circle" /> Limpiar
             </button>
           </div>
           <div className="col-auto ms-auto">
-            <span className="records-badge">{filtradas.length} sesiones</span>
+            <span className="records-badge">{filtradas.length} {filtradas.length === 1 ? 'sesión' : 'sesiones'}</span>
           </div>
         </div>
       </div>
@@ -179,7 +238,7 @@ export function HistorialPage({ sessions, onDelete, onRecargar, puedeEliminar = 
         </div>
       ) : (
         filtradas.map((s, i) => (
-          <SesionCard key={s.id} sesion={s} numero={filtradas.length - i} onDelete={onDelete} puedeEliminar={puedeEliminar} />
+          <SesionCard key={s.id} sesion={s} numero={filtradas.length - i} barrido={barrido} onDelete={onDelete} puedeEliminar={puedeEliminar} />
         ))
       )}
     </>

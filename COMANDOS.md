@@ -157,18 +157,44 @@ porque `setup_db.sql` ya las crea:
 sudo mysql tms_db < PT/server/migrations/002_usuarios.sql
 ```
 
+Para la Fase 3 (configuración del sistema, simulador en el servidor y
+parámetros de cada medición), ejecuta también la 003. Crea la tabla
+`configuracion` con sus valores por defecto y agrega a cada sesión su
+origen (simulada o Pico W), su paso (0,5, 1 o 2 cm) y su medio (campo
+magnético o solución salina). Las sesiones existentes quedan como simuladas,
+de 0,5 cm y de campo magnético. Se puede repetir sin problema y no hace
+falta en una instalación nueva:
+
+```bash
+sudo mysql tms_db < PT/server/migrations/003_configuracion.sql
+```
+
+> Al arrancar, el servidor cierra cualquier sesión de medición que haya
+> quedado abierta de una ejecución anterior (por ejemplo, tras un corte de
+> luz) y lo anota en el log.
+
 ---
 
 ## PASO 2b — Crear el usuario administrador
 
-Desde la Fase 2 el dashboard pide usuario y contraseña. Crea el primer
-administrador (o restablece su contraseña si la olvidaste):
+Desde la Fase 2 el dashboard pide usuario y contraseña. El acceso del
+sistema es **admin / admin**, sin cambio obligatorio. Créalo (o restáuralo si
+alguien cambió la contraseña) con:
 
 ```bash
 cd PT/server
 npm install            # si todavía no instalaste las dependencias
+npm run crear-admin -- --predeterminado
+```
+
+> ⚠ Cualquiera que esté conectado al mismo hotspot y conozca admin/admin
+> puede entrar como administrador.
+
+Si prefieres una contraseña propia para el admin, ejecuta el script sin la
+opción. Pide la contraseña dos veces sin mostrarla (mínimo 8 caracteres):
+
+```bash
 npm run crear-admin
-# Pide la contraseña dos veces sin mostrarla (mínimo 8 caracteres).
 ```
 
 Si no tienes una terminal interactiva (por ejemplo, por SSH sin TTY), pásala
@@ -267,8 +293,9 @@ npm run dev
 http://localhost:5173
 ```
 
-Aparece la pantalla de login. Entra con `admin` y la contraseña de
-`npm run crear-admin`; la primera vez te pide elegir una nueva. Después, el
+Aparece la pantalla de login. Entra con `admin` / `admin` (si usaste
+`npm run crear-admin` sin `--predeterminado`, la primera vez te pide elegir
+una contraseña nueva). Después, el
 badge superior derecho debe mostrar **"SERVIDOR EN LÍNEA"** en verde, junto a
 tu nombre, tu rol y el botón **Salir**.
 
@@ -299,16 +326,39 @@ Tras 5 intentos fallidos con el mismo usuario desde la misma IP, el login
 responde 429 durante 15 minutos.
 
 ### 8.2 Crear una sesión manualmente (operador o admin)
+Se indican la velocidad (`DC` o `AC`), el paso en mm (5, 10 o 20; se aplica
+igual en X, Y y Z) y el medio (`campo_magnetico` o `solucion_salina`). Si
+faltan el paso o el medio, se usan los predeterminados. En modo simulación,
+el simulador del servidor empieza a generar los puntos y cierra la sesión
+solo al terminar la malla.
 ```bash
 curl -b cookies.txt -X POST http://localhost:4000/api/sesiones \
   -H "Content-Type: application/json" \
-  -d '{"modo": "DC"}'
+  -d '{"modo": "DC", "paso_mm": 10, "medio": "solucion_salina"}'
 ```
 ```json
-{ "ok": true, "sesionId": 1 }
+{ "ok": true, "sesionId": 1, "sesion": { "id": 1, "modo": "DC", "origen": "sim", "paso_mm": 10,
+  "medio": "solucion_salina", "grid_n": 7, "z_levels_mm": [0, 10, 20], "puntos_esperados": 147, "...": "..." } }
 ```
+Si ya hay otra sesión abierta responde 409: solo puede haber una a la vez.
 
-### 8.3 Enviar una medición del sensor Hall
+### 8.2b Ver y cambiar la configuración
+```bash
+curl -b cookies.txt http://localhost:4000/api/configuracion
+# Solo admin. El cuerpo siempre es {"valor": …}; en los objetos basta con los campos que cambian:
+curl -b cookies.txt -X PUT http://localhost:4000/api/configuracion/simulacion \
+  -H "Content-Type: application/json" -d '{"valor": {"ms_por_punto": {"DC": 30}}}'
+curl -b cookies.txt -X PUT http://localhost:4000/api/configuracion/modo_operacion \
+  -H "Content-Type: application/json" -d '{"valor": "real"}'
+```
+El modo de operación, el barrido y el sensor no se pueden cambiar con una
+sesión abierta (409).
+
+### 8.3 Enviar una medición (solo en modo real)
+En modo simulación esta ruta responde 409, porque los datos los genera el
+servidor. En modo real (y hasta que la Fase 4 la reemplace por la ruta de la
+Pico W) acepta lecturas para la sesión abierta. `zMM` debe ser uno de los
+planos de esa sesión según su paso:
 ```bash
 curl -b cookies.txt -X POST http://localhost:4000/api/mediciones \
   -H "Content-Type: application/json" \
@@ -403,10 +453,12 @@ Mediciones Pasadas del Dashboard.
 ## PASO 9 — Prueba completa del Dashboard
 
 1. Abre `http://localhost:5173` e inicia sesión como admin u operador
-2. Elige **DC — Rápida** o **AC — Normal**
-3. Clic en **Iniciar Medición** → confirma en el modal
-4. Observa:
-   - Barra de progreso: avanza de 0 a 100% (845 puntos)
+2. En la barra del panel de control elige la **velocidad** (DC — Rápida o
+   AC — Normal), el **paso** (0,5 cm, 1 cm o 2 cm) y el **medio** (campo
+   magnético o solución salina con voltaje)
+3. Clic en **Iniciar Medición** → revisa el resumen y confirma
+4. Observa (en todas las pestañas y equipos conectados a la vez):
+   - Barra de progreso: avanza de 0 a 100% (845 puntos con 0,5 cm; 147 con 1 cm; 32 con 2 cm)
    - Gráfica de líneas: Bx (cyan), By (magenta), Bz (verde)
    - Mapa 3D: **flechas** que crecen en cada punto medido
      - La dirección de la flecha indica hacia dónde apunta el campo
@@ -416,7 +468,15 @@ Mediciones Pasadas del Dashboard.
 5. Al terminar el barrido (o al presionar **Detener**):
    - La sesión se guarda automáticamente en MariaDB
    - Ve a **Mediciones Pasadas** → aparece la sesión recién completada
-6. Abre la sesión y haz clic en **Exportar CSV**
+6. En Mediciones Pasadas puedes filtrar por velocidad, paso, medio, origen y fecha
+7. Abre la sesión y haz clic en **Exportar CSV**
+
+### Tests automáticos
+```bash
+cd PT/server && npm test
+```
+No necesitan la base de datos. Prueban la física de la espira, el generador
+aleatorio con semilla, el ruido gaussiano y la malla de cada paso.
 
 ---
 
@@ -424,7 +484,7 @@ Mediciones Pasadas del Dashboard.
 
 ### Olvidé la contraseña del admin
 ```bash
-cd PT/server && npm run crear-admin   # la restablece y cierra sus sesiones
+cd PT/server && npm run crear-admin -- --predeterminado   # vuelve a admin/admin y cierra sus sesiones
 ```
 
 ### "No existe la tabla de usuarios" al correr crear-admin

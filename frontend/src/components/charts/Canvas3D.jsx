@@ -23,9 +23,14 @@
 
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
-import { Z_LEVELS, Z_COLORS_INT, GRID_SIZE_MM } from '../../constants/system.js';
+import { Z_COLORS_INT } from '../../constants/system.js';
 
-export function Canvas3D({ points3D }) {
+/**
+ * @param points3D    lecturas de la sesión
+ * @param zLevels     planos Z de la sesión (dependen del paso; ver utils/geometria.js)
+ * @param gridSizeMM  tamaño de la placa en mm
+ */
+export function Canvas3D({ points3D, zLevels = [0, 5, 10, 15, 20], gridSizeMM = 60 }) {
   const wrapRef    = useRef(null);   // div contenedor (para medir tamaño)
   const canvasRef  = useRef(null);   // canvas de WebGL
   const stateRef   = useRef({        // estado de Three.js (no reactivo)
@@ -33,6 +38,7 @@ export function Canvas3D({ points3D }) {
     scene:    null,
     camera:   null,
     group:    null,                  // grupo de flechas de medición
+    planos:   null,                  // grupo con los marcos de los planos Z
     orbit:    { theta: 0.6, phi: 0.8, radius: 180, drag: false, mx: 0, my: 0, auto: true },
     frame:    null,
     prevLen:  0,
@@ -73,20 +79,9 @@ export function Canvas3D({ points3D }) {
     addLine([0,   0, 0],  [0, 32, 0],  0xff00c8); // eje Z (altura) — magenta
     addLine([0,   0, -32],[0, 0,  32], 0x00ffa3); // eje Y — verde
 
-    // Marcos de los 5 planos Z (uno por nivel de altura)
-    Z_LEVELS.forEach((zmm, zi) => {
-      const mat = new THREE.LineBasicMaterial({
-        color: Z_COLORS_INT[zi], transparent: true, opacity: 0.2,
-      });
-      const pts = [
-        [-30, zmm, -30], [30, zmm, -30],
-        [30, zmm, 30],   [-30, zmm, 30],
-        [-30, zmm, -30], // cerrar el cuadrado
-      ].map(p => new THREE.Vector3(...p));
-      s.scene.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts), mat
-      ));
-    });
+    // Marcos de los planos Z: se dibujan en otro efecto, según el paso de la sesión
+    s.planos = new THREE.Group();
+    s.scene.add(s.planos);
 
     // Grupo vacío donde iremos añadiendo las flechas
     s.group = new THREE.Group();
@@ -145,6 +140,31 @@ export function Canvas3D({ points3D }) {
     };
   }, []);
 
+  // ── Marcos de los planos Z (cambian con el paso de la sesión) ──
+  const clavePlanos = zLevels.join(',');
+  useEffect(() => {
+    const { current: s } = stateRef;
+    if (!s.planos) return;
+    while (s.planos.children.length > 0) {
+      const viejo = s.planos.children[0];
+      s.planos.remove(viejo);
+      viejo.geometry.dispose();
+      viejo.material.dispose();
+    }
+    zLevels.forEach((zmm, zi) => {
+      const mat = new THREE.LineBasicMaterial({
+        color: Z_COLORS_INT[zi] ?? Z_COLORS_INT[0], transparent: true, opacity: 0.2,
+      });
+      const pts = [
+        [-30, zmm, -30], [30, zmm, -30],
+        [30, zmm, 30],   [-30, zmm, 30],
+        [-30, zmm, -30], // cerrar el cuadrado
+      ].map(p => new THREE.Vector3(...p));
+      s.planos.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clavePlanos]);
+
   // ── Agregar flechas para los nuevos puntos ───────────────
   useEffect(() => {
     const { current: s } = stateRef;
@@ -157,9 +177,9 @@ export function Canvas3D({ points3D }) {
     nuevos.forEach(({ xMM, yMM, zIdx, zMM, bx, by, bz, magnitud }) => {
       // ── Posición del punto en el espacio 3D ──────────────
       // Mapeamos: xMM [0..60] → [-30..30], yMM→ eje Z Three.js, zMM→ altura Y
-      const px = (xMM / GRID_SIZE_MM) * 60 - 30;
+      const px = (xMM / gridSizeMM) * 60 - 30;
       const py = zMM;   // altura real en mm
-      const pz = (yMM / GRID_SIZE_MM) * 60 - 30;
+      const pz = (yMM / gridSizeMM) * 60 - 30;
       const origen = new THREE.Vector3(px, py, pz);
 
       // ── Vector del campo ──────────────────────────────────
@@ -229,7 +249,7 @@ export function Canvas3D({ points3D }) {
       <div className="chart-header">
         <div>
           <div className="chart-title">Mapa 3D de Mediciones</div>
-          <div className="chart-desc">Placa 6×6cm — 5 planos Z (0–20mm)</div>
+          <div className="chart-desc">Placa {gridSizeMM / 10}×{gridSizeMM / 10} cm — {zLevels.length} planos Z ({zLevels[0]}–{zLevels[zLevels.length - 1]} mm)</div>
         </div>
       </div>
       <div className="chart-body" style={{ position: 'relative', minHeight: 280 }}>
@@ -237,11 +257,11 @@ export function Canvas3D({ points3D }) {
           <canvas ref={canvasRef} />
           {/* Leyenda de colores por nivel Z */}
           <div className="z-legend">
-            {Z_LEVELS.map((zmm, zi) => (
+            {zLevels.map((zmm, zi) => (
               <div key={zi} className="z-legend-item">
                 <div
                   className="z-legend-dot"
-                  style={{ background: `#${Z_COLORS_INT[zi].toString(16).padStart(6, '0')}` }}
+                  style={{ background: `#${(Z_COLORS_INT[zi] ?? Z_COLORS_INT[0]).toString(16).padStart(6, '0')}` }}
                 />
                 Z{zi} — {zmm} mm
               </div>

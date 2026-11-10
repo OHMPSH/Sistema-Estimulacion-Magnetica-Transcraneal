@@ -3,7 +3,7 @@
  * Cuatro tarjetas de indicadores en tiempo real.
  */
 import React from 'react';
-import { Z_LEVELS, Z_COLORS_HEX } from '../../constants/system.js';
+import { Z_COLORS_HEX } from '../../constants/system.js';
 
 function formatElapsed(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
@@ -11,8 +11,8 @@ function formatElapsed(sec) {
   return `${m}:${s}`;
 }
 
-export function KpiCards({ isActive, currentZIdx, currentPos, magnitudeValue, lastTimestamp, elapsedSec, totalScanned }) {
-  const zMM     = Z_LEVELS[currentZIdx] ?? 0;
+export function KpiCards({ isActive, currentZIdx, zLevels, currentPos, magnitudeValue, lastTimestamp, elapsedSec, totalScanned }) {
+  const zMM     = zLevels[currentZIdx] ?? 0;
   const zColor  = Z_COLORS_HEX[currentZIdx] ?? Z_COLORS_HEX[0];
 
   return (
@@ -48,11 +48,11 @@ export function KpiCards({ isActive, currentZIdx, currentPos, magnitudeValue, la
           </div>
           {/* Indicador de 5 niveles */}
           <div className="d-flex gap-1 mt-2">
-            {Z_LEVELS.map((_, zi) => (
+            {zLevels.map((_, zi) => (
               <div
                 key={zi}
                 className={`z-level-pill${(isActive || totalScanned > 0) && zi === currentZIdx ? ` active-z${zi}` : ''}`}
-                title={`Z${zi} = ${Z_LEVELS[zi]}mm`}
+                title={`Z${zi} = ${zLevels[zi]}mm`}
               >
                 Z{zi}
               </div>

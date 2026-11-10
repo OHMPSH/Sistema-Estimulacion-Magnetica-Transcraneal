@@ -21,17 +21,55 @@ import pool from '../config/database.js';
 // SESIONES
 // ─────────────────────────────────────────────────────────────
 
+/** Columnas de una sesión que se envían al navegador */
+const COLUMNAS_SESION = 'id, modo, origen, paso_mm, medio, iniciada_en, terminada_en';
+
 /**
  * Crea una nueva sesión en la BD y devuelve su ID.
- * @param {string} modo  'DC' o 'AC'
+ * La regla de "una sola sesión abierta" la aplica services/sesiones.js.
+ * @param {object} s  { modo: 'DC'|'AC', origen: 'sim'|'hw', pasoMM: 5|10|20, medio }
  * @returns {Promise<number>} ID de la sesión recién creada
  */
-export async function crearSesion(modo) {
+export async function crearSesion({ modo, origen, pasoMM, medio }) {
   const [result] = await pool.execute(
-    'INSERT INTO sesiones (modo, iniciada_en) VALUES (?, UTC_TIMESTAMP())',
-    [modo]
+    `INSERT INTO sesiones (modo, origen, paso_mm, medio, iniciada_en)
+     VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
+    [modo, origen, pasoMM, medio]
   );
   return result.insertId;
+}
+
+/** Una sesión completa (sin estadísticas), o null si no existe */
+export async function obtenerSesion(sesionId) {
+  const [rows] = await pool.execute(`SELECT ${COLUMNAS_SESION} FROM sesiones WHERE id = ?`, [sesionId]);
+  return rows[0] ?? null;
+}
+
+/** Sesiones abiertas (terminada_en NULL), de la más antigua a la más nueva */
+export async function obtenerSesionesAbiertas() {
+  const [rows] = await pool.execute(
+    `SELECT ${COLUMNAS_SESION} FROM sesiones WHERE terminada_en IS NULL ORDER BY id ASC`
+  );
+  return rows;
+}
+
+/**
+ * Cierra una sesión que quedó abierta de una ejecución anterior del
+ * servidor. La hora de cierre es la de su última medición (o la de
+ * inicio si no tiene ninguna), no la hora actual: así la duración del
+ * historial refleja lo que de verdad se midió.
+ * @returns {Promise<boolean>}
+ */
+export async function cerrarSesionHuerfana(sesionId) {
+  const [result] = await pool.execute(
+    `UPDATE sesiones s
+        SET s.terminada_en = COALESCE(
+              (SELECT MAX(m.\`timestamp\`) FROM mediciones m WHERE m.sesion_id = s.id),
+              s.iniciada_en)
+      WHERE s.id = ? AND s.terminada_en IS NULL`,
+    [sesionId]
+  );
+  return result.affectedRows === 1;
 }
 
 /**
@@ -60,15 +98,28 @@ export async function cerrarSesion(sesionId) {
 }
 
 /**
- * Obtiene todas las sesiones ordenadas de más reciente a más antigua.
+ * Obtiene las sesiones ordenadas de más reciente a más antigua.
  * Se usa en la página "Mediciones Pasadas".
+ * @param {object} [filtros]  { modo?, pasoMM?, medio?, origen? } ya validados
  * @returns {Promise<Array>} filas de la tabla sesiones con estadísticas
  */
-export async function obtenerSesiones() {
+export async function obtenerSesiones(filtros = {}) {
+  // Solo columnas fijas; los valores van siempre como parámetros "?"
+  const condiciones = [];
+  const valores = [];
+  if (filtros.modo)   { condiciones.push('s.modo = ?');    valores.push(filtros.modo); }
+  if (filtros.pasoMM) { condiciones.push('s.paso_mm = ?'); valores.push(filtros.pasoMM); }
+  if (filtros.medio)  { condiciones.push('s.medio = ?');   valores.push(filtros.medio); }
+  if (filtros.origen) { condiciones.push('s.origen = ?');  valores.push(filtros.origen); }
+  const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
+
   const [rows] = await pool.execute(
     `SELECT
        s.id,
        s.modo,
+       s.origen,
+       s.paso_mm,
+       s.medio,
        s.iniciada_en,
        s.terminada_en,
        COUNT(m.id)       AS total_puntos,
@@ -76,8 +127,10 @@ export async function obtenerSesiones() {
        MIN(m.magnitud)   AS min_magnitud
      FROM sesiones s
      LEFT JOIN mediciones m ON m.sesion_id = s.id
+     ${where}
      GROUP BY s.id
-     ORDER BY s.iniciada_en DESC, s.id DESC`
+     ORDER BY s.iniciada_en DESC, s.id DESC`,
+    valores
   );
   return rows;
 }

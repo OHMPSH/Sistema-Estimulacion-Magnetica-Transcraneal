@@ -1,202 +1,140 @@
 /**
  * controllers/mediciones.controller.js
  * ─────────────────────────────────────────────────────────────
- * CAPA DE CONTROLADOR (MVC)
+ * CAPA DE CONTROLADOR (MVC) — sesiones de medición y mediciones
  *
- * Recibe peticiones HTTP desde el frontend (Fetch API) o desde
- * el microcontrolador Pico W, ejecuta la lógica de negocio y
- * devuelve respuestas JSON.
+ *   getStatus        — GET    /api/status        health-check (público)
+ *   sseHandler       — GET    /api/stream        canal en tiempo real
+ *   iniciarSesion    — POST   /api/sesiones      {modo, paso_mm?, medio?}
+ *   finalizarSesion  — PUT    /api/sesiones/:id  cierra la sesión
+ *   getSesiones      — GET    /api/sesiones      lista (?modo=&paso_mm=&medio=&origen=)
+ *   deleteSesion     — DELETE /api/sesiones/:id  elimina la sesión
+ *   createMedicion   — POST   /api/mediciones    inserta una medición (solo modo real)
+ *   getMedicionesDeSesion — GET /api/sesiones/:id/mediciones
  *
- * Funciones:
- *   getStatus        — GET  /api/status       health-check
- *   sseHandler       — GET  /api/stream        canal tiempo real
- *   iniciarSesion    — POST /api/sesiones       crea sesión en BD
- *   finalizarSesion  — PUT  /api/sesiones/:id   cierra sesión
- *   getSesiones      — GET  /api/sesiones       lista sesiones
- *   deleteSesion     — DELETE /api/sesiones/:id elimina sesión
- *   createMedicion   — POST /api/mediciones     inserta medición
- *   getMediciones    — GET  /api/sesiones/:id/mediciones
+ * Las reglas de negocio viven en services/: sesiones.js (una sola
+ * sesión abierta, simulador), ingesta.js (validar, guardar y difundir)
+ * y tiempoReal.js (SSE).
  * ─────────────────────────────────────────────────────────────
  */
 
-import { randomUUID } from 'node:crypto';
 import * as Medicion from '../models/Medicion.js';
+import * as sesiones from '../services/sesiones.js';
+import { registrarMedicion, ErrorIngesta } from '../services/ingesta.js';
+import { conectar, totalClientes } from '../services/tiempoReal.js';
+import { obtener } from '../services/configuracion.js';
 
-// ── Canal SSE ────────────────────────────────────────────────
-// Array de objetos Response de Express.
-// Cuando llega una medición, se envía a todos los clientes.
-let sseClients = [];
+/** Traduce los errores conocidos de los servicios a su respuesta HTTP */
+function responderError(res, next, err) {
+  if (err instanceof sesiones.ErrorSesion) {
+    return res.status(err.status).json({ ok: false, error: err.message });
+  }
+  if (err instanceof ErrorIngesta) {
+    return res.status(err.status).json({ ok: false, error: err.message, errores: err.errores });
+  }
+  return next(err);
+}
 
-/** Envía datos a todos los clientes SSE conectados */
-const broadcast = (event, data) => {
-  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  // Recorrer la lista e intentar escribir en cada conexión abierta
-  sseClients.forEach(({ res }) => {
-    try { res.write(msg); } catch (_) { /* cliente ya desconectado */ }
-  });
-};
-
-// ─────────────────────────────────────────────────────────────
-// HEALTH-CHECK
-// ─────────────────────────────────────────────────────────────
+// ── Health-check y SSE ───────────────────────────────────────
 
 /** GET /api/status — el frontend lo llama cada 15 s */
 export const getStatus = (_req, res) => {
   res.json({
-    ok:      true,
-    version: '3.0.0',
-    uptime:  process.uptime(),         // segundos que lleva corriendo
-    clientes: sseClients.length,       // cuántos dashboards conectados
+    ok:             true,
+    version:        '3.0.0',            // la versión real llega en la Fase 5
+    uptime:         process.uptime(),
+    clientes:       totalClientes(),
+    modo_operacion: obtener('modo_operacion'),
   });
 };
 
-// ─────────────────────────────────────────────────────────────
-// SSE — Server-Sent Events
-// ─────────────────────────────────────────────────────────────
+/** GET /api/stream — eventos medicion, sesion y configuracion */
+export const sseHandler = (req, res) => conectar(req, res);
 
-/**
- * GET /api/stream
- * El frontend abre esta conexión UNA sola vez y queda
- * escuchando. Cada vez que llega una medición, el servidor
- * la empuja aquí sin que el cliente tenga que pedir nada.
- */
-export const sseHandler = (req, res) => {
-  // Cabeceras especiales para SSE
-  res.setHeader('Content-Type',      'text/event-stream');
-  res.setHeader('Cache-Control',     'no-cache');
-  res.setHeader('Connection',        'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // evita que Nginx almacene el stream
-  res.flushHeaders();
+// ── Sesiones ─────────────────────────────────────────────────
 
-  // Registrar este cliente en la lista
-  const clientId = randomUUID();
-  sseClients.push({ id: clientId, res });
-  console.log(`[SSE] +cliente ${clientId}. Total: ${sseClients.length}`);
-
-  // Mantener viva la conexión con un ping cada 25 segundos
-  const ping = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch (_) {}
-  }, 25_000);
-
-  // Cuando el cliente cierra el navegador, limpiar
-  req.on('close', () => {
-    clearInterval(ping);
-    sseClients = sseClients.filter(c => c.id !== clientId);
-    console.log(`[SSE] -cliente ${clientId}. Total: ${sseClients.length}`);
-  });
-};
-
-// ─────────────────────────────────────────────────────────────
-// SESIONES
-// ─────────────────────────────────────────────────────────────
-
-/** POST /api/sesiones — crea una nueva sesión en MariaDB (modo validado) */
-export const iniciarSesion = async (req, res) => {
+/** POST /api/sesiones — crea la sesión (409 si ya hay otra abierta) */
+export const iniciarSesion = async (req, res, next) => {
   try {
-    const sesionId = await Medicion.crearSesion(req.modo);
-    res.status(201).json({ ok: true, sesionId });
+    const sesion = await sesiones.iniciar(req.nuevaSesion);
+    // sesionId se mantiene por compatibilidad con el frontend anterior
+    res.status(201).json({ ok: true, sesionId: sesion.id, sesion });
   } catch (err) {
-    console.error('[sesion] Error al crear:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al crear sesión' });
+    responderError(res, next, err);
   }
 };
 
-/**
- * Responde 404 si la sesión no existe o 409 si ya está cerrada.
- * Se usa cuando una operación sobre una sesión abierta no afectó filas.
- */
-const responderSesionNoDisponible = async (res, sesionId) => {
-  const sesion = await Medicion.obtenerEstadoSesion(sesionId);
-  if (!sesion) return res.status(404).json({ ok: false, error: `La sesión ${sesionId} no existe` });
-  return res.status(409).json({ ok: false, error: `La sesión ${sesionId} ya está cerrada` });
-};
-
-/** PUT /api/sesiones/:id — marca la sesión como terminada */
-export const finalizarSesion = async (req, res) => {
+/** PUT /api/sesiones/:id — cierra la sesión y detiene el simulador */
+export const finalizarSesion = async (req, res, next) => {
   try {
-    const cerrada = await Medicion.cerrarSesion(req.idSesion);
-    if (!cerrada) return await responderSesionNoDisponible(res, req.idSesion);
-    res.json({ ok: true });
+    const sesion = await sesiones.finalizar(req.idSesion, 'manual');
+    res.json({ ok: true, sesion });
   } catch (err) {
-    console.error('[sesion] Error al cerrar:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al cerrar sesión' });
+    responderError(res, next, err);
   }
 };
 
-/** GET /api/sesiones — lista todas las sesiones con estadísticas */
-export const getSesiones = async (_req, res) => {
+/** GET /api/sesiones — sesiones con estadísticas, filtradas */
+export const getSesiones = async (req, res, next) => {
   try {
-    const sesiones = await Medicion.obtenerSesiones();
-    res.json({ ok: true, data: sesiones });
+    res.json({ ok: true, data: await Medicion.obtenerSesiones(req.filtros), activa: sesiones.sesionAbierta() });
   } catch (err) {
-    console.error('[sesion] Error al listar:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al obtener sesiones' });
+    next(err);
   }
 };
 
-/** DELETE /api/sesiones/:id — elimina sesión y sus mediciones */
-export const deleteSesion = async (req, res) => {
+/** DELETE /api/sesiones/:id — elimina la sesión y sus mediciones */
+export const deleteSesion = async (req, res, next) => {
   try {
-    const eliminada = await Medicion.eliminarSesion(req.idSesion);
-    if (!eliminada) {
-      return res.status(404).json({ ok: false, error: `La sesión ${req.idSesion} no existe` });
+    if (sesiones.sesionAbierta()?.id === req.idSesion) {
+      return res.status(409).json({ ok: false, error: `La sesión ${req.idSesion} está en curso. Deténla antes de eliminarla.` });
     }
+    const eliminada = await Medicion.eliminarSesion(req.idSesion);
+    if (!eliminada) return res.status(404).json({ ok: false, error: `La sesión ${req.idSesion} no existe` });
     res.json({ ok: true });
   } catch (err) {
-    console.error('[sesion] Error al eliminar:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al eliminar sesión' });
+    next(err);
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// MEDICIONES
-// ─────────────────────────────────────────────────────────────
+// ── Mediciones ───────────────────────────────────────────────
 
 /**
  * POST /api/mediciones
- * Recibe una lectura (ya validada por validarMedicion), la guarda en
- * MariaDB y la reenvía en tiempo real al dashboard vía SSE.
- *
- * Body esperado: { sesionId, xMM, yMM, zMM, bx, by, bz }
- * Unidades: mm y μT. timestamp = hora de recepción del servidor (UTC).
+ * En modo simulación responde 409: los datos los genera el simulador
+ * del servidor. En modo real la usan operador y admin hasta que la
+ * Fase 4 la reemplace por la ingesta de la Pico W.
  */
-export const createMedicion = async (req, res) => {
-  const { sesionId, xMM, yMM, zMM, zIdx, bx, by, bz } = req.medicion;
-
-  // |B| = √(Bx²+By²+Bz²), sin redondear (el redondeo es solo de presentación)
-  const magnitud  = Math.hypot(bx, by, bz);
-  const timestamp = new Date();
-
+export const createMedicion = async (req, res, next) => {
   try {
-    // 1. Guardar en MariaDB (solo si la sesión existe y está abierta)
-    const insertada = await Medicion.insertarMedicion({
-      sesionId, xMM, yMM, zMM, bx, by, bz, magnitud, timestamp,
-    });
-    if (!insertada) return await responderSesionNoDisponible(res, sesionId);
-
-    const medicion = {
-      sesionId, xMM, yMM, zMM, zIdx, bx, by, bz, magnitud,
-      timestamp: timestamp.toISOString(),
-    };
-
-    // 2. Enviar al dashboard en tiempo real (SSE)
-    broadcast('medicion', medicion);
-
-    // 3. Responder al cliente (simulación o Pico W)
+    if (obtener('modo_operacion') === 'simulacion') {
+      return res.status(409).json({
+        ok: false,
+        error: 'El sistema está en modo simulación: las mediciones las genera el simulador del servidor.',
+      });
+    }
+    const { sesionId, ...lectura } = req.medicion;
+    const abierta = sesiones.sesionAbierta();
+    if (!abierta || abierta.id !== sesionId) {
+      const estado = await Medicion.obtenerEstadoSesion(sesionId);
+      if (!estado) return res.status(404).json({ ok: false, error: `La sesión ${sesionId} no existe` });
+      return res.status(409).json({ ok: false, error: `La sesión ${sesionId} no está abierta` });
+    }
+    if (abierta.origen !== 'hw') {
+      return res.status(409).json({ ok: false, error: `La sesión ${sesionId} es simulada: no acepta lecturas externas` });
+    }
+    const medicion = await registrarMedicion(abierta, lectura);
     res.status(201).json({ ok: true, data: medicion });
   } catch (err) {
-    console.error('[medicion] Error:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al guardar medición' });
+    responderError(res, next, err);
   }
 };
 
 /** GET /api/sesiones/:id/mediciones — exportar datos de una sesión */
-export const getMedicionesDeSesion = async (req, res) => {
+export const getMedicionesDeSesion = async (req, res, next) => {
   try {
-    const datos = await Medicion.obtenerMedicionesDeSesion(req.idSesion);
-    res.json({ ok: true, data: datos });
+    res.json({ ok: true, data: await Medicion.obtenerMedicionesDeSesion(req.idSesion) });
   } catch (err) {
-    console.error('[medicion] Error al exportar:', err.message);
-    res.status(500).json({ ok: false, error: 'Error al obtener mediciones' });
+    next(err);
   }
 };

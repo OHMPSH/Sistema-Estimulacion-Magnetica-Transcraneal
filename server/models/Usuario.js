@@ -202,14 +202,15 @@ export async function actualizarPassword(id, hashPassword, debeCambiar) {
 
 /**
  * Deja a un usuario existente como administrador activo con una
- * contraseña nueva que deberá cambiar. Lo usa scripts/crear-admin.js.
+ * contraseña nueva. Lo usa scripts/crear-admin.js.
+ * @param {boolean} debeCambiar  true si tendrá que cambiarla al entrar
  */
-export async function restablecerComoAdmin(id, hashPassword) {
+export async function restablecerComoAdmin(id, hashPassword, debeCambiar = true) {
   const [resultado] = await pool.execute(
     `UPDATE usuarios
-        SET hash_password = ?, rol = 'admin', activo = 1, debe_cambiar_password = 1
+        SET hash_password = ?, rol = 'admin', activo = 1, debe_cambiar_password = ?
       WHERE id = ?`,
-    [hashPassword, id]
+    [hashPassword, debeCambiar ? 1 : 0, id]
   );
   return resultado.affectedRows === 1;
 }
