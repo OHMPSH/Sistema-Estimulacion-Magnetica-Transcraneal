@@ -4,6 +4,7 @@
   "6": "sesiones.js",
   "7": "react",
   "8": "emular-pico.js",
+  "9": "validar.js",
   "11": "pico_w_cliente_ejemplo.py",
   "13": "Fase 5: Datos y trazabilidad (pendiente)",
   "16": "Fase 7 — Revisión de la interfaz y plan de diseño",
@@ -12,5 +13,12 @@
   "23": "setup_test_db.sql",
   "25": "Medicion.js",
   "29": "003_configuracion.sql",
-  "30": "004_dispositivo.sql"
+  "30": "004_dispositivo.sql",
+  "31": "app.js",
+  "32": "dispositivo.js",
+  "33": "api.integ.js",
+  "34": "scripts",
+  "35": "database.js",
+  "36": "Dispositivo.js",
+  "37": "idx_sesiones_eliminada"
 }
