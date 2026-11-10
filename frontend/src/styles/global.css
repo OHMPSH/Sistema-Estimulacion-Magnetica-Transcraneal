@@ -293,6 +293,18 @@ fieldset:disabled .opcion-radio { cursor: not-allowed; opacity: .7; }
 .grupo-opciones:disabled .opcion-boton { cursor: not-allowed; opacity: .6; }
 .grupo-opciones:disabled .opcion-boton input { cursor: not-allowed; }
 
+/* Paso libre: campo en mm + pasos sugeridos */
+button.opcion-boton { background: transparent; font-family: inherit; }
+button.opcion-boton:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+.campo-paso { position: relative; display: inline-flex; align-items: center; }
+.campo-paso .campo-tms { width: 6.5rem; min-height: 38px; padding-right: 2.4rem; text-align: right; }
+.campo-paso-unidad { position: absolute; right: 12px; font-size: 13px; color: var(--text-secondary); pointer-events: none; }
+.texto-paso { margin-top: 6px; font-size: 12px; max-width: 34ch; }
+.grupo-opciones:disabled .campo-paso .campo-tms { cursor: not-allowed; opacity: .6; }
+/* Zona de muestreo: X, Y y Z con su eje a la izquierda */
+.campo-zona .campo-zona-eje { position: absolute; left: 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.campo-zona .campo-tms { width: 6.75rem; padding-left: 1.8rem; }
+
 /* ── Botones ────────────────────────────────────────────────── */
 /* Táctil: sin retraso de doble toque y con un resaltado propio */
 button, a, label, select, summary, .opcion-boton, .segmento { touch-action: manipulation; -webkit-tap-highlight-color: color-mix(in srgb, var(--guinda-bright) 20%, transparent); }

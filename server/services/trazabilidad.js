@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { puntoDeMalla } from './geometria.js';
+import { puntoDeMalla, indicePlano, indiceDeMalla } from './geometria.js';
 
 /** Máximo de posiciones que se guardan en `huecos.posiciones` */
 export const MAX_HUECOS_LISTADOS = 1000;
@@ -25,7 +25,7 @@ export const TOLERANCIA_POSICION_MM = 1;
 /**
  * Posiciones de la malla que no tienen ninguna lectura válida (no
  * saturada). Se recorren en el orden del barrido (x → y → z).
- * @param {object} malla       mallaDeBarrido(barrido, paso)
+ * @param {object} malla       mallaDeZona(zona, paso)
  * @param {Array<{x_mm, y_mm, z_mm}>} posiciones  lecturas válidas
  * @returns {{ total: number, posiciones: {xMM, yMM, zMM}[] }}
  */
@@ -35,10 +35,10 @@ export function calcularHuecos(malla, posiciones) {
   for (const p of posiciones) {
     const ix = Math.round(p.x_mm / paso);
     const iy = Math.round(p.y_mm / paso);
-    const iz = malla.zLevels.indexOf(p.z_mm);
-    if (iz === -1 || ix < 0 || iy < 0 || ix >= malla.gridN || iy >= malla.gridN) continue;
+    const i = indiceDeMalla(malla, ix, iy, indicePlano(malla.zLevels, p.z_mm));
+    if (i === -1) continue;
     if (Math.abs(p.x_mm - ix * paso) > TOLERANCIA_POSICION_MM || Math.abs(p.y_mm - iy * paso) > TOLERANCIA_POSICION_MM) continue;
-    cubiertos.add((iz * malla.gridN + iy) * malla.gridN + ix);
+    cubiertos.add(i);
   }
   const lista = [];
   let total = 0;

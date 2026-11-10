@@ -137,13 +137,13 @@ def mover_a(x_mm, y_mm, z_mm):
 
 
 def malla(sesion):
-    """Puntos de la sesión en orden x → y → z."""
+    """Puntos de la sesión en orden x → y → z, en coordenadas de la zona
+    (0..zona_mm.x, 0..zona_mm.y). La zona va centrada bajo la bobina."""
     paso = sesion["paso_mm"]
-    n = sesion["grid_n"]
     for z in sesion["z_levels_mm"]:
-        for iy in range(n):
-            for ix in range(n):
-                yield ix * paso, iy * paso, z
+        for iy in range(sesion["grid_ny"]):
+            for ix in range(sesion["grid_nx"]):
+                yield round(ix * paso, 1), round(iy * paso, 1), z
 
 
 # ── Bucle principal ────────────────────────────────────────────

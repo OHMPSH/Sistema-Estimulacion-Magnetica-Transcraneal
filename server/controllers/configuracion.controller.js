@@ -14,7 +14,7 @@
 
 import * as configuracion from '../services/configuracion.js';
 import { sesionAbierta } from '../services/sesiones.js';
-import { PASOS_MM, MEDIOS } from '../services/geometria.js';
+import { PASOS_SUGERIDOS_MM, PASO_MIN_MM, MAX_PUNTOS_SESION, MEDIOS } from '../services/geometria.js';
 import { RANGOS_GA, GANANCIAS_HMC5883L } from '../services/validacionConfiguracion.js';
 
 const BLOQUEADAS_CON_SESION = ['modo_operacion', 'barrido', 'sensor'];
@@ -25,7 +25,9 @@ export const getConfiguracion = (_req, res) => {
     ok: true,
     data: configuracion.obtenerTodo(),
     opciones: {
-      pasos_mm: PASOS_MM,
+      pasos_sugeridos_mm: PASOS_SUGERIDOS_MM,
+      paso_min_mm: PASO_MIN_MM,
+      max_puntos_sesion: MAX_PUNTOS_SESION,
       medios: MEDIOS,
       ganancias_hmc5883l: RANGOS_GA.map(rango => ({ rango_ga: rango, lsb_por_ga: GANANCIAS_HMC5883L[rango] })),
     },

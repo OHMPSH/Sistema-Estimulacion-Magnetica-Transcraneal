@@ -24,7 +24,8 @@
 
 import * as Medicion from '../models/Medicion.js';
 import { obtener } from './configuracion.js';
-import { mallaDeBarrido } from './geometria.js';
+import { mallaDeZona, limitesDeBarrido } from './geometria.js';
+import { zonaDeSesion, mallaDeSesion } from '../config/barrido.js';
 import { difundir } from './tiempoReal.js';
 import * as simulador from './simulador.js';
 import { olvidarSesion } from './ingesta.js';
@@ -50,11 +51,8 @@ const enCola = tarea => {
   return resultado;
 };
 
-/**
- * Malla de una sesión: con la copia de la configuración de barrido que
- * se guardó al iniciarla (Fase 5); las sesiones antiguas, con la vigente.
- */
-export const mallaDeSesion = sesion => mallaDeBarrido(sesion.config_barrido ?? obtener('barrido'), sesion.paso_mm);
+/** Zona y malla de una sesión (viven en config/barrido.js; se reexportan aquí) */
+export { zonaDeSesion, mallaDeSesion };
 
 /** Sesión con su geometría, tal como se envía al navegador (sin las copias de configuración) */
 function conGeometria(sesion) {
@@ -62,7 +60,9 @@ function conGeometria(sesion) {
   const { config_barrido: _b, config_sensor: _s, config_simulacion: _c, ...publica } = sesion;
   return {
     ...publica,
-    grid_n: malla.gridN,
+    zona_mm: malla.zona,
+    grid_nx: malla.gridNx,
+    grid_ny: malla.gridNy,
     z_levels_mm: malla.zLevels,
     puntos_esperados: sesion.puntos_esperados ?? malla.totalPuntos,
   };
@@ -113,11 +113,11 @@ export async function inicializar() {
  * configuración vigente (barrido, sensor y, en simulación, la de
  * simulación con su semilla), la versión del software, los puntos
  * esperados y, en modo real, el firmware del último latido de la Pico.
- * @param {object} p  { modo, pasoMM, medio, usuarioId } ya validados
+ * @param {object} p  { modo, pasoMM, medio, zona: {x,y,z}, usuarioId } ya validados
  * @returns {Promise<object>} la sesión con su geometría
  * @throws {ErrorSesion} 409 si ya hay otra abierta
  */
-export function iniciar({ modo, pasoMM, medio, usuarioId = null }) {
+export function iniciar({ modo, pasoMM, medio, zona, usuarioId = null }) {
   return enCola(async () => {
     if (abierta) {
       throw new ErrorSesion(409, `Ya hay una sesión abierta (la ${abierta.id}). Deténla antes de iniciar otra.`);
@@ -130,10 +130,11 @@ export function iniciar({ modo, pasoMM, medio, usuarioId = null }) {
 
     const origen = obtener('modo_operacion') === 'simulacion' ? 'sim' : 'hw';
     const configBarrido = obtener('barrido');
+    zona ??= limitesDeBarrido(configBarrido);
     const configSimulacion = origen === 'sim' ? obtener('simulacion') : null;
     const id = await Medicion.crearSesion({
-      modo, origen, pasoMM, medio, usuarioId,
-      puntosEsperados: mallaDeBarrido(configBarrido, pasoMM).totalPuntos,
+      modo, origen, pasoMM, medio, zona, usuarioId,
+      puntosEsperados: mallaDeZona(zona, pasoMM).totalPuntos,
       configBarrido,
       configSensor: obtener('sensor'),
       configSimulacion,
@@ -143,7 +144,7 @@ export function iniciar({ modo, pasoMM, medio, usuarioId = null }) {
     abierta = await Medicion.obtenerSesion(id, { conConfig: true });
     const sesion = conGeometria(abierta);
 
-    console.log(`[sesiones] Sesión ${id} iniciada: ${modo}, paso ${pasoMM} mm, ${medio}, origen ${origen}.`);
+    console.log(`[sesiones] Sesión ${id} iniciada: ${modo}, zona ${zona.x} × ${zona.y} × ${zona.z} mm, paso ${pasoMM} mm, ${medio}, origen ${origen}.`);
     difundir('sesion', { tipo: 'iniciada', sesion });
 
     if (origen === 'sim') {

@@ -41,9 +41,14 @@ const opcionesCookie = () => ({
 /** SHA-256 en hexadecimal del token: es el id de la fila en sesiones_login */
 export const hashDeToken = token => createHash('sha256').update(String(token)).digest('hex');
 
-/** Escribe (o renueva) la cookie de sesión en la respuesta */
+/**
+ * Escribe (o renueva) la cookie de sesión en la respuesta.
+ * Es una cookie de sesión del navegador (sin Max-Age): se borra al
+ * cerrar el navegador. La expiración de 12 h la aplica el servidor
+ * (sesiones_login.expira_en), así que no depende del navegador.
+ */
 export function ponerCookie(res, token) {
-  res.cookie(NOMBRE_COOKIE, token, { ...opcionesCookie(), maxAge: DURACION_S * 1000 });
+  res.cookie(NOMBRE_COOKIE, token, opcionesCookie());
 }
 
 /** Le pide al navegador que borre la cookie de sesión */

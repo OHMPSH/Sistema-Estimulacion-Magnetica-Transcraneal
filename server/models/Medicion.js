@@ -17,6 +17,7 @@
  */
 
 import pool from '../config/database.js';
+import { indicePlano } from '../services/geometria.js';
 
 // ─────────────────────────────────────────────────────────────
 // SESIONES
@@ -33,6 +34,7 @@ function leerJSON(v) {
 
 /** Columnas de una sesión que se envían al navegador (sin las copias de configuración) */
 const COLUMNAS_SESION = `s.id, s.usuario_id, u.nombre AS iniciada_por, s.modo, s.origen, s.paso_mm, s.medio,
+  s.zona_x_mm, s.zona_y_mm, s.zona_z_mm,
   s.iniciada_en, s.terminada_en, s.notas, s.puntos_esperados, s.puntos_recibidos, s.huecos,
   s.version_software, s.version_firmware, s.eliminada_en`;
 
@@ -44,6 +46,10 @@ const DESDE_SESIONES = 'FROM sesiones s LEFT JOIN usuarios u ON u.id = s.usuario
 function normalizarSesion(fila) {
   if (!fila) return null;
   const r = { ...fila, huecos: leerJSON(fila.huecos) };
+  // paso_mm y zona_*_mm son DECIMAL: mysql2 los entrega como texto ("5.0")
+  for (const c of ['paso_mm', 'zona_x_mm', 'zona_y_mm', 'zona_z_mm']) {
+    if (r[c] !== undefined && r[c] !== null) r[c] = Number(r[c]);
+  }
   for (const c of ['config_barrido', 'config_sensor', 'config_simulacion']) {
     if (c in r) r[c] = leerJSON(r[c]);
   }
@@ -53,17 +59,18 @@ function normalizarSesion(fila) {
 /**
  * Crea una nueva sesión en la BD y devuelve su ID.
  * La regla de "una sola sesión abierta" la aplica services/sesiones.js.
- * @param {object} s  { modo, origen, pasoMM, medio, usuarioId, puntosEsperados,
+ * @param {object} s  { modo, origen, pasoMM, medio, zona: {x,y,z}, usuarioId, puntosEsperados,
  *                      configBarrido, configSensor, configSimulacion, versionSoftware, versionFirmware }
  * @returns {Promise<number>} ID de la sesión recién creada
  */
 export async function crearSesion(s) {
   const json = v => (v === null || v === undefined ? null : JSON.stringify(v));
   const [result] = await pool.execute(
-    `INSERT INTO sesiones (usuario_id, modo, origen, paso_mm, medio, iniciada_en, puntos_esperados,
+    `INSERT INTO sesiones (usuario_id, modo, origen, paso_mm, medio, zona_x_mm, zona_y_mm, zona_z_mm,
+                           iniciada_en, puntos_esperados,
                            config_barrido, config_sensor, config_simulacion, version_software, version_firmware)
-     VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?)`,
-    [s.usuarioId ?? null, s.modo, s.origen, s.pasoMM, s.medio, s.puntosEsperados ?? null,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?)`,
+    [s.usuarioId ?? null, s.modo, s.origen, s.pasoMM, s.medio, s.zona.x, s.zona.y, s.zona.z, s.puntosEsperados ?? null,
      json(s.configBarrido), json(s.configSensor), json(s.configSimulacion),
      s.versionSoftware ?? null, s.versionFirmware ?? null]
   );
@@ -339,7 +346,7 @@ export async function medicionesComoEventos(sesionId, zLevels) {
   return filas.map(r => ({
     sesionId,
     seq: r.seq,
-    xMM: r.x_mm, yMM: r.y_mm, zMM: r.z_mm, zIdx: zLevels.indexOf(r.z_mm),
+    xMM: r.x_mm, yMM: r.y_mm, zMM: r.z_mm, zIdx: indicePlano(zLevels, r.z_mm),
     bx: r.bx, by: r.by, bz: r.bz, magnitud: r.magnitud,
     saturado: r.saturado,
     raw: r.raw_x === null && r.raw_y === null && r.raw_z === null ? null : { x: r.raw_x, y: r.raw_y, z: r.raw_z },

@@ -35,7 +35,9 @@ export function crearGeneradorMuestras({ simulacion, barrido, sensor, malla }) {
   const uniforme  = mulberry32(simulacion.semilla);
   const gaussiano = generadorGaussiano(uniforme);
   const parametros = {
-    centroMM:      barrido.grid_size_mm / 2,
+    // La zona va centrada bajo la bobina
+    centroXMM:     malla.zona.x / 2,
+    centroYMM:     malla.zona.y / 2,
     standoffMM:    barrido.standoff_mm,
     radioMM:       simulacion.radio_bobina_mm,
     campoCentroUT: simulacion.campo_centro_ut,

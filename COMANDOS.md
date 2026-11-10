@@ -90,6 +90,8 @@ Las migraciones están en `server/migrations/` y se ejecutan **una sola vez, en 
 | `003_configuracion.sql` | Tabla `configuracion`; `origen`, `paso_mm` y `medio` en `sesiones`. |
 | `004_dispositivo.sql` | Tabla `dispositivos` (Pico W); `seq`, crudos, `saturado` y `ts_dispositivo` en `mediciones`. |
 | `005_trazabilidad.sql` | FLOAT → DOUBLE en `mediciones` (las filas viejas conservan su error de float32); metadatos, huecos, notas y borrado lógico en `sesiones`. |
+| `006_paso_libre.sql` | `sesiones.paso_mm` pasa a `DECIMAL(4,1)`: el paso de medición es libre (en mm, con un decimal). |
+| `007_zona_muestreo.sql` | `sesiones.zona_x_mm/zona_y_mm/zona_z_mm` (zona de muestreo por sesión) y la configuración `barrido` pasa a límites de la base (`limite_x_mm`, `limite_y_mm`, `limite_z_mm`). |
 
 ```bash
 cd /opt/tms/server/migrations
@@ -97,6 +99,8 @@ sudo mysql tms_db < 002_usuarios.sql
 sudo mysql tms_db < 003_configuracion.sql
 sudo mysql tms_db < 004_dispositivo.sql
 sudo mysql tms_db < 005_trazabilidad.sql
+sudo mysql tms_db < 006_paso_libre.sql
+sudo mysql tms_db < 007_zona_muestreo.sql
 ```
 
 Si la base vieja usaba la contraseña publicada o `ALL PRIVILEGES`, cámbiala y reduce los permisos:

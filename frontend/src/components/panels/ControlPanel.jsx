@@ -8,7 +8,7 @@
  * pudo iniciar otra persona) y no se puede cambiar.
  */
 import React from 'react';
-import { PASOS, MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo } from '../../utils/geometria.js';
+import { MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo, etiquetaZona } from '../../utils/geometria.js';
 import { entero } from '../../utils/formato.js';
 
 /** Grupo de opciones como radios con aspecto de botones */
@@ -28,8 +28,79 @@ function GrupoOpciones({ nombre, leyenda, icono, opciones, valor, onCambio, desh
   );
 }
 
+/**
+ * Paso de la malla: se escribe en mm (libre, con un decimal). El de
+ * 5 mm, el más usado, está a un clic.
+ */
+const PASO_RAPIDO_MM = 5;
+
+function CampoPaso({ texto, valor, error, malla, onCambio, deshabilitado }) {
+  const descripcion = error ? 'paso-error' : 'paso-malla';
+  return (
+    <fieldset className="grupo-opciones grupo-paso" disabled={deshabilitado}>
+      <legend className="etiqueta-campo"><i className="bi bi-grid-3x3" aria-hidden="true" /> Paso (X, Y y Z)</legend>
+      <div className="opciones-botones">
+        <div className="campo-paso">
+          <label htmlFor="paso-mm" className="visually-hidden">Paso en milímetros</label>
+          <input id="paso-mm" name="paso_mm" className="form-control campo-tms cifra" inputMode="decimal"
+            autoComplete="off" spellCheck={false} value={texto}
+            onChange={e => onCambio(e.target.value)}
+            aria-invalid={error ? true : undefined} aria-describedby={descripcion} />
+          <span className="campo-paso-unidad" aria-hidden="true">mm</span>
+        </div>
+        {[PASO_RAPIDO_MM].map(mm => (
+          <button key={mm} type="button" className={`opcion-boton${valor === mm && !error ? ' activa' : ''}`}
+            aria-pressed={valor === mm && !error} onClick={() => onCambio(String(mm))}
+            aria-label={`Usar paso de ${mm} mm`}>
+            {etiquetaPaso(mm)}
+          </button>
+        ))}
+      </div>
+      {error
+        ? <p id="paso-error" className="texto-error texto-paso mb-0">{error}</p>
+        : <p id="paso-malla" className="texto-ayuda texto-paso mb-0 cifra">
+            {malla.gridNx}{'\u00a0'}×{'\u00a0'}{malla.gridNy} · {malla.zLevels.length} {malla.zLevels.length === 1 ? 'plano' : 'planos'} Z = {entero(malla.totalPuntos)}{'\u00a0'}puntos
+          </p>}
+    </fieldset>
+  );
+}
+
+/**
+ * Zona de muestreo: tamaño en X, Y y Z (mm). No puede pasar de los
+ * límites de la base (Configuración › Barrido); por defecto, toda la base.
+ */
+function CampoZona({ textos, errores, limites, onCambio, deshabilitado }) {
+  const ejes = [['x', 'X'], ['y', 'Y'], ['z', 'Z']];
+  const hayError = ejes.some(([e]) => errores?.[e]);
+  return (
+    <fieldset className="grupo-opciones grupo-zona" disabled={deshabilitado}>
+      <legend className="etiqueta-campo"><i className="bi bi-bounding-box" aria-hidden="true" /> Zona de muestreo</legend>
+      <div className="opciones-botones">
+        {ejes.map(([e, nombre]) => (
+          <div key={e} className="campo-paso campo-zona">
+            <label htmlFor={`zona-${e}`} className="campo-zona-eje">{nombre}</label>
+            <input id={`zona-${e}`} name={`zona_${e}_mm`} className="form-control campo-tms cifra" inputMode="decimal"
+              autoComplete="off" spellCheck={false} value={textos[e]}
+              onChange={ev => onCambio({ ...textos, [e]: ev.target.value })}
+              aria-invalid={errores?.[e] ? true : undefined} aria-describedby={errores?.[e] ? `zona-${e}-error` : 'zona-limites'} />
+            <span className="campo-paso-unidad" aria-hidden="true">mm</span>
+          </div>
+        ))}
+        <button type="button" className="opcion-boton"
+          onClick={() => onCambio({ x: String(limites.x), y: String(limites.y), z: String(limites.z) })}>
+          Toda la base
+        </button>
+      </div>
+      {hayError
+        ? ejes.filter(([e]) => errores[e]).map(([e, nombre]) => (
+            <p key={e} id={`zona-${e}-error`} className="texto-error texto-paso mb-0">{nombre}: {errores[e]}</p>))
+        : <p id="zona-limites" className="texto-ayuda texto-paso mb-0">Límites de la base: {etiquetaZona(limites)}</p>}
+    </fieldset>
+  );
+}
+
 export function ControlPanel({
-  enCurso, iniciando, deteniendo, parametros, onCambiarParametros, sesion,
+  enCurso, iniciando, deteniendo, parametros, onCambiarParametros, sesion, mallaElegida,
   recibidas, totalPuntos, zActualMM, progreso, etiquetaEstado,
   onIniciar, onDetener, errorAccion, puedeControlar,
 }) {
@@ -46,7 +117,7 @@ export function ControlPanel({
         </h2>
         {enCurso && sesion && (
           <span className="panel-detalle">
-            Sesión {sesion.id}: {etiquetaModo(sesion.modo)} · {etiquetaPaso(sesion.paso_mm)} · {etiquetaMedio(sesion.medio)}
+            Sesión {sesion.id}: {etiquetaModo(sesion.modo)} · {etiquetaZona(sesion.zona_mm)} · paso {etiquetaPaso(sesion.paso_mm)} · {etiquetaMedio(sesion.medio)}
             {sesion.iniciada_por ? ` · ${sesion.iniciada_por}` : ''}
           </span>
         )}
@@ -56,9 +127,21 @@ export function ControlPanel({
         <GrupoOpciones nombre="velocidad" leyenda="Velocidad" icono="bi-speedometer2"
           opciones={MODOS} valor={vista.modo}
           onCambio={modo => onCambiarParametros({ modo })} deshabilitado={bloqueado} />
-        <GrupoOpciones nombre="paso" leyenda="Paso (X, Y y Z)" icono="bi-grid-3x3"
-          opciones={PASOS.map(p => ({ valor: p.mm, etiqueta: p.etiqueta }))} valor={vista.pasoMM}
-          onCambio={pasoMM => onCambiarParametros({ pasoMM })} deshabilitado={bloqueado} />
+        {enCurso && sesion ? (
+          <CampoZona textos={{ x: String(sesion.zona_mm?.x ?? ''), y: String(sesion.zona_mm?.y ?? ''), z: String(sesion.zona_mm?.z ?? '') }}
+            errores={{}} limites={parametros.limites} onCambio={() => {}} deshabilitado />
+        ) : (
+          <CampoZona textos={parametros.zonaTexto} errores={parametros.erroresZona} limites={parametros.limites}
+            onCambio={zonaTexto => onCambiarParametros({ zonaTexto })} deshabilitado={bloqueado} />
+        )}
+        {enCurso && sesion ? (
+          <CampoPaso texto={String(sesion.paso_mm)} valor={sesion.paso_mm} error=""
+            malla={{ gridNx: sesion.grid_nx ?? 0, gridNy: sesion.grid_ny ?? 0, zLevels: sesion.z_levels_mm ?? [], totalPuntos: sesion.puntos_esperados ?? 0 }}
+            onCambio={() => {}} deshabilitado />
+        ) : (
+          <CampoPaso texto={parametros.pasoTexto} valor={parametros.pasoMM} error={parametros.errorPaso}
+            malla={mallaElegida} onCambio={pasoTexto => onCambiarParametros({ pasoTexto })} deshabilitado={bloqueado} />
+        )}
         <GrupoOpciones nombre="medio" leyenda="Medio" icono="bi-droplet-half"
           opciones={MEDIOS.map(m => ({ valor: m.valor, etiqueta: m.etiqueta }))} valor={vista.medio}
           onCambio={medio => onCambiarParametros({ medio })} deshabilitado={bloqueado} />
@@ -68,8 +151,9 @@ export function ControlPanel({
         {puedeControlar ? (
           <div className="acciones">
             <button type="button" className="btn-tms btn-start" onClick={onIniciar}
-              disabled={enCurso || iniciando || !vista.modo}
-              title={!vista.modo ? 'Elige la velocidad (DC o AC) para iniciar' : undefined}>
+              disabled={enCurso || iniciando || !vista.modo || Boolean(parametros.errorPaso) || Object.keys(parametros.erroresZona ?? {}).length > 0}
+              title={!vista.modo ? 'Elige la velocidad (DC o AC) para iniciar'
+                : (parametros.errorPaso || Object.keys(parametros.erroresZona ?? {}).length ? 'Corrige la zona o el paso para iniciar' : undefined)}>
               <i className="bi bi-play-fill" aria-hidden="true" /> {iniciando ? 'Iniciando…' : 'Iniciar medición'}
             </button>
             <button type="button" className="btn-tms btn-stop" onClick={onDetener} disabled={!enCurso || deteniendo}>

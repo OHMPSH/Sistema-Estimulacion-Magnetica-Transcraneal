@@ -23,7 +23,7 @@ import { difundir } from './tiempoReal.js';
 /** Valores por defecto (iguales a la migración 003 y a setup_db.sql) */
 export const POR_DEFECTO = {
   modo_operacion: 'simulacion',
-  barrido:        { grid_size_mm: 60, z_max_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 },
+  barrido:        { limite_x_mm: 60, limite_y_mm: 60, limite_z_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 },
   sensor:         { modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 1, offset_ut: { x: 0, y: 0, z: 0 } },
   simulacion:     { ms_por_punto: { DC: 60, AC: 120 }, semilla: 12345, ruido_sigma_ut: 0.25, radio_bobina_mm: 25, campo_centro_ut: 120, prob_hueco: 0, prob_saturacion: 0 },
   dispositivo:    { intervalo_latido_s: 5, umbral_desconexion_s: 15 },

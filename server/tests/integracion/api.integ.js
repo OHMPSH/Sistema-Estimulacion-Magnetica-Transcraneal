@@ -114,6 +114,46 @@ test('Roles: 401 sin sesión, 403 con un rol insuficiente', async (t) => {
   assert.equal((await op.post('/dispositivo/token')).status, 403);
 });
 
+test('Paso libre en mm: 12,5 mm guarda la malla correcta y se puede filtrar', async (t) => {
+  if (omitir(t)) return;
+  await admin.put('/configuracion/simulacion', { valor: { ms_por_punto: { DC: 20, AC: 20 }, prob_hueco: 0, prob_saturacion: 0 } });
+  for (const paso of [0.5, 2.55, '5', 1]) assert.equal((await admin.post('/sesiones', { modo: 'DC', paso_mm: paso })).status, 422);
+  const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 12.5 });
+  // 0, 12,5 … 50 en X e Y (5 × 5) y planos 0 y 12,5 → 50 puntos
+  const lista = await admin.get('/sesiones?paso_mm=12,5');
+  assert.equal(lista.status, 200);
+  const s = lista.datos.data.find(x => x.id === id);
+  assert.equal(s.paso_mm, 12.5);
+  assert.equal(s.puntos_esperados, 50);
+  assert.equal(s.puntos_recibidos, 50);
+  assert.equal(s.huecos.total, 0);
+  assert.ok(!(await admin.get('/sesiones?paso_mm=12')).datos.data.some(x => x.id === id));
+  const { filas } = leerCSV((await admin.get(`/sesiones/${id}/csv`)).datos);
+  assert.deepEqual([...new Set(filas.map(f => Number(f.z_mm)))], [0, 12.5]);
+  assert.equal(Math.max(...filas.map(f => Number(f.x_mm))), 50);
+});
+
+test('Zona de muestreo 40 × 20 × 10 mm con paso 10: 30 puntos dentro de la zona; los límites de la base se respetan', async (t) => {
+  if (omitir(t)) return;
+  await admin.put('/configuracion/simulacion', { valor: { ms_por_punto: { DC: 20, AC: 20 }, prob_hueco: 0, prob_saturacion: 0 } });
+  const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 10, zona_mm: { x: 40, y: 20, z: 10 } });
+  const s = (await admin.get('/sesiones')).datos.data.find(x => x.id === id);
+  assert.deepEqual([s.zona_x_mm, s.zona_y_mm, s.zona_z_mm], [40, 20, 10]);
+  assert.equal(s.puntos_esperados, 30);
+  assert.equal(s.puntos_recibidos, 30);
+  assert.equal(s.huecos.total, 0);
+  const { meta, filas } = leerCSV((await admin.get(`/sesiones/${id}/csv`)).datos);
+  assert.match(meta.zona_mm, /^40 x 20 x 10/);
+  assert.equal(Math.max(...filas.map(f => Number(f.x_mm))), 40);
+  assert.equal(Math.max(...filas.map(f => Number(f.y_mm))), 20);
+  // Una zona más grande que la base: 422
+  assert.equal((await admin.post('/sesiones', { modo: 'DC', paso_mm: 10, zona_mm: { x: 70, y: 20, z: 10 } })).status, 422);
+  // Si se cambia de base (límites menores), la zona anterior ya no cabe
+  assert.equal((await admin.put('/configuracion/barrido', { valor: { limite_x_mm: 30 } })).status, 200);
+  assert.equal((await admin.post('/sesiones', { modo: 'DC', paso_mm: 10, zona_mm: { x: 40, y: 20, z: 10 } })).status, 422);
+  assert.equal((await admin.put('/configuracion/barrido', { valor: { limite_x_mm: 60 } })).status, 200);
+});
+
 test('Borrado lógico y restauración', async (t) => {
   if (omitir(t)) return;
   const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 20 });

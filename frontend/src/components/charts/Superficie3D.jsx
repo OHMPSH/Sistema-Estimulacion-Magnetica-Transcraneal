@@ -66,15 +66,17 @@ const Superficie3D = memo(function Superficie3D({ mediciones, malla, enCurso, es
     return { min, max };
   }, [validas]);
 
-  const ejes = useMemo(() => Array.from({ length: malla.gridN }, (_, i) => i * malla.pasoMM), [malla]);
+  const ejeX = useMemo(() => Array.from({ length: malla.gridNx }, (_, i) => Math.round(i * malla.pasoMM * 10) / 10), [malla]);
+  const ejeY = useMemo(() => Array.from({ length: malla.gridNy }, (_, i) => Math.round(i * malla.pasoMM * 10) / 10), [malla]);
 
   const matriz = useMemo(() => {
-    const z = Array.from({ length: malla.gridN }, () => Array(malla.gridN).fill(null));
+    // Filas = Y, columnas = X
+    const z = Array.from({ length: malla.gridNy }, () => Array(malla.gridNx).fill(null));
     for (const m of validas) {
       if (plano !== 'ALL' && m.zMM !== plano) continue;
       const ix = Math.round(m.xMM / malla.pasoMM);
       const iy = Math.round(m.yMM / malla.pasoMM);
-      if (ix < 0 || iy < 0 || ix >= malla.gridN || iy >= malla.gridN) continue;
+      if (ix < 0 || iy < 0 || ix >= malla.gridNx || iy >= malla.gridNy) continue;
       const actual = z[iy][ix];
       z[iy][ix] = plano === 'ALL' ? Math.max(actual ?? -Infinity, m.magnitud) : m.magnitud;
     }
@@ -117,7 +119,7 @@ const Superficie3D = memo(function Superficie3D({ mediciones, malla, enCurso, es
         ) : (
           <Plot
             data={[{
-              type: 'surface', x: ejes, y: ejes, z: matriz,
+              type: 'surface', x: ejeX, y: ejeY, z: matriz,
               colorscale: escala, cmin: rango.min, cmax: rango.max, cauto: false,
               connectgaps: false,
               colorbar: { title: { text: '|B| (µT)', font: fuente }, tickfont: fuente, outlinecolor: t.borde },
@@ -133,7 +135,8 @@ const Superficie3D = memo(function Superficie3D({ mediciones, malla, enCurso, es
               scene: {
                 xaxis: eje('X (mm)'), yaxis: eje('Y (mm)'), zaxis: eje('|B| (µT)'),
                 camera: { eye: { x: 1.5, y: -1.5, z: 1.1 } },
-                aspectmode: 'manual', aspectratio: { x: 1, y: 1, z: 0.6 },
+                aspectmode: 'manual',
+                aspectratio: { x: malla.zona.x >= malla.zona.y ? 1 : Math.max(0.2, malla.zona.x / malla.zona.y), y: malla.zona.y >= malla.zona.x ? 1 : Math.max(0.2, malla.zona.y / malla.zona.x), z: 0.6 },
               },
             }}
             config={{ displaylogo: false, responsive: true, modeBarButtonsToRemove: ['toImage'] }}

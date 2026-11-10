@@ -86,20 +86,21 @@ export function campoEspira(rho, z, a) {
 /**
  * Campo en un punto de la placa, en µT, ya normalizado.
  *
- * @param {number} xMM, yMM  posición en la placa (0..grid_size_mm)
- * @param {number} zMM       altura del barrido (0..z_max_mm)
+ * @param {number} xMM, yMM  posición en la zona de muestreo (0..zona.x, 0..zona.y)
+ * @param {number} zMM       altura del barrido (0..zona.z)
  * @param {object} p
- *   centroMM       centro de la placa (= grid_size_mm / 2), donde está el eje de la bobina
+ *   centroXMM, centroYMM  centro de la zona (zona / 2), donde está el eje de la bobina
+ *                         (centroMM, si se da, vale para los dos)
  *   standoffMM     separación bobina–sensor: z_real = zMM + standoffMM
  *   radioMM        radio de la espira
  *   campoCentroUT  |B| deseado en el centro con zMM = 0
  * @returns {{ bx: number, by: number, bz: number }}
  */
-export function campoEnPlaca(xMM, yMM, zMM, { centroMM, standoffMM, radioMM, campoCentroUT }) {
+export function campoEnPlaca(xMM, yMM, zMM, { centroMM, centroXMM = centroMM, centroYMM = centroMM, standoffMM, radioMM, campoCentroUT }) {
   const escala = campoCentroUT / campoEspira(0, standoffMM, radioMM).bz;
 
-  const dx  = xMM - centroMM;
-  const dy  = yMM - centroMM;
+  const dx  = xMM - centroXMM;
+  const dy  = yMM - centroYMM;
   const rho = Math.hypot(dx, dy);
   const { bRho, bz } = campoEspira(rho, zMM + standoffMM, radioMM);
 

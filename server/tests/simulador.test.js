@@ -107,7 +107,7 @@ test('La malla depende del paso: 845, 147 y 32 puntos, en orden x → y → z', 
   assert.equal(mallaDeBarrido(BARRIDO, 10).totalPuntos, 147);
   assert.equal(mallaDeBarrido(BARRIDO, 20).totalPuntos, 32);
   assert.deepEqual(mallaDeBarrido(BARRIDO, 10).zLevels, [0, 10, 20]);
-  assert.deepEqual(mallaDeBarrido(BARRIDO, 20).ejeMM, [0, 20, 40, 60]);
+  assert.deepEqual(mallaDeBarrido(BARRIDO, 20).ejeX, [0, 20, 40, 60]);
 
   const m = mallaDeBarrido(BARRIDO, 20);
   assert.deepEqual(puntoDeMalla(m, 0), { xMM: 0, yMM: 0, zMM: 0, zIdx: 0 });

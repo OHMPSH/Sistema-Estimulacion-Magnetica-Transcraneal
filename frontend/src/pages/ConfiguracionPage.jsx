@@ -11,7 +11,6 @@ import { useConfig } from '../context/ConfigContext.jsx';
 import { SeccionFormulario } from '../components/config/SeccionFormulario.jsx';
 import { SeccionUsuarios } from '../components/config/SeccionUsuarios.jsx';
 import { SeccionDispositivo } from '../components/config/SeccionDispositivo.jsx';
-import { PASOS } from '../utils/geometria.js';
 import { numero } from '../utils/formato.js';
 
 const SECCIONES = [
@@ -103,13 +102,17 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
     default:
       contenido = (
         <SeccionFormulario clave="barrido" titulo="Barrido" soloLectura={!esAdmin}
-          descripcion={`La placa y la altura máxima deben ser múltiplos de 20 mm para que los tres pasos caigan en el borde. ${sesionAbierta ? AVISO_SESION : ''}`}
+          descripcion={`Los límites de la base son lo más que puede recorrer la mesa en cada eje. En cada medición el operador elige la zona de muestreo (X × Y × Z) y el sistema no deja que pase de estos límites; si cambias de base, ajústalos aquí. La zona va centrada bajo la bobina. ${sesionAbierta ? AVISO_SESION : ''}`}
           campos={[
-            { ruta: ['grid_size_mm'], etiqueta: 'Tamaño de la placa', tipo: 'entero', unidad: 'mm' },
-            { ruta: ['z_max_mm'], etiqueta: 'Altura máxima (Z)', tipo: 'entero', unidad: 'mm' },
+            { ruta: ['limite_x_mm'], etiqueta: 'Límite de la base en X', tipo: 'numero', unidad: 'mm',
+              ayuda: 'Recorrido máximo de la mesa en X. Entre 1 y 1000 mm, con un decimal.' },
+            { ruta: ['limite_y_mm'], etiqueta: 'Límite de la base en Y', tipo: 'numero', unidad: 'mm',
+              ayuda: 'Recorrido máximo de la mesa en Y. Entre 1 y 1000 mm, con un decimal.' },
+            { ruta: ['limite_z_mm'], etiqueta: 'Límite de la base en Z (altura)', tipo: 'numero', unidad: 'mm',
+              ayuda: 'Altura máxima sobre el standoff. Entre 0 y 500 mm; 0 = un solo plano.' },
             { ruta: ['standoff_mm'], etiqueta: 'Separación bobina–sensor (standoff)', tipo: 'numero', unidad: 'mm' },
-            { ruta: ['paso_predeterminado_mm'], etiqueta: 'Paso predeterminado', tipo: 'select',
-              opciones: PASOS.map(p => ({ valor: p.mm, etiqueta: p.etiqueta })) },
+            { ruta: ['paso_predeterminado_mm'], etiqueta: 'Paso predeterminado', tipo: 'numero', unidad: 'mm',
+              ayuda: 'El que aparece al abrir el dashboard; el operador puede escribir otro en cada medición. Los más usados: 5, 10 y 20 mm. Desde 1 mm, con un decimal.' },
           ]}
         />
       );

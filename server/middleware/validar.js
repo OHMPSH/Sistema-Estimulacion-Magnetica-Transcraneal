@@ -16,9 +16,12 @@
  */
 
 import { ROLES, TEMAS } from '../config/roles.js';
-import { PASOS_MM, MEDIOS } from '../services/geometria.js';
+import { MEDIOS, erroresDePaso, erroresDeZona, limitesDeBarrido, redondearMM } from '../services/geometria.js';
 import { CLAVES } from '../services/validacionConfiguracion.js';
-import { obtener as obtenerConfiguracion } from '../services/configuracion.js';
+import { obtener as obtenerConfiguracion, POR_DEFECTO } from '../services/configuracion.js';
+
+/** Barrido vigente (el predeterminado si la configuración no está cargada, como en los tests unitarios) */
+const barridoActual = () => { try { return obtenerConfiguracion('barrido'); } catch { return POR_DEFECTO.barrido; } };
 import { errorDePassword, LONGITUD_MAXIMA } from '../services/passwords.js';
 import { MAX_LECTURAS_LOTE, tsDispositivoValido } from '../services/conversionSensor.js';
 
@@ -51,18 +54,26 @@ export function validarNuevaSesion(req, res, next) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
   }
-  const { modo, paso_mm: paso, medio } = body;
+  const { modo, paso_mm: paso, medio, zona_mm: zonaRecibida } = body;
   const errores = [];
   if (!MODOS.includes(modo)) errores.push(`modo debe ser ${MODOS.join(' o ')}`);
-  if (paso !== undefined && !PASOS_MM.includes(paso)) {
-    errores.push(`paso_mm debe ser ${PASOS_MM.join(', ')} (0,5, 1 o 2 cm)`);
-  }
+  const barrido = barridoActual();
+  // Zona de muestreo { x, y, z } en mm, dentro de los límites de la base (por defecto, toda la base)
+  const limites = limitesDeBarrido(barrido);
+  const erroresZona = zonaRecibida === undefined ? [] : erroresDeZona(zonaRecibida, limites);
+  errores.push(...erroresZona);
+  const zona = zonaRecibida === undefined || erroresZona.length
+    ? limites
+    : { x: redondearMM(zonaRecibida.x), y: redondearMM(zonaRecibida.y), z: redondearMM(zonaRecibida.z) };
+  const pasoFinal = paso ?? barrido.paso_predeterminado_mm;
+  if (erroresZona.length === 0) errores.push(...erroresDePaso(pasoFinal, zona, paso === undefined ? 'paso_predeterminado_mm' : 'paso_mm'));
   if (medio !== undefined && !MEDIOS.includes(medio)) errores.push(`medio debe ser ${MEDIOS.join(' o ')}`);
   if (errores.length > 0) return rechazar(res, 422, errores);
 
   req.nuevaSesion = {
     modo,
-    pasoMM: paso ?? obtenerConfiguracion('barrido').paso_predeterminado_mm,
+    pasoMM: redondearMM(pasoFinal),
+    zona,
     medio:  medio ?? 'campo_magnetico',
   };
   next();
@@ -84,8 +95,9 @@ export function validarFiltrosSesiones(req, res, next) {
   }
   const paso = texto(q.paso_mm);
   if (paso !== undefined) {
-    const n = /^\d+$/.test(paso) ? Number(paso) : NaN;
-    if (PASOS_MM.includes(n)) filtros.pasoMM = n; else errores.push(`paso_mm debe ser ${PASOS_MM.join(', ')}`);
+    // Cualquier paso en mm, con punto o coma decimal (un decimal como máximo)
+    const n = /^\d{1,3}([.,]\d)?$/.test(paso) ? Number(paso.replace(',', '.')) : NaN;
+    if (n > 0) filtros.pasoMM = n; else errores.push('paso_mm debe ser un número en mm, con un decimal como máximo (por ejemplo 5 o 2.5)');
   }
   const medio = texto(q.medio);
   if (medio !== undefined) {
