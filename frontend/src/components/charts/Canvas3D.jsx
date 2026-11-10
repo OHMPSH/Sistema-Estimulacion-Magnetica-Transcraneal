@@ -27,12 +27,19 @@ import React, { memo, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useTokensTema } from '../../hooks/useTokensTema.js';
 import { numero } from '../../utils/formato.js';
+import { clasePlano, indicePlano, etiquetaZona } from '../../utils/geometria.js';
 
 const L_MIN = 1.5;   // longitud visual de la flecha más corta (mm de escena)
 const L_MAX = 9;     // la del |B| máximo
 const claveDe = m => (m.seq ?? `${m.timestamp}|${m.xMM}|${m.yMM}|${m.zMM}`);
 
-export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM = 60, sesionId, rotacionAuto, reducirMovimiento }) {
+const ZONA_POR_DEFECTO = { x: 60, y: 60, z: 20 };
+
+export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, zona = ZONA_POR_DEFECTO, sesionId, rotacionAuto, reducirMovimiento }) {
+  // La escena está en mm: la cámara se aleja según el tamaño de la zona (60 mm = escala 1)
+  const escala = Math.max(zona.x, zona.y, 10) / 60;
+  const escalaRef = useRef(escala);
+  escalaRef.current = escala;
   const t = useTokensTema();
   const wrapRef = useRef(null);
   const s = useRef({
@@ -117,7 +124,7 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
       if (o.punteros.size === 2) {
         const [a, b] = [...o.punteros.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (o.distPellizco) o.radio = Math.max(40, Math.min(400, o.radio * (o.distPellizco / d)));
+        if (o.distPellizco) o.radio = Math.max(40 * escalaRef.current, Math.min(400 * escalaRef.current, o.radio * (o.distPellizco / d)));
         o.distPellizco = d;
       } else if (o.arrastre) {
         o.theta -= (ev.clientX - o.arrastre.x) * 0.01;
@@ -133,7 +140,7 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
     };
     const rueda = ev => {
       ev.preventDefault();   // zoom sin desplazar la página
-      o.radio = Math.max(40, Math.min(400, o.radio + ev.deltaY * 0.25));
+      o.radio = Math.max(40 * escalaRef.current, Math.min(400 * escalaRef.current, o.radio + ev.deltaY * 0.25));
       pedirDibujo();
     };
     canvas.addEventListener('pointerdown', abajo);
@@ -167,15 +174,24 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
     };
   }, [pedirDibujo]);
 
-  // ── Tema: fondo, rejilla, ejes y colores de los planos ───
-  const clavePlanos = zLevels.join(',');
+  // Al cambiar el tamaño de la zona, la cámara se encuadra de nuevo
+  useEffect(() => {
+    s.current.orbita.radio = 105 * escala;
+    pedirDibujo();
+  }, [escala, pedirDibujo]);
+
+  // ── Tema y zona: fondo, rejilla, ejes, contorno de los planos ───
+  const clavePlanos = `${zLevels.join(',')}|${zona.x}|${zona.y}`;
   useEffect(() => {
     const e = s.current;
     if (!e.renderer) return;
     e.renderer.setClearColor(new THREE.Color(t.lienzo3d || '#0a0a0e'), 1);
 
     if (e.rejilla) { e.scene.remove(e.rejilla); e.rejilla.geometry.dispose(); e.rejilla.material.dispose(); }
-    e.rejilla = new THREE.GridHelper(60, 12, new THREE.Color(t.textoSecundario), new THREE.Color(t.bordeFuerte || t.textoSecundario));
+ const hx = zona.x / 2;
+    const hy = zona.y / 2;
+    const lado = Math.max(zona.x, zona.y, 10);
+    e.rejilla = new THREE.GridHelper(lado, Math.max(1, Math.round(lado / 5)), new THREE.Color(t.textoSecundario), new THREE.Color(t.bordeFuerte || t.textoSecundario));
     e.rejilla.material.transparent = true;
     e.rejilla.material.opacity = 0.35;
     e.scene.add(e.rejilla);
@@ -186,20 +202,20 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]),
       new THREE.LineBasicMaterial({ color: new THREE.Color(color) }));
     // X del laboratorio → +X; Y → −Z de Three.js; Z (altura) → +Y
-    e.ejes.add(linea([-32, 0, 0], [34, 0, 0], t.bx));
-    e.ejes.add(linea([0, 0, 32], [0, 0, -34], t.by));
-    e.ejes.add(linea([0, 0, 0], [0, 34, 0], t.bz));
+    e.ejes.add(linea([-hx - 2, 0, 0], [hx + 4, 0, 0], t.bx));
+    e.ejes.add(linea([0, 0, hy + 2], [0, 0, -hy - 4], t.by));
+    e.ejes.add(linea([0, 0, 0], [0, Math.max(zona.z, 10) + 14, 0], t.bz));
 
     vaciar(e.planos);
     zLevels.forEach((z, i) => {
-      const pts = [[-30, z, -30], [30, z, -30], [30, z, 30], [-30, z, 30], [-30, z, -30]].map(p => new THREE.Vector3(...p));
+      const pts = [[-hx, z, -hy], [hx, z, -hy], [hx, z, hy], [-hx, z, hy], [-hx, z, -hy]].map(p => new THREE.Vector3(...p));
       e.planos.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color: new THREE.Color(t.planos[i] || t.planos[0]), transparent: true, opacity: 0.3 })));
+        new THREE.LineBasicMaterial({ color: new THREE.Color(t.planos[i % t.planos.length] || t.planos[0]), transparent: true, opacity: 0.3 })));
     });
 
     // Colores de las flechas por plano (materiales compartidos)
     for (const [i, m] of e.materiales) {
-      const color = new THREE.Color(t.planos[Number(String(i).split('-')[1])] || t.planos[0]);
+      const color = new THREE.Color(t.planos[Number(String(i).split('-')[1]) % t.planos.length] || t.planos[0]);
       m.color.copy(color);
     }
     pedirDibujo();
@@ -219,13 +235,14 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
     const material = (tipo, zIdx) => {
       const clave = `${tipo}-${zIdx}`;
       if (!e.materiales.has(clave)) {
-        const color = new THREE.Color(t.planos[zIdx] || t.planos[0]);
+        const color = new THREE.Color(t.planos[zIdx % t.planos.length] || t.planos[0]);
         e.materiales.set(clave, tipo === 'l' ? new THREE.LineBasicMaterial({ color }) : new THREE.MeshBasicMaterial({ color }));
       }
       return e.materiales.get(clave);
     };
     const longitud = b => L_MIN + (e.maxB > 0 ? b / e.maxB : 0) * (L_MAX - L_MIN);
-    const c = gridSizeMM / 2;
+    const cx = zona.x / 2;
+    const cy = zona.y / 2;
     let maxNuevo = e.maxB;
     for (const m of mediciones) if (!m.saturado && m.magnitud > maxNuevo) maxNuevo = m.magnitud;
     const reescalar = maxNuevo > e.maxB * 1.02;
@@ -238,8 +255,8 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
       const v = new THREE.Vector3(m.bx, m.bz, -m.by);
       if (v.length() < 1e-6) continue;
       const L = longitud(m.magnitud);
-      const flecha = new THREE.ArrowHelper(v.normalize(), new THREE.Vector3(m.xMM - c, m.zMM, -(m.yMM - c)), L, 0xffffff, L * 0.35, L * 0.45);
-      const zIdx = Math.max(0, m.zIdx ?? zLevels.indexOf(m.zMM));
+      const flecha = new THREE.ArrowHelper(v.normalize(), new THREE.Vector3(m.xMM - cx, m.zMM, -(m.yMM - cy)), L, 0xffffff, L * 0.35, L * 0.45);
+      const zIdx = Math.max(0, m.zIdx ?? indicePlano(zLevels, m.zMM));
       // Materiales compartidos por plano (los propios de la flecha se liberan ya)
       flecha.line.material.dispose(); flecha.line.material = material('l', zIdx);
       flecha.cone.material.dispose(); flecha.cone.material = material('c', zIdx);
@@ -258,7 +275,7 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
     }
     pedirDibujo();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediciones, sesionId, gridSizeMM, pedirDibujo]);
+  }, [mediciones, sesionId, zona.x, zona.y, pedirDibujo]);
 
   // ── Rotación automática (nunca con movimiento reducido) ──
   useEffect(() => {
@@ -274,10 +291,10 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
     const o = s.current.orbita;
     o.theta += dTheta;
     o.phi = Math.max(0.15, Math.min(1.5, o.phi + dPhi));
-    o.radio = Math.max(40, Math.min(400, o.radio + dRadio));
+    o.radio = Math.max(40 * escalaRef.current, Math.min(400 * escalaRef.current, o.radio + dRadio));
     pedirDibujo();
   }, [pedirDibujo]);
-  const reiniciarVista = () => { Object.assign(s.current.orbita, { theta: 0.7, phi: 0.95, radio: 105 }); pedirDibujo(); };
+  const reiniciarVista = () => { Object.assign(s.current.orbita, { theta: 0.7, phi: 0.95, radio: 105 * escalaRef.current }); pedirDibujo(); };
   const alTeclear = (ev) => {
     const acciones = {
       ArrowLeft: [0.15, 0, 0], ArrowRight: [-0.15, 0, 0], ArrowUp: [0, -0.1, 0], ArrowDown: [0, 0.1, 0],
@@ -298,7 +315,7 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
       <div className="chart-header">
         <div>
           <h2 id="titulo-mapa3d" className="chart-title">Mapa 3D de flechas</h2>
-          <p className="chart-desc">Placa de {gridSizeMM / 10} × {gridSizeMM / 10} cm · {zLevels.length} planos Z ({zLevels[0]}–{zLevels[zLevels.length - 1]} mm)</p>
+          <p className="chart-desc">Zona de {etiquetaZona(zona)} · {zLevels.length} planos Z ({zLevels[0]}–{zLevels[zLevels.length - 1]} mm)</p>
         </div>
         <div className="controles-3d" role="group" aria-label="Controles de la vista 3D">
           <button type="button" className="btn-icono" onClick={() => mover(0.3, 0, 0)} aria-label="Rotar a la izquierda"><i className="bi bi-arrow-counterclockwise" aria-hidden="true" /></button>
@@ -316,7 +333,7 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, gridSizeMM
           <p id="resumen-mapa3d" className="visually-hidden">{resumen}</p>
           <div className="z-legend" aria-hidden="true">
             {zLevels.map((z, i) => (
-              <div key={z} className="z-legend-item"><span className={`z-legend-dot z${i}`} /> Z = {z} mm</div>
+              <div key={z} className="z-legend-item"><span className={`z-legend-dot ${clasePlano(i)}`} /> Z = {z} mm</div>
             ))}
             <div className="z-legend-item escala" ref={etiquetaEscala}>Sin lecturas</div>
           </div>

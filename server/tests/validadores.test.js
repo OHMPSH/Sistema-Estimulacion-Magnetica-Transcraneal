@@ -38,15 +38,26 @@ test('validarIdSesion: 400 si no es entero positivo; deja req.idSesion', () => {
 test('validarNuevaSesion: 400 sin objeto, 422 con valores inválidos', () => {
   espera(correr(v.validarNuevaSesion, { body: [] }), 400);
   espera(correr(v.validarNuevaSesion, { body: { modo: 'XX', paso_mm: 10 } }), 422);
-  espera(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 7 } }), 422);
+  // El paso es libre (≥ 1 mm, un decimal, como máximo 25000 puntos)
+  for (const paso of ['5', 0.5, 2.55, 0, 301, 1]) espera(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: paso } }), 422);
+  assert.equal(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 7 } }).req.nuevaSesion.pasoMM, 7);
+  assert.equal(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 2.5 } }).req.nuevaSesion.pasoMM, 2.5);
   espera(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 10, medio: 'agua' } }), 422);
   const ok = correr(v.validarNuevaSesion, { body: { modo: 'AC', paso_mm: 20, medio: 'solucion_salina' } });
-  assert.deepEqual(ok.req.nuevaSesion, { modo: 'AC', pasoMM: 20, medio: 'solucion_salina' });
+  assert.deepEqual(ok.req.nuevaSesion, { modo: 'AC', pasoMM: 20, medio: 'solucion_salina', zona: { x: 60, y: 60, z: 20 } });
+  // Zona de muestreo: dentro de los límites de la base (60 × 60 × 20 por defecto)
+  for (const zona of [{ x: 70, y: 10, z: 0 }, { x: 10, y: 10 }, { x: 10, y: 10, z: -1 }, { x: 10.25, y: 10, z: 0 }, [], 'x'])
+    espera(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 5, zona_mm: zona } }), 422);
+  const zona = correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 5, zona_mm: { x: 40, y: 20.5, z: 0 } } });
+  assert.deepEqual(zona.req.nuevaSesion.zona, { x: 40, y: 20.5, z: 0 });
+  // Con una zona pequeña, un paso de 1 mm ya cabe en el máximo de puntos
+  assert.equal(correr(v.validarNuevaSesion, { body: { modo: 'DC', paso_mm: 1, zona_mm: { x: 10, y: 10, z: 10 } } }).siguio, true);
 });
 
 test('validarFiltrosSesiones: 422 en valores inválidos; 403 si un no admin pide eliminadas', () => {
   espera(correr(v.validarFiltrosSesiones, { query: { modo: 'x' } }), 422);
-  espera(correr(v.validarFiltrosSesiones, { query: { paso_mm: '7' } }), 422);
+  for (const paso of ['abc', '2.55', '-5', '0']) espera(correr(v.validarFiltrosSesiones, { query: { paso_mm: paso } }), 422);
+  assert.equal(correr(v.validarFiltrosSesiones, { query: { paso_mm: '7,5' } }).req.filtros.pasoMM, 7.5);
   espera(correr(v.validarFiltrosSesiones, { query: { origen: 'pico' } }), 422);
   espera(correr(v.validarFiltrosSesiones, { query: { incluir_eliminadas: 'si' }, usuario: { rol: 'admin' } }), 422);
   espera(correr(v.validarFiltrosSesiones, { query: { incluir_eliminadas: '1' }, usuario: { rol: 'operador' } }), 403);

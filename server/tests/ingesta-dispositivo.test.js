@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { clasificarLote } from '../services/conversionSensor.js';
 
 const CTX = {
-  placaMM: 60, zLevels: [0, 5, 10, 15, 20],
+  zona: { x: 60, y: 60, z: 20 }, zLevels: [0, 5, 10, 15, 20],
   sensor: { modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 1, offset_ut: { x: 0, y: 0, z: 0 } },
 };
 const lect = seq => ({ seq, xMM: (seq % 13) * 5, yMM: 0, zMM: 0, raw: { x: seq, y: 0, z: 0 }, ts_ms: 0 });

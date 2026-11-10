@@ -6,12 +6,12 @@
 - Unclassified: 7 file(s) not represented in the graph (top: (none) 3, .service 1, .css 1)
 
 ## Summary
-- 868 nodes · 1923 edges · 31 communities (28 shown, 3 thin omitted)
+- 869 nodes · 1918 edges · 38 communities (34 shown, 4 thin omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 108 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `febbe3b6`
+- Built from commit: `4fde0376`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -25,7 +25,7 @@
 - sesiones.js
 - react
 - emular-pico.js
-- Fase 2: login (docs)
+- validar.js
 - Esquema SQL y migraciones
 - pico_w_cliente_ejemplo.py
 - Fase 3: parámetros y medición (docs)
@@ -46,18 +46,25 @@
 - Prompts de las fases
 - 003_configuracion.sql
 - 004_dispositivo.sql
+- app.js
+- dispositivo.js
+- api.integ.js
+- scripts
+- database.js
+- Dispositivo.js
+- idx_sesiones_eliminada
 
 ## God Nodes (most connected - your core abstractions)
 1. `react` - 34 edges
 2. `obtener()` - 24 edges
 3. `apiFetch()` - 20 edges
 4. `leerJSON()` - 19 edges
-5. `difundir()` - 18 edges
-6. `Fase 7 — Revisión de la interfaz y plan de diseño` - 18 edges
+5. `Fase 7 — Revisión de la interfaz y plan de diseño` - 18 edges
+6. `difundir()` - 18 edges
 7. `numero()` - 16 edges
 8. `rechazar()` - 16 edges
-9. `enviarJSON()` - 15 edges
-10. `DashboardPage()` - 15 edges
+9. `DashboardPage()` - 15 edges
+10. `enviarJSON()` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Raspberry Pi Pico 2W (C++ / MicroPython)` --conceptually_related_to--> `Raspberry Pi Pico W (RP2040)`  [AMBIGUOUS]
@@ -68,8 +75,8 @@
   docs/prompts-sesiones.md → CLAUDE.md
 - `Prompt Fase 5 — Datos y trazabilidad` --references--> `Fase 5: Datos y trazabilidad (pendiente)`  [EXTRACTED]
   docs/prompts-sesiones.md → CLAUDE.md
-- `Unit de systemd deploy/tms-server.service` --conceptually_related_to--> `Raspberry Pi 5 (servidor Node.js + MariaDB + Nginx)`  [INFERRED]
-  docs/prompts-sesiones.md → CLAUDE.md
+- `Instalación y despliegue local (README)` --semantically_similar_to--> `COMANDOS.md — Guía de arranque TMS v3.0`  [INFERRED] [semantically similar]
+  README.md → COMANDOS.md
 
 ## Import Cycles
 - None detected.
@@ -79,47 +86,47 @@
 - **Protocolo Pico W (Fase 4)** — claude_token_dispositivo, claude_latido_dispositivo, claude_ingesta_lotes, claude_servicio_dispositivo, claude_tabla_dispositivos, server_scripts_emular_pico [EXTRACTED 1.00]
 - **Autenticación y sesión de usuario (Fase 2)** — claude_auth_controller, claude_servicio_passwords, claude_servicio_sesionusuario, claude_servicio_limiteintentos, claude_middleware_auth, claude_cookie_tms_sesion, claude_auth_context [INFERRED 0.85]
 
-## Communities (31 total, 3 thin omitted)
+## Communities (38 total, 4 thin omitted)
 
 ### Community 0 - "DashboardPage.jsx"
 Cohesion: 0.09
-Nodes (39): Canvas3D, claveDe(), COMPONENTES, LineChartComponent, Plot, Superficie3D, useLimitado(), StartModal (+31 more)
+Nodes (41): Canvas3D, claveDe(), COMPONENTES, LineChartComponent, Plot, Superficie3D, useLimitado(), ModalConfirmacion (+33 more)
 
 ### Community 1 - "Modelos SQL y acceso admin"
-Cohesion: 0.05
-Nodes (27): faltantes, pool, leerValor(), obtenerTodas(), buscarPorTokenHash(), normalizar(), obtenerPrincipal(), buscarVigenteConUsuario() (+19 more)
+Cohesion: 0.06
+Nodes (22): api/cliente.js (apiFetch; 401 → login), context/AuthContext.jsx (useAuth), Fase 2: Login y usuarios (hecha), frontend App.jsx (login / cambio forzado / Dashboard), Migración 002 (usuarios y sesiones_login), models/Usuario.js (protege al último admin), LoginPage.jsx · CambiarPasswordPage.jsx, Tabla sesiones_login (+14 more)
 
 ### Community 2 - "mediciones.controller.js"
 Cohesion: 0.06
-Nodes (46): deleteSesion(), finalizarSesion(), getCsv(), getMedicionesDeSesion(), getSesionActiva(), getSesiones(), getStatus(), iniciarSesion() (+38 more)
+Nodes (47): deleteSesion(), finalizarSesion(), getCsv(), getMedicionesDeSesion(), getSesionActiva(), getSesiones(), getStatus(), iniciarSesion() (+39 more)
 
 ### Community 3 - "Login, cookie y límite de intentos"
-Cohesion: 0.06
-Nodes (74): ROLES, TEMAS, cambiarPassword(), guardarPreferencias(), login(), logout(), responderBloqueo(), usuarioPublico() (+66 more)
+Cohesion: 0.10
+Nodes (44): cambiarPassword(), guardarPreferencias(), login(), logout(), responderBloqueo(), usuarioPublico(), yo(), actualizarUsuario() (+36 more)
 
 ### Community 4 - "Arranque Express y dependencias"
-Cohesion: 0.06
-Nodes (39): cors, dotenv, express, mysql2, nodemon, crearApp(), iniciarServicios(), testConnection() (+31 more)
+Cohesion: 0.11
+Nodes (21): cors, dotenv, express, mysql2, nodemon, corsMiddleware, origenes, dependencies (+13 more)
 
 ### Community 5 - "Dependencias del frontend"
 Cohesion: 0.07
 Nodes (41): dependencies, bootstrap@^5.3.8, bootstrap-icons@^1.13.2, chart.js@^4.4.3, @fontsource/inter@^5.3.0, @fontsource/rajdhani@^5.3.0, @fontsource/share-tech-mono@^5.3.0, plotly.js-gl3d-dist-min@^3.7.0 (+33 more)
 
 ### Community 6 - "sesiones.js"
-Cohesion: 0.06
-Nodes (63): barridoVigente(), limiteCampoUT(), mallaParaPaso(), tamanoPlacaMM(), BLOQUEADAS_CON_SESION, generarToken(), getEstado(), latido() (+55 more)
+Cohesion: 0.13
+Nodes (31): barridoVigente(), limiteCampoUT(), mallaParaPaso(), tamanoPlacaMM(), generarToken(), getEstado(), latido(), lote() (+23 more)
 
 ### Community 7 - "react"
 Cohesion: 0.08
-Nodes (61): alPerderSesion(), apiFetch(), enviarJSON(), leerJSON(), App(), Shell(), SeccionDispositivo(), aTexto() (+53 more)
+Nodes (59): alPerderSesion(), apiFetch(), enviarJSON(), leerJSON(), App(), Shell(), SeccionDispositivo(), aTexto() (+51 more)
 
 ### Community 8 - "emular-pico.js"
-Cohesion: 0.07
-Nodes (44): firmware/pico_w_cliente_ejemplo.py (MicroPython), azar, bucleLatido(), bucleMedicion(), dormir(), enviarConReintento(), gauss, hora() (+36 more)
+Cohesion: 0.06
+Nodes (45): firmware/pico_w_cliente_ejemplo.py (MicroPython), azar, bucleLatido(), bucleMedicion(), dormir(), enviarConReintento(), gauss, hora() (+37 more)
 
-### Community 9 - "Fase 2: login (docs)"
-Cohesion: 0.20
-Nodes (10): api/cliente.js (apiFetch; 401 → login), context/AuthContext.jsx (useAuth), Fase 2: Login y usuarios (hecha), frontend App.jsx (login / cambio forzado / Dashboard), Migración 002 (usuarios y sesiones_login), models/Usuario.js (protege al último admin), LoginPage.jsx · CambiarPasswordPage.jsx, Tabla sesiones_login (+2 more)
+### Community 9 - "validar.js"
+Cohesion: 0.07
+Nodes (53): ROLES, TEMAS, BLOQUEADAS_CON_SESION, getConfiguracion(), putConfiguracion(), esEnteroPositivo(), esObjeto(), esTexto() (+45 more)
 
 ### Community 10 - "Esquema SQL y migraciones"
 Cohesion: 0.25
@@ -190,31 +197,55 @@ Cohesion: 0.70
 Nodes (4): idx_sesiones_login_expira, idx_sesiones_login_usuario, sesiones_login, usuarios
 
 ### Community 29 - "003_configuracion.sql"
+Cohesion: 0.40
+Nodes (3): configuracion, idx_sesiones_filtros, idx_sesiones_iniciada
+
+### Community 31 - "app.js"
+Cohesion: 0.36
+Nodes (8): crearApp(), iniciarServicios(), testConnection(), manejadorErrores(), rutaNoEncontrada(), router, arrancar(), iniciarLimpiezaPeriodica()
+
+### Community 32 - "dispositivo.js"
+Cohesion: 0.38
+Nodes (9): calcularEnLinea(), cambiarActivo(), cargar(), difundirEstado(), estadoPublico(), generarToken(), registrarLatido(), revisar() (+1 more)
+
+### Community 33 - "api.integ.js"
 Cohesion: 0.29
-Nodes (4): configuracion, idx_sesiones_filtros, idx_sesiones_iniciada, idx_sesiones_eliminada
+Nodes (8): carpetaServidor, sesionSimulada(), carpetaServidor, cliente(), configurarEntorno(), esperar(), leerCSV(), levantar()
+
+### Community 34 - "scripts"
+Cohesion: 0.25
+Nodes (8): scripts, crear-admin, dev, emular-pico, start, test, test:integracion, test:unit
+
+### Community 35 - "database.js"
+Cohesion: 0.38
+Nodes (4): faltantes, pool, leerValor(), obtenerTodas()
+
+### Community 36 - "Dispositivo.js"
+Cohesion: 0.38
+Nodes (3): buscarPorTokenHash(), normalizar(), obtenerPrincipal()
 
 ## Ambiguous Edges - Review These
 - `Raspberry Pi Pico 2W (C++ / MicroPython)` → `Raspberry Pi Pico W (RP2040)`  [AMBIGUOUS]
   README.md · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **38 isolated node(s):** `StartModal.jsx · StopModal.jsx`, `hooks/useServerStatus.js (/api/status cada 15 s)`, `Borrado lógico de sesiones (eliminada_en, restaurar)`, `Prompt Fase 5 — Datos y trazabilidad`, `config/database.js (pool mysql2 en UTC)` (+33 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 238 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **38 isolated node(s):** `StartModal.jsx · StopModal.jsx`, `Borrado lógico de sesiones (eliminada_en, restaurar)`, `Standoff de 5 mm (bobina–sensor)`, `Cómo ejecutar y verificar (curl, navegador, npm test)`, `Prompt Fase 5 — Datos y trazabilidad` (+33 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 242 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Estado de las fases (1 a 8)` connect `Estado de las fases` to `Fase 2: login (docs)`, `Fase 3: parámetros y medición (docs)`, `Fase 5: Datos y trazabilidad (pendiente)`, `Fase 4: Pico W (docs)`, `Fase 6: frontend (docs)`, `Accesibilidad e index.html`?**
+- **Why does `Estado de las fases (1 a 8)` connect `Estado de las fases` to `Modelos SQL y acceso admin`, `Fase 3: parámetros y medición (docs)`, `Fase 5: Datos y trazabilidad (pendiente)`, `Fase 4: Pico W (docs)`, `Fase 6: frontend (docs)`, `Accesibilidad e index.html`?**
   _High betweenness centrality (0.074) - this node is a cross-community bridge._
-- **What connects `StartModal.jsx · StopModal.jsx`, `hooks/useServerStatus.js (/api/status cada 15 s)`, `Borrado lógico de sesiones (eliminada_en, restaurar)` to the rest of the system?**
+- **What connects `StartModal.jsx · StopModal.jsx`, `Borrado lógico de sesiones (eliminada_en, restaurar)`, `Standoff de 5 mm (bobina–sensor)` to the rest of the system?**
   _38 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `DashboardPage.jsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.09147869674185463 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0912568306010929 - nodes in this community are weakly interconnected._
 - **Why does `Latido POST /api/dispositivo/latido` connect `Fase 4: Pico W (docs)` to `emular-pico.js`, `Hardware y sensor`, `Fase 3: parámetros y medición (docs)`?**
   _High betweenness centrality (0.053) - this node is a cross-community bridge._
 - **Should `Modelos SQL y acceso admin` be split into smaller, more focused modules?**
-  _Cohesion score 0.053185271770894216 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06201550387596899 - nodes in this community are weakly interconnected._
 - **Why does `services/sesiones.js (una sola sesión abierta, cola de promesas)` connect `Fase 3: parámetros y medición (docs)` to `mediciones.controller.js`?**
   _High betweenness centrality (0.049) - this node is a cross-community bridge._
 

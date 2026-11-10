@@ -24,7 +24,7 @@
  */
 
 import { obtener } from './configuracion.js';
-import { mallaDeBarrido } from './geometria.js';
+import { mallaDeSesion } from '../config/barrido.js';
 import { crearGeneradorMuestras } from './simulacionPura.js';
 import { registrarMedicion, ErrorIngesta } from './ingesta.js';
 
@@ -45,7 +45,7 @@ export function arrancar(sesion, alTerminar) {
   const simulacion = sesion.config_simulacion ?? obtener('simulacion');
   const barrido = sesion.config_barrido ?? obtener('barrido');
   const sensor = sesion.config_sensor ?? obtener('sensor');
-  const malla = mallaDeBarrido(barrido, sesion.paso_mm);
+  const malla = mallaDeSesion(sesion);
   const siguiente = crearGeneradorMuestras({ simulacion, barrido, sensor, malla });
   const msPorPunto = simulacion.ms_por_punto[sesion.modo];
 

@@ -18,7 +18,7 @@
  * Devuelve:
  *   sesion, enCurso, mediciones (todas, en orden de seq), version (cambia
  *   en cada cuadro con datos nuevos), ultima, iniciando, deteniendo,
- *   errorAccion, iniciar({modo, pasoMM, medio}), detener(), limpiarError()
+ *   errorAccion, iniciar({modo, pasoMM, medio, zona}), detener(), limpiarError()
  * ─────────────────────────────────────────────────────────────
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -130,13 +130,13 @@ export function useSesionActiva() {
     }
   });
 
-  const iniciar = useCallback(async ({ modo, pasoMM, medio }) => {
+  const iniciar = useCallback(async ({ modo, pasoMM, medio, zona }) => {
     if (ocupado.current) return false;
     ocupado.current = true;
     setIniciando(true);
     setErrorAccion('');
     try {
-      const json = await leerJSON(await enviarJSON('/api/sesiones', { modo, paso_mm: pasoMM, medio }));
+      const json = await leerJSON(await enviarJSON('/api/sesiones', { modo, paso_mm: pasoMM, medio, zona_mm: zona }));
       if (json.ok) {
         if (json.sesion.id !== datos.current.sesionId) seguir(json.sesion, []);
         setEnCurso(true);

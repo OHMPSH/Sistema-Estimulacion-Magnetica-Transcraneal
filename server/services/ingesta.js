@@ -26,10 +26,11 @@
  */
 
 import * as Medicion from '../models/Medicion.js';
-import { tamanoPlacaMM, mallaParaPaso, limiteCampoUT } from '../config/barrido.js';
+import { limiteCampoUT, mallaDeSesion } from '../config/barrido.js';
 import { obtener } from './configuracion.js';
 import { difundir } from './tiempoReal.js';
 import { erroresDePosicion, clasificarLote, DESBORDE } from './conversionSensor.js';
+import { indicePlano } from './geometria.js';
 
 export class ErrorIngesta extends Error {
   constructor(status, mensaje, errores) {
@@ -75,8 +76,8 @@ function paraDifundir(sesionId, m, timestamp) {
  * @throws {ErrorIngesta}
  */
 export async function registrarMedicion(sesion, { xMM, yMM, zMM, bx, by, bz }) {
-  const malla = mallaParaPaso(sesion.paso_mm);
-  const errores = erroresDePosicion({ xMM, yMM, zMM }, tamanoPlacaMM(), malla.zLevels);
+  const malla = mallaDeSesion(sesion);
+  const errores = erroresDePosicion({ xMM, yMM, zMM }, malla.zona, malla.zLevels);
   for (const [nombre, v] of [['bx', bx], ['by', by], ['bz', bz]]) {
     if (typeof v !== 'number' || !Number.isFinite(v)) errores.push(`${nombre} debe ser un número finito`);
   }
@@ -98,7 +99,7 @@ export async function registrarMedicion(sesion, { xMM, yMM, zMM, bx, by, bz }) {
 
   const seq = (await ultimoSeq(sesion.id)) + 1;
   const medicion = {
-    seq, xMM, yMM, zMM, zIdx: malla.zLevels.indexOf(zMM),
+    seq, xMM, yMM, zMM, zIdx: indicePlano(malla.zLevels, zMM),
     bx: ut.x, by: ut.y, bz: ut.z,
     magnitud: saturado ? null : Math.hypot(ut.x, ut.y, ut.z),
     saturado, raw,
@@ -127,9 +128,10 @@ export async function registrarMedicion(sesion, { xMM, yMM, zMM, bx, by, bz }) {
  * @throws {ErrorIngesta} 409 si la sesión se cerró
  */
 export async function registrarLoteDispositivo(sesion, lecturas) {
+  const malla = mallaDeSesion(sesion);
   const ctx = {
-    placaMM: tamanoPlacaMM(),
-    zLevels: mallaParaPaso(sesion.paso_mm).zLevels,
+    zona:    malla.zona,
+    zLevels: malla.zLevels,
     sensor:  obtener('sensor'),   // no cambia con la sesión abierta (409 en PUT /configuracion)
   };
   const timestamp = new Date();

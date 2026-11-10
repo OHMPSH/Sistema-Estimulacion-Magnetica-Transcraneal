@@ -17,7 +17,8 @@
 import * as Usuario from '../models/Usuario.js';
 import * as SesionLogin from '../models/SesionLogin.js';
 import { hashPassword, verificarPassword, verificarContraRelleno } from '../services/passwords.js';
-import { abrirSesion, quitarCookie } from '../services/sesionUsuario.js';
+import { abrirSesion, quitarCookie, hashDeToken, NOMBRE_COOKIE } from '../services/sesionUsuario.js';
+import { leerCookie } from '../middleware/auth.js';
 import {
   claveDeIntento, segundosDeBloqueo, registrarFallo, olvidarFallos,
 } from '../services/limiteIntentos.js';
@@ -69,6 +70,10 @@ export const login = async (req, res, next) => {
     }
 
     olvidarFallos(clave);
+    // Si el navegador traía una sesión anterior (otra pestaña, o la de antes
+    // de pedir el login de nuevo), se cierra: queda solo la nueva.
+    const anterior = leerCookie(req, NOMBRE_COOKIE);
+    if (anterior) await SesionLogin.borrar(hashDeToken(anterior));
     await abrirSesion(req, res, encontrado.id);
     await Usuario.registrarAcceso(encontrado.id);
     console.log(`[auth] Login de "${usuario}" (${encontrado.rol}) desde ${req.ip}`);

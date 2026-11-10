@@ -3,9 +3,12 @@
  * ─────────────────────────────────────────────────────────────
  * Estado de la sesión del usuario para toda la aplicación.
  *
- * Al montar pregunta al servidor quién es el usuario (GET /api/auth/yo);
- * la cookie de sesión es HttpOnly, así que el navegador no puede
- * leerla y la única forma de saberlo es preguntar.
+ * Login obligatorio al entrar: cada pestaña nueva (o el navegador
+ * recién abierto) pide usuario y contraseña, aunque quede una cookie
+ * válida. La marca vive en sessionStorage, que es por pestaña y
+ * sobrevive a la recarga: recargar a mitad de un barrido no saca al
+ * usuario. Solo con esa marca se pregunta al servidor quién es
+ * (GET /api/auth/yo; la cookie es HttpOnly y no se puede leer aquí).
  *
  * Expone con useAuth():
  *   usuario          — { id, usuario, nombre, rol, debe_cambiar_password, preferencias } o null
@@ -22,6 +25,12 @@ import { apiFetch, enviarJSON, leerJSON, alPerderSesion } from '../api/cliente.j
 
 const AuthContext = createContext(null);
 
+/** Marca de "en esta pestaña ya se inició sesión" */
+const MARCA_PESTANA = 'tms_login_pestana';
+const leerMarca = () => { try { return sessionStorage.getItem(MARCA_PESTANA) === '1'; } catch { return false; } };
+const ponerMarca = () => { try { sessionStorage.setItem(MARCA_PESTANA, '1'); } catch { /* sin almacenamiento: se pedirá el login al recargar */ } };
+const quitarMarca = () => { try { sessionStorage.removeItem(MARCA_PESTANA); } catch { /* nada que borrar */ } };
+
 const SIN_CONEXION = 'No se pudo conectar con el servidor. Revisa que esté encendido e inténtalo de nuevo.';
 
 export function AuthProvider({ children }) {
@@ -37,8 +46,15 @@ export function AuthProvider({ children }) {
     // Cualquier 401 de la API devuelve al login
     alPerderSesion(() => {
       if (usuarioRef.current) setSesionExpirada(true);
+      quitarMarca();
       setUsuario(null);
     });
+
+    // Pestaña nueva: se muestra el login sin usar la cookie que pudiera quedar
+    if (!leerMarca()) {
+      setCargando(false);
+      return () => alPerderSesion(null);
+    }
 
     let cancelado = false;
     (async () => {
@@ -62,6 +78,7 @@ export function AuthProvider({ children }) {
     try {
       const json = await leerJSON(await enviarJSON('/api/auth/login', { usuario: nombreUsuario, password }));
       if (!json.ok) return { ok: false, error: json.error };
+      ponerMarca();
       setSesionExpirada(false);
       setUsuario(json.usuario);
       return { ok: true };
@@ -76,6 +93,7 @@ export function AuthProvider({ children }) {
     } catch {
       // Sin conexión: igual se sale de la interfaz; la sesión expira sola en el servidor
     }
+    quitarMarca();
     setSesionExpirada(false);
     setUsuario(null);
   }, []);

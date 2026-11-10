@@ -14,7 +14,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { PASOS_MM, MULTIPLO_GEOMETRIA } from './geometria.js';
+import { erroresDePaso, limitesDeBarrido, unDecimal } from './geometria.js';
 
 /** Ganancias válidas del HMC5883L: rango en gauss → LSB por gauss */
 export const GANANCIAS_HMC5883L = {
@@ -82,19 +82,26 @@ const VALIDADORES = {
   },
 
   barrido(v) {
-    const campos = ['grid_size_mm', 'z_max_mm', 'standoff_mm', 'paso_predeterminado_mm'];
-    const errores = clavesDesconocidas(v, campos);
-    const m = MULTIPLO_GEOMETRIA;
-    if (!esEntero(v.grid_size_mm) || v.grid_size_mm < m || v.grid_size_mm > 300 || v.grid_size_mm % m !== 0) {
-      errores.push(`grid_size_mm debe ser un múltiplo de ${m} entre ${m} y 300 (para que los pasos de ${PASOS_MM.join(', ')} mm caigan en el borde)`);
+    // Forma anterior a la migración 007 ({grid_size_mm, z_max_mm}): se convierte a límites
+    if (esObjeto(v) && v.limite_x_mm === undefined && v.grid_size_mm !== undefined) {
+      const { grid_size_mm: _g, z_max_mm: _z, ...resto } = v;
+      const l = limitesDeBarrido(v);
+      v = { limite_x_mm: l.x, limite_y_mm: l.y, limite_z_mm: l.z, ...resto };
     }
-    if (!esEntero(v.z_max_mm) || v.z_max_mm < 0 || v.z_max_mm > 200 || v.z_max_mm % m !== 0) {
-      errores.push(`z_max_mm debe ser un múltiplo de ${m} entre 0 y 200`);
+    const campos = ['limite_x_mm', 'limite_y_mm', 'limite_z_mm', 'standoff_mm', 'paso_predeterminado_mm'];
+    const errores = clavesDesconocidas(v, campos);
+    // Límites de la base: lo más que puede recorrer la mesa en cada eje (la zona de cada sesión no los pasa)
+    let validos = true;
+    for (const [campo, min, max] of [['limite_x_mm', 1, 1000], ['limite_y_mm', 1, 1000], ['limite_z_mm', 0, 500]]) {
+      const n = v[campo];
+      if (typeof n !== 'number' || !Number.isFinite(n) || n < min || n > max || !unDecimal(n)) {
+        errores.push(`${campo} debe ser un número entre ${min} y ${max} mm, con un decimal como máximo`);
+        validos = false;
+      }
     }
     numero(errores, 'standoff_mm', v.standoff_mm, 0.1, 100);
-    if (!PASOS_MM.includes(v.paso_predeterminado_mm)) {
-      errores.push(`paso_predeterminado_mm debe ser ${PASOS_MM.join(', ')}`);
-    }
+    // El paso predeterminado se valida con la base completa
+    if (validos) errores.push(...erroresDePaso(v.paso_predeterminado_mm, limitesDeBarrido(v), 'paso_predeterminado_mm'));
     return { valor: v, errores };
   },
 

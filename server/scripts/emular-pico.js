@@ -36,7 +36,7 @@
  */
 
 import { campoEnPlaca } from '../services/fisicaEspira.js';
-import { mallaDeBarrido, puntoDeMalla } from '../services/geometria.js';
+import { mallaDeZona, puntoDeMalla } from '../services/geometria.js';
 import { mulberry32, generadorGaussiano } from '../services/aleatorio.js';
 import { utACrudo, DESBORDE, MAX_LECTURAS_LOTE } from '../services/conversionSensor.js';
 
@@ -126,10 +126,10 @@ async function bucleLatido() {
 // ── Lecturas ──────────────────────────────────────────────────
 /** Lectura cruda del punto número `indice` de la malla de la sesión */
 function leerSensor(s, indice) {
-  const malla = mallaDeBarrido(s.barrido, s.paso_mm);
+  const malla = mallaDeZona(s.zona_mm, s.paso_mm);
   const punto = puntoDeMalla(malla, indice);
   const campo = campoEnPlaca(punto.xMM, punto.yMM, punto.zMM, {
-    centroMM: s.barrido.grid_size_mm / 2, standoffMM: s.barrido.standoff_mm,
+    centroXMM: s.zona_mm.x / 2, centroYMM: s.zona_mm.y / 2, standoffMM: s.barrido.standoff_mm,
     radioMM: 25, campoCentroUT: 120,
   });
   const raw = {

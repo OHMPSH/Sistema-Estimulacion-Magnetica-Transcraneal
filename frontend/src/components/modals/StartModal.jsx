@@ -6,7 +6,7 @@
  */
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { useModalBootstrap } from './useModalBootstrap.js';
-import { etiquetaPaso, etiquetaMedio, etiquetaModo } from '../../utils/geometria.js';
+import { etiquetaPaso, etiquetaMedio, etiquetaModo, etiquetaZona } from '../../utils/geometria.js';
 
 export const StartModal = forwardRef(function StartModal({ parametros, geometria, modoOperacion, onConfirm }, ref) {
   const elemento = useRef(null);
@@ -17,9 +17,10 @@ export const StartModal = forwardRef(function StartModal({ parametros, geometria
 
   const filas = [
     ['Velocidad', etiquetaModo(parametros.modo)],
+    ['Zona (X × Y × Z)', etiquetaZona(parametros.zona)],
     ['Paso (X, Y y Z)', etiquetaPaso(parametros.pasoMM)],
     ['Medio', etiquetaMedio(parametros.medio)],
-    ['Malla', `${geometria.gridN} × ${geometria.gridN} puntos · ${geometria.zLevels.length} planos Z (${geometria.zLevels.join(', ')} mm)`],
+    ['Malla', `${geometria.gridNx} × ${geometria.gridNy} puntos · ${geometria.zLevels.length} planos Z (${geometria.zLevels.join(', ')} mm)`],
     ['Total', `${geometria.totalPuntos} puntos`],
     ['Origen de los datos', modoOperacion === 'real' ? 'Pico W (modo real)' : 'Simulador del servidor'],
   ];

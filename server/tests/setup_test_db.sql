@@ -98,8 +98,11 @@ CREATE TABLE IF NOT EXISTS sesiones (
   usuario_id        INT          NULL,                        -- quién la inició
   modo              ENUM('DC','AC') NOT NULL,                 -- velocidad: DC rápida, AC normal
   origen            ENUM('sim','hw') NOT NULL DEFAULT 'sim',  -- simulador del servidor o Pico W
-  paso_mm           TINYINT UNSIGNED NOT NULL DEFAULT 5,      -- paso en X, Y y Z: 5, 10 o 20 mm
+  paso_mm           DECIMAL(4,1) UNSIGNED NOT NULL DEFAULT 5.0, -- paso en X, Y y Z, en mm (libre, migración 006)
   medio             ENUM('campo_magnetico','solucion_salina') NOT NULL DEFAULT 'campo_magnetico',
+  zona_x_mm         DECIMAL(5,1) UNSIGNED NOT NULL,           -- zona de muestreo en X, Y y Z (mm, migración 007)
+  zona_y_mm         DECIMAL(5,1) UNSIGNED NOT NULL,
+  zona_z_mm         DECIMAL(5,1) UNSIGNED NOT NULL,
   iniciada_en       DATETIME     NOT NULL,                    -- UTC
   terminada_en      DATETIME     NULL,                        -- UTC (NULL si está abierta)
   notas             TEXT         NULL,                        -- texto libre (máx. 5000 por la API)
@@ -177,7 +180,7 @@ CREATE TABLE IF NOT EXISTS configuracion (
 
 INSERT IGNORE INTO configuracion (clave, valor, actualizado_en) VALUES
   ('modo_operacion', '"simulacion"', UTC_TIMESTAMP()),
-  ('barrido',        '{"grid_size_mm":60,"z_max_mm":20,"standoff_mm":5,"paso_predeterminado_mm":5}', UTC_TIMESTAMP()),
+  ('barrido',        '{"limite_x_mm":60,"limite_y_mm":60,"limite_z_mm":20,"standoff_mm":5,"paso_predeterminado_mm":5}', UTC_TIMESTAMP()),
   ('sensor',         '{"modelo":"HMC5883L","rango_ga":1.9,"lsb_por_ga":820,"lecturas_por_punto":1,"offset_ut":{"x":0,"y":0,"z":0}}', UTC_TIMESTAMP()),
   ('simulacion',     '{"ms_por_punto":{"DC":60,"AC":120},"semilla":12345,"ruido_sigma_ut":0.25,"radio_bobina_mm":25,"campo_centro_ut":120,"prob_hueco":0,"prob_saturacion":0}', UTC_TIMESTAMP()),
   ('dispositivo',    '{"intervalo_latido_s":5,"umbral_desconexion_s":15}', UTC_TIMESTAMP()),

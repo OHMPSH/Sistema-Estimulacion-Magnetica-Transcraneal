@@ -16,6 +16,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
+import { indicePlano } from './geometria.js';
 /** Valor del registro de un eje cuando se desborda */
 export const DESBORDE = -4096;
 /** Rango aceptado para las cuentas crudas */
@@ -57,18 +58,18 @@ export function convertirCrudo(raw, sensor) {
 
 /**
  * Valida la posición de una lectura contra la malla de la sesión.
- * x e y deben caer en la placa; z debe ser uno de los planos de la
+ * x e y deben caer en la zona de la sesión; z debe ser uno de los planos de la
  * sesión (según su paso). Es la misma regla para el simulador y la Pico.
  * @returns {string[]} errores (vacío si es válida)
  */
-export function erroresDePosicion({ xMM, yMM, zMM }, placaMM, zLevels) {
+export function erroresDePosicion({ xMM, yMM, zMM }, zona, zLevels) {
   const errores = [];
-  for (const [nombre, v] of [['xMM', xMM], ['yMM', yMM]]) {
+  for (const [nombre, v, max] of [['xMM', xMM, zona.x], ['yMM', yMM, zona.y]]) {
     if (!esNumero(v)) errores.push(`${nombre} debe ser un número`);
-    else if (v < 0 || v > placaMM) errores.push(`${nombre} fuera de la placa (0 a ${placaMM} mm): ${v}`);
+    else if (v < 0 || v > max + 1e-6) errores.push(`${nombre} fuera de la zona de la sesión (0 a ${max} mm): ${v}`);
   }
   if (!esNumero(zMM)) errores.push('zMM debe ser un número');
-  else if (!zLevels.includes(zMM)) {
+  else if (indicePlano(zLevels, zMM) === -1) {
     errores.push(`zMM debe ser uno de los planos de la sesión: ${zLevels.join(', ')} mm (recibido: ${zMM})`);
   }
   return errores;
@@ -82,15 +83,15 @@ export const tsDispositivoValido = v => Number.isInteger(v) && v >= TS_MIN && v 
 /**
  * Valida una lectura de la Pico y la convierte.
  * @param {object} l  { seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms? }
- * @param {object} ctx { placaMM, zLevels, sensor }
+ * @param {object} ctx { zona: {x, y}, zLevels, sensor }
  * @returns {{ errores: string[], lectura?: object }}
  *   lectura = { seq, xMM, yMM, zMM, zIdx, raw, bx, by, bz, magnitud, saturado, tsDispositivo: Date|null }
  */
-export function validarLecturaDispositivo(l, { placaMM, zLevels, sensor }) {
+export function validarLecturaDispositivo(l, { zona, zLevels, sensor }) {
   if (!esObjeto(l)) return { errores: ['La lectura debe ser un objeto'] };
   const errores = [];
   if (!Number.isSafeInteger(l.seq) || l.seq <= 0) errores.push('seq debe ser un entero positivo');
-  errores.push(...erroresDePosicion(l, placaMM, zLevels));
+  errores.push(...erroresDePosicion(l, zona, zLevels));
 
   if (!esObjeto(l.raw)) {
     errores.push('raw debe ser un objeto {x, y, z} con las cuentas del sensor');
@@ -111,7 +112,7 @@ export function validarLecturaDispositivo(l, { placaMM, zLevels, sensor }) {
   return {
     errores: [],
     lectura: {
-      seq: l.seq, xMM: l.xMM, yMM: l.yMM, zMM: l.zMM, zIdx: zLevels.indexOf(l.zMM),
+      seq: l.seq, xMM: l.xMM, yMM: l.yMM, zMM: l.zMM, zIdx: indicePlano(zLevels, l.zMM),
       raw: { x: l.raw.x, y: l.raw.y, z: l.raw.z },
       ...convertida,
       tsDispositivo,
@@ -126,7 +127,7 @@ export function validarLecturaDispositivo(l, { placaMM, zLevels, sensor }) {
  *
  * @param {Array} lecturas       tal como llegaron en el cuerpo
  * @param {Set<number>} seqGuardados  seq que la sesión ya tiene en la base
- * @param {object} ctx           { placaMM, zLevels, sensor }
+ * @param {object} ctx           { zona, zLevels, sensor }
  * @returns {{ nuevas: object[], duplicadas: number[], rechazadas: {seq, error}[] }}
  */
 export function clasificarLote(lecturas, seqGuardados, ctx) {

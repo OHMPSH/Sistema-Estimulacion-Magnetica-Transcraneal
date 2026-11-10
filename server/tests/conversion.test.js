@@ -17,7 +17,7 @@ import { GANANCIAS_HMC5883L } from '../services/validacionConfiguracion.js';
 const sensorCon = (rango, offset = { x: 0, y: 0, z: 0 }) =>
   ({ modelo: 'HMC5883L', rango_ga: rango, lsb_por_ga: GANANCIAS_HMC5883L[rango], lecturas_por_punto: 1, offset_ut: offset });
 
-const CTX = { placaMM: 60, zLevels: [0, 5, 10, 15, 20], sensor: sensorCon(1.9) };
+const CTX = { zona: { x: 60, y: 60, z: 20 }, zLevels: [0, 5, 10, 15, 20], sensor: sensorCon(1.9) };
 const lectura = (extra = {}) => ({ seq: 1, xMM: 30, yMM: 30, zMM: 0, raw: { x: 100, y: -200, z: 984 }, ts_ms: Date.UTC(2026, 10, 10), ...extra });
 
 test('µT = cuentas / LSB por gauss × 100, para varias ganancias', () => {

@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mallaDeBarrido, puntoDeMalla } from '../services/geometria.js';
+import { mallaDeBarrido, mallaDeZona, puntoDeMalla } from '../services/geometria.js';
 import {
   calcularHuecos, encabezadoCSV, escaparMeta, lineaCSV, nombreArchivoCSV, COLUMNAS_CSV, MAX_HUECOS_LISTADOS,
 } from '../services/trazabilidad.js';
@@ -32,8 +32,36 @@ test('Puntos esperados: 845, 147 y 32 según el paso', () => {
   assert.equal(mallaDeBarrido(BARRIDO, 20).totalPuntos, 4 * 4 * 2);
 });
 
+test('Paso libre: 7 mm y 2,5 mm (el último punto queda antes del borde si no divide la placa)', () => {
+  const m7 = mallaDeBarrido(BARRIDO, 7);
+  assert.equal(m7.gridNx, 9);
+  assert.deepEqual(m7.zLevels, [0, 7, 14]);
+  assert.equal(m7.ejeX.at(-1), 56);
+  assert.equal(m7.totalPuntos, 9 * 9 * 3);
+  const m25 = mallaDeBarrido(BARRIDO, 2.5);
+  assert.equal(m25.gridNx, 25);
+  assert.equal(m25.zLevels.length, 9);
+  assert.equal(m25.ejeX[3], 7.5);
+  const m03 = mallaDeBarrido(BARRIDO, 1.1);
+  assert.equal(m03.ejeX[3], 3.3);          // sin 3.3000000000000003
+});
+
+test('Zona rectangular: 40 × 20 × 10 con paso 10 → 5 × 3 × 2 = 30 puntos en orden x → y → z', () => {
+  const m = mallaDeZona({ x: 40, y: 20, z: 10 }, 10);
+  assert.equal(m.gridNx, 5);
+  assert.equal(m.gridNy, 3);
+  assert.deepEqual(m.zLevels, [0, 10]);
+  assert.equal(m.totalPuntos, 30);
+  assert.deepEqual(puntoDeMalla(m, 4), { xMM: 40, yMM: 0, zMM: 0, zIdx: 0 });
+  assert.deepEqual(puntoDeMalla(m, 5), { xMM: 0, yMM: 10, zMM: 0, zIdx: 0 });
+  assert.deepEqual(puntoDeMalla(m, 29), { xMM: 40, yMM: 20, zMM: 10, zIdx: 1 });
+  const todas = Array.from({ length: 30 }, (_, i) => puntoDeMalla(m, i)).map(p => ({ x_mm: p.xMM, y_mm: p.yMM, z_mm: p.zMM }));
+  assert.equal(calcularHuecos(m, todas).total, 0);
+  assert.deepEqual(calcularHuecos(m, todas.slice(1)).posiciones, [{ xMM: 0, yMM: 0, zMM: 0 }]);
+});
+
 test('Una malla completa no tiene huecos', () => {
-  for (const paso of [5, 10, 20]) {
+  for (const paso of [5, 10, 20, 7, 2.5]) {
     const m = mallaDeBarrido(BARRIDO, paso);
     assert.deepEqual(calcularHuecos(m, posiciones(m)), { total: 0, posiciones: [] });
   }

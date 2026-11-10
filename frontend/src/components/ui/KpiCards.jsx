@@ -5,8 +5,9 @@
  */
 import React, { memo } from 'react';
 import { numero, duracion } from '../../utils/formato.js';
+import { clasePlano, etiquetaZona } from '../../utils/geometria.js';
 
-export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLevels, decimales, placaCM }) {
+export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLevels, decimales, zona }) {
   const zIdx = ultima ? ultima.zIdx : null;
   const textoEstado = { adquiriendo: 'Adquiriendo', terminada: 'Terminada', detenida: 'Detenida', inactiva: 'Inactiva' }[estado];
 
@@ -25,7 +26,7 @@ export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLeve
         <p className="kpi-value cifra">{ultima ? `${ultima.zMM}\u00a0mm` : '—'}</p>
         <ol className="z-pills" aria-label="Planos de la sesión">
           {zLevels.map((z, i) => (
-            <li key={z} className={`z-level-pill${i === zIdx ? ` activo z${i}` : ''}`} aria-current={i === zIdx ? 'true' : undefined}>
+            <li key={z} className={`z-level-pill${i === zIdx ? ` activo ${clasePlano(i)}` : ''}`} aria-current={i === zIdx ? 'true' : undefined}>
               {z}{'\u00a0'}mm
             </li>
           ))}
@@ -45,7 +46,7 @@ export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLeve
         <p className="kpi-value cifra kpi-value-chico">
           {ultima ? `(${numero(ultima.xMM, 1)}, ${numero(ultima.yMM, 1)})\u00a0mm` : '—'}
         </p>
-        <p className="kpi-unit">En la placa de {placaCM}{'\u00a0'}×{'\u00a0'}{placaCM}{'\u00a0'}cm{ultima?.seq ? ` · lectura ${ultima.seq}` : ''}</p>
+        <p className="kpi-unit">En la zona de {etiquetaZona(zona)}{ultima?.seq ? ` · lectura ${ultima.seq}` : ''}</p>
       </article>
     </div>
   );

@@ -10,13 +10,15 @@ Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesio
 
 Sistema de adquisición y visualización de datos para la tesis de ingeniería (IPN, ESIME Zacatenco) sobre la **caracterización del campo magnético** en un montaje de estimulación magnética transcraneal (TMS) sobre un phantom de solución salina.
 
-- Un sensor recorre una malla sobre una placa de **60 × 60 mm**, en planos Z de **0 a 20 mm**. El **paso de medición** se elige al iniciar cada sesión (ver 7.0) y se aplica **igual en X, Y y Z**:
+- Un sensor recorre una malla sobre una **zona de muestreo** X × Y × Z que elige el operador en cada sesión (por defecto toda la base: **60 × 60 mm** y planos Z de **0 a 20 mm**; los límites de la base se configuran, ver 7.0). El **paso de medición** se elige al iniciar cada sesión (ver 7.0) y se aplica **igual en X, Y y Z**:
 
   | Paso | Malla X-Y | Planos Z (mm) | Puntos por sesión |
   |---|---|---|---|
   | 0,5 cm (5 mm, el de siempre) | 13 × 13 | 0, 5, 10, 15, 20 | **845** |
   | 1 cm (10 mm) | 7 × 7 | 0, 10, 20 | 147 |
   | 2 cm (20 mm) | 4 × 4 | 0, 20 | 32 |
+
+  Desde el 2026-11-10 el paso es **libre** (en mm, con un decimal; ver 7.0): los de la tabla son solo los más usados. Por ejemplo, 7,5 mm da 9 × 9 × 3 planos = 243 puntos.
 - Por cada punto se guardan las tres componentes Bx, By, Bz (en **µT**) y su módulo |B|.
 - Hoy los datos los genera una **simulación**. Más adelante los mandará una **Raspberry Pi Pico W** por Wi-Fi.
 
@@ -85,6 +87,8 @@ PT/
 │   ├── migrations/003_configuracion.sql       ← configuracion y sesiones.origen/paso_mm/medio (Fase 3)
 │   ├── migrations/004_dispositivo.sql         ← dispositivos y mediciones.seq/raw/saturado/ts_dispositivo (Fase 4)
 │   ├── migrations/005_trazabilidad.sql        ← DOUBLE en mediciones; metadatos y borrado lógico en sesiones (Fase 5)
+│   ├── migrations/006_paso_libre.sql          ← sesiones.paso_mm DECIMAL(4,1): paso libre en mm (2026-11-10)
+│   ├── migrations/007_zona_muestreo.sql       ← sesiones.zona_x/y/z_mm y barrido → límites de la base (2026-11-10)
 │   ├── config/database.js        ← pool de mysql2, timezone 'Z', SET time_zone '+00:00'
 │   ├── config/barrido.js         ← lee la configuración: tamanoPlacaMM(), mallaParaPaso(paso), limiteCampoUT()
 │   ├── config/roles.js           ← ROLES ('admin','operador','observador') y TEMAS
@@ -191,7 +195,7 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `PATCH /api/usuarios/:id {nombre?,rol?,activo?}` | admin | Desactivar borra sus sesiones de login | 200, 400, 404, 409 último admin, 422 |
 | `POST /api/usuarios/:id/restablecer-password {password}` | admin | Deja `debe_cambiar_password` y cierra sus sesiones | 200, 400, 404, 422 |
 | `GET /api/stream` | sesión | SSE con `id:` y los eventos `medicion`, `sesion`, `configuracion`, `dispositivo` y `resincronizar`; reenvía desde `Last-Event-ID` (búfer de 2000) | — |
-| `POST /api/sesiones {modo, paso_mm?, medio?}` | op | Crea la sesión (7.0) y arranca el simulador en modo simulación. Responde `{sesionId, sesion}` con `grid_n`, `z_levels_mm` y `puntos_esperados` | 201, 409 si ya hay otra abierta, 422 |
+| `POST /api/sesiones {modo, paso_mm?, medio?, zona_mm?: {x, y, z}}` | op | Crea la sesión (7.0) y arranca el simulador en modo simulación. Sin `zona_mm`, toda la base. Responde `{sesionId, sesion}` con `zona_mm`, `grid_nx`, `grid_ny`, `z_levels_mm` y `puntos_esperados` | 201, 409 si ya hay otra abierta, 422 |
 | `PUT /api/sesiones/:id` | op | Cierra la sesión y detiene el simulador | 200, 404, 409 si ya estaba cerrada |
 | `GET /api/sesiones?modo=&paso_mm=&medio=&origen=&incluir_eliminadas=` | sesión | Lista con COUNT, MAX y MIN (sin saturadas), `saturadas`, metadatos de la Fase 5 (`usuario_id`, `iniciada_por`, `notas`, `puntos_esperados`, `puntos_recibidos`, `huecos`, versiones, `eliminada_en`). Excluye las eliminadas salvo `incluir_eliminadas=1` (solo admin). Incluye `activa` | 200, 403, 422 |
 | `GET /api/sesiones/activa` | sesión | `{sesion, mediciones}` de la sesión abierta (mismo formato que `event: medicion`), o `{sesion: null, mediciones: []}` | 200 |
@@ -204,12 +208,12 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `POST /api/dispositivo/token` | admin | Genera el token (32 bytes base64url) y lo devuelve **una vez**; reemplaza al anterior | 201 |
 | `DELETE /api/dispositivo/token` | admin | Revoca el token | 200, 404 |
 | `PATCH /api/dispositivo {activo}` | admin | Activa o desactiva la Pico | 200, 400, 404 |
-| `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, grid_n, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
+| `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
 | `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
 | `GET /api/sesiones/:id/mediciones` | sesión | Mediciones en JSON, con `seq`, crudos y `saturado` | 200, 404 (también si está eliminada) |
 
 **Detalles del login (Fase 2):**
-- El token es de 32 bytes aleatorios (base64url); en la base solo se guarda su SHA-256. La cookie es `HttpOnly; SameSite=Strict; Path=/; Max-Age=43200`, más `Secure` con `NODE_ENV=production`. Por eso, **en producción solo funciona por HTTPS** (Nginx).
+- El token es de 32 bytes aleatorios (base64url); en la base solo se guarda su SHA-256. La cookie es `HttpOnly; SameSite=Strict; Path=/`, **sin Max-Age** (cookie de sesión del navegador: se borra al cerrarlo), más `Secure` con `NODE_ENV=production`; la expiración de 12 h la aplica el servidor. Por eso, **en producción solo funciona por HTTPS** (Nginx).
 - La renovación de 12 h es deslizante, pero solo se escribe en la base si pasó más de 60 s desde el último uso (`RENOVAR_CADA_S`), para no escribir en cada medición.
 - El rol y `activo` se leen de la base en cada petición: degradar o desactivar aplica de inmediato.
 - `app.set('trust proxy', 'loopback')`: `req.ip` sale de `X-Forwarded-For` solo si la conexión viene de 127.0.0.1 (Nginx).
@@ -219,7 +223,7 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 
 ### Esquema actual de MariaDB
 
-- `sesiones(id, usuario_id FK NULL, modo ENUM('DC','AC'), origen ENUM('sim','hw'), paso_mm TINYINT UNSIGNED, medio ENUM, iniciada_en, terminada_en NULL, notas TEXT, puntos_esperados, puntos_recibidos, huecos JSON {total, posiciones≤1000}, config_barrido/config_sensor/config_simulacion JSON, version_software VARCHAR(64), version_firmware VARCHAR(40), eliminada_en DATETIME NULL)`, con índices en `iniciada_en`, `(modo, paso_mm, medio, origen)` y `eliminada_en` (migraciones 003 y 005).
+- `sesiones(id, usuario_id FK NULL, modo ENUM('DC','AC'), origen ENUM('sim','hw'), paso_mm DECIMAL(4,1) UNSIGNED, medio ENUM, iniciada_en, terminada_en NULL, notas TEXT, puntos_esperados, puntos_recibidos, huecos JSON {total, posiciones≤1000}, config_barrido/config_sensor/config_simulacion JSON, version_software VARCHAR(64), version_firmware VARCHAR(40), eliminada_en DATETIME NULL)`, con índices en `iniciada_en`, `(modo, paso_mm, medio, origen)` y `eliminada_en` (migraciones 003 y 005).
 - `configuracion(clave VARCHAR(40) PK, valor JSON, actualizado_en DATETIME, actualizado_por FK a usuarios NULL con ON DELETE SET NULL)` (migración 003).
 - `mediciones(id, sesion_id FK con ON DELETE CASCADE, seq INT NULL, x_mm, y_mm, z_mm, bx, by, bz, magnitud FLOAT (bx/by/bz/magnitud NULL si saturó), raw_x/raw_y/raw_z SMALLINT NULL, saturado BOOL, timestamp DATETIME(3), ts_dispositivo DATETIME(3) NULL)`, con índice en `sesion_id` y `UNIQUE(sesion_id, seq)` (migración 004).
 - `dispositivos(id, nombre UNIQUE, token_hash CHAR(64) UNIQUE NULL, activo, creado_en, ultimo_latido DATETIME(3), ip, firmware, rssi, uptime_s)`, con la fila `pico-w-1` (migración 004).
@@ -354,6 +358,11 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - Cómo se mueve el eje Z.
 - La dirección I2C real del sensor.
 
+**Cambios posteriores a la Fase 8 (2026-11-10, pedidos por el usuario):**
+- **Paso libre** (ver 7.0): migración 006, `erroresDePaso`, `indicePlano`, campo del panel, filtro del historial y paso predeterminado numérico en Configuración › Barrido. `opciones` de `GET /configuracion` ahora trae `pasos_sugeridos_mm`, `paso_min_mm` y `max_puntos_sesion` (antes `pasos_mm`). Los colores de los planos se repiten cada 5 (`clasePlano`). 54 tests unitarios y 6 de integración. ⚠ **La migración 006 NO se aplicó en la base local** (el clasificador de permisos lo bloqueó): hay que ejecutarla con `sudo mysql tms_db < server/migrations/006_paso_libre.sql`; sin ella, un paso decimal se trunca en la base. Se verificó contra una MariaDB temporal (migración idempotente, simulador con 12,5 mm, Pico emulada con 7,5 mm, filtro del historial).
+- **Zona de muestreo por sesión y límites de la base** (ver 7.0): migración 007, `mallaDeZona`/`limitesDeBarrido`/`erroresDeZona` (servidor y frontend), `zonaDeSesion`/`mallaDeSesion` en `config/barrido.js`, mallas rectangulares en el mapa 3D, la superficie y la gráfica de líneas; CSV con `# zona_mm`; latido con `zona_mm`, `grid_nx` y `grid_ny` (ya no `grid_n`). 55 tests unitarios y 7 de integración. ⚠ **La migración 007 tampoco se aplicó en la base local**: ejecuta la 006 y luego la 007 (`sudo mysql tms_db < server/migrations/007_zona_muestreo.sql`). Sin la 007 el servidor falla al crear sesiones (no existen las columnas de zona). Verificado contra una MariaDB temporal (esquema migrado = `setup_db.sql`, migración idempotente, sesión 40 × 20 × 10, Pico emulada 30 × 15 × 5, límites de la base 422).
+- **Login obligatorio al entrar:** cada pestaña nueva y cada navegador recién abierto piden usuario y contraseña. La marca `tms_login_pestana` vive en `sessionStorage` (por pestaña; sobrevive a la recarga, así que recargar a mitad de un barrido no saca al usuario). La cookie ya no lleva `Max-Age`, y al iniciar sesión el servidor borra la sesión de login anterior de ese navegador.
+
 **Notas que deja la Fase 8 (pendientes y mejoras futuras):**
 - ⚠ **Contraseña publicada:** el `.env` local usa `DB_PASSWORD=tms_password`, que aparece en el historial de git (commit `22d3e7f`, quitada en `010cb13`). No se reescribió el historial. En la Raspberry usa otra contraseña (COMANDOS.md 3.1); si el repositorio es público, cámbiala también en local.
 - **Acceso desde el hotspot (comprobado con Nginx y una copia de `tms.conf`):** por HTTPS funciona con la IP o cualquier nombre, porque `tms.conf` es el único servidor en el 443. Por HTTP, el sitio `default` de Raspberry Pi OS captura `http://<IP>`; la guía lo deshabilita y recomienda el nombre de host `tms` → `https://tms.local` por mDNS. `tms.ipn.local` no se resuelve por mDNS (dos etiquetas).
@@ -378,11 +387,14 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
 | Parámetro | Valores | Columna en `sesiones` |
 |---|---|---|
 | Velocidad | **DC — rápida** o **AC — normal** (ya existía) | `modo ENUM('DC','AC')` |
-| Paso de medición | **0,5 cm**, **1 cm** o **2 cm**; se aplica igual a X, Y y Z (tabla de la sección 1) | `paso_mm TINYINT UNSIGNED NOT NULL DEFAULT 5` (5, 10 o 20) |
+| Paso de medición | **Libre, en mm** (decisión del usuario, 2026-11-10): de 1 mm en adelante, con un decimal; 5, 10 y 20 mm son solo sugerencias. Se aplica igual a X, Y y Z | `paso_mm DECIMAL(4,1) UNSIGNED NOT NULL DEFAULT 5.0` (migración 006) |
 | Medio | **Campo magnético** o **Solución salina con voltaje** (solo se guarda el medio, sin el valor del voltaje) | `medio ENUM('campo_magnetico','solucion_salina') NOT NULL DEFAULT 'campo_magnetico'` |
 
 - `POST /api/sesiones {modo, paso_mm, medio}`. Si faltan `paso_mm` o `medio`, se usan los predeterminados de la configuración (`barrido.paso_predeterminado_mm`, y `campo_magnetico`).
-- **Geometría derivada del paso:** `grid_n = grid_size_mm / paso + 1`, `z_levels = 0, paso, 2·paso … z_max_mm`, `puntos = grid_n² × planos`. Por eso `grid_size_mm` y `z_max_mm` deben ser múltiplos de 20 (el paso más grande). La validación de `zMM` usa los planos **de la sesión**, no los fijos.
+- **Zona de muestreo** (decisión del usuario, 2026-11-10; migración 007): el operador elige en el panel, junto a velocidad, paso y medio, el tamaño de la zona en X, Y y Z (mm, un decimal; botón «Toda la base»). Se guarda en `sesiones.zona_x_mm/zona_y_mm/zona_z_mm`. No puede pasar de los **límites de la base** (`barrido.limite_x_mm/limite_y_mm/limite_z_mm`, Configuración › Barrido, solo admin; se cambian si se cambia de base) → 422. Coordenadas de la zona: x 0..zona.x, y 0..zona.y, z 0..zona.z; la zona va **centrada bajo la bobina** (el simulador pone el eje en zona/2).
+- **Geometría** (`mallaDeZona`): `grid_nx = floor(zona.x / paso) + 1`, `grid_ny = floor(zona.y / paso) + 1`, `z_levels = 0, paso, 2·paso …` hasta `zona.z`, `puntos = grid_nx × grid_ny × planos`; las posiciones se redondean a décimas. Si el paso no divide la zona, el último punto queda antes del borde. La validación de `zMM` usa los planos **de la sesión**, con tolerancia de coma flotante (`indicePlano`).
+- **Límites del paso** (`services/geometria.js` y `frontend/src/utils/geometria.js`): mínimo 1 mm (el posicionamiento tiene ±1 mm de error), máximo el tamaño de la placa, un decimal, y como máximo **25 000 puntos** por sesión (`MAX_PUNTOS_SESION`: el mapa 3D dibuja una flecha por punto). Con la placa de 60 mm y z_max 20 el paso mínimo práctico es unos 1,5 mm. Fuera de eso, 422.
+- En el dashboard el paso se escribe en un campo (mm) con un botón de 5 mm al lado (pedido del usuario: sin botones de 10 y 20); debajo se ve la malla y el total. En el historial el filtro de paso es un campo libre con sugerencias (los más usados y los que ya hay en el historial); `GET /sesiones?paso_mm=7.5` acepta punto o coma.
 - La **física del simulador es la misma** en los dos medios; el medio es una etiqueta de la sesión. (Que la solución salina con voltaje se simule distinto queda como pregunta abierta.)
 - La Pico W recibe `paso_mm` y `medio` en `sesion_activa` del latido (Fase 4), para saber qué malla recorrer.
 - Las sesiones anteriores a la migración 003 quedan como `paso_mm = 5` y `medio = 'campo_magnetico'`.
@@ -414,7 +426,7 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
   | Clave | Valor por defecto |
   |---|---|
   | `modo_operacion` | `'simulacion'` o `'real'` |
-  | `barrido` | `{ grid_size_mm: 60, z_max_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 }` (los pasos permitidos son fijos: 5, 10 y 20 mm; ver 7.0) |
+  | `barrido` | `{ limite_x_mm: 60, limite_y_mm: 60, limite_z_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 }` (límites de la base; antes de la migración 007 era `{grid_size_mm, z_max_mm, …}`, que el validador todavía convierte) |
   | `sensor` | `{ modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 1, offset_ut: {x:0,y:0,z:0} }` (1,9 Ga por decisión del usuario, 2026-11-10: con 1,3 Ga saturaban 4 puntos) |
   | `simulacion` | `{ ms_por_punto: {DC:60, AC:120}, semilla: 12345, ruido_sigma_ut: 0.25, radio_bobina_mm: 25, campo_centro_ut: 120, prob_hueco: 0, prob_saturacion: 0 }` |
   | `dispositivo` | `{ intervalo_latido_s: 5, umbral_desconexion_s: 15 }` |
@@ -449,7 +461,7 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
 ### 7.3 Pico W (Fase 4)
 - **Tabla `dispositivos`:** `id, nombre, token_hash, activo, creado_en, ultimo_latido DATETIME(3), ip, firmware, rssi, uptime_s`.
 - **Token:** lo genera un admin con `POST /api/dispositivo/token`, que lo muestra **una sola vez**. Se guarda como SHA-256. El dispositivo lo envía como `Authorization: Bearer <token>`. Se revoca con `DELETE /api/dispositivo/token` (agregado en la Fase 4).
-- **Latido:** `POST /api/dispositivo/latido {firmware, rssi, uptime_s, ts_dispositivo_ms}` cada `intervalo_latido_s`. Responde `{ ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, grid_n, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} | null, intervalo_latido_s, servidor_ts_ms }`. Así la Pico sabe cuándo empezar a enviar sin necesidad de otra tecnología, y `ultimo_seq` le permite seguir numerando tras un reinicio.
+- **Latido:** `POST /api/dispositivo/latido {firmware, rssi, uptime_s, ts_dispositivo_ms}` cada `intervalo_latido_s`. Responde `{ ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} | null, intervalo_latido_s, servidor_ts_ms }`. Así la Pico sabe cuándo empezar a enviar sin necesidad de otra tecnología, y `ultimo_seq` le permite seguir numerando tras un reinicio.
 - **Ingesta por lotes:** `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms}]}`.
   - Solo en modo real y con la sesión abierta.
   - El servidor convierte las cuentas a µT con la configuración del sensor y resta el offset.

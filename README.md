@@ -2,7 +2,7 @@
 
 Sistema para la tesis de ingeniería (IPN, ESIME Zacatenco) sobre la **caracterización del campo magnético** en un montaje de estimulación magnética transcraneal (TMS) sobre un phantom de solución salina.
 
-Un sensor recorre una malla sobre una placa de 60 × 60 mm, en planos Z de 0 a 20 mm, con un paso de 0,5, 1 o 2 cm (845, 147 o 32 puntos). En cada punto se guardan Bx, By y Bz en µT y |B|. Varias personas miran el barrido en vivo desde laptops y teléfonos conectados al mismo hotspot.
+Un sensor recorre una malla sobre una placa de 60 × 60 mm, en planos Z de 0 a 20 mm, con el paso que elija el operador en mm (los más usados: 5, 10 y 20 mm, que dan 845, 147 y 32 puntos). En cada punto se guardan Bx, By y Bz en µT y |B|. Varias personas miran el barrido en vivo desde laptops y teléfonos conectados al mismo hotspot.
 
 ## Cómo funciona
 

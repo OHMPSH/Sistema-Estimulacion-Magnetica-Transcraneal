@@ -15,7 +15,7 @@ import { apiFetch, enviarJSON, leerJSON } from '../api/cliente.js';
 import { useConfig } from '../context/ConfigContext.jsx';
 import { useEventoStream } from '../hooks/useStream.js';
 import { ModalConfirmacion } from '../components/modals/ModalConfirmacion.jsx';
-import { PASOS, MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaMedioCorta, etiquetaModo } from '../utils/geometria.js';
+import { PASOS_SUGERIDOS, MEDIOS, MODOS, etiquetaPaso, etiquetaZona, etiquetaMedio, etiquetaMedioCorta, etiquetaModo } from '../utils/geometria.js';
 import { numero, entero, fechaHora, diaLocal, duracion } from '../utils/formato.js';
 
 const NOTAS_MAXIMO = 5000;
@@ -104,6 +104,7 @@ function SesionCard({ sesion, usuario, zona, onEliminar, onRestaurar, onActualiz
         <div className="session-body" id={idCuerpo}>
           <dl className="session-stats">
             <div><dt>Velocidad</dt><dd>{etiquetaModo(sesion.modo)}</dd></div>
+            <div><dt>Zona</dt><dd className="cifra">{sesion.zona_x_mm != null ? etiquetaZona({ x: sesion.zona_x_mm, y: sesion.zona_y_mm, z: sesion.zona_z_mm }) : '—'}</dd></div>
             <div><dt>Paso</dt><dd>{etiquetaPaso(sesion.paso_mm)} (X, Y y Z)</dd></div>
             <div><dt>Medio</dt><dd>{etiquetaMedio(sesion.medio)}</dd></div>
             <div><dt>Origen</dt><dd>{sesion.origen === 'hw' ? 'Pico W (real)' : 'Simulador del servidor'}</dd></div>
@@ -154,6 +155,9 @@ function SesionCard({ sesion, usuario, zona, onEliminar, onRestaurar, onActualiz
   );
 }
 
+/** Paso del filtro: vacío (todos) o mm con un decimal como máximo */
+const pasoValido = t => t === '' || (/^\d{1,3}([.,]\d)?$/.test(t) && Number(t.replace(',', '.')) > 0);
+
 export function HistorialPage({ usuario }) {
   const { config } = useConfig();
   const zona = config?.datos?.zona_horaria;
@@ -174,6 +178,20 @@ export function HistorialPage({ usuario }) {
   }, [filtros]);
   const [sesiones, setSesiones] = useState([]);
   const [activaId, setActivaId] = useState(null);
+  // Paso: se escribe libre (con sugerencias de los más usados y de los que ya hay en el historial)
+  const [textoPaso, setTextoPaso] = useState(() => filtros.paso_mm);
+  const [pasosConocidos, setPasosConocidos] = useState(PASOS_SUGERIDOS);
+  const errorPaso = pasoValido(textoPaso.trim()) ? '' : 'Escribe el paso en mm, con un decimal como máximo (por ejemplo 5 o 2.5).';
+  useEffect(() => {
+    // Se aplica medio segundo después de dejar de escribir, y solo si es válido
+    const t = textoPaso.trim();
+    if (!pasoValido(t)) return undefined;
+    const id = setTimeout(() => setFiltros(f => {
+      const nuevo = t === '' ? '' : String(Number(t.replace(',', '.')));
+      return f.paso_mm === nuevo ? f : { ...f, paso_mm: nuevo };
+    }), 500);
+    return () => clearTimeout(id);
+  }, [textoPaso]);
   const [cargando, setCargando] = useState(true);
   const [aviso, setAviso] = useState({ texto: '', error: false });
   const confirmacion = useRef(null);
@@ -187,7 +205,13 @@ export function HistorialPage({ usuario }) {
     try {
       const json = await leerJSON(await apiFetch(`/api/sesiones?${q}`));
       if (idPeticion !== peticion.current) return;
-      if (json.ok) { setSesiones(json.data); setActivaId(json.activa?.id ?? null); }
+      if (json.ok) {
+        setSesiones(json.data); setActivaId(json.activa?.id ?? null);
+        setPasosConocidos(prev => {
+          const todos = new Set([...prev, ...json.data.map(s => Number(s.paso_mm))]);
+          return todos.size === prev.length ? prev : [...todos].sort((a, b) => a - b);
+        });
+      }
       else setAviso({ texto: json.error || 'No se pudo cargar el historial.', error: true });
     } catch {
       setAviso({ texto: 'No se pudo conectar con el servidor.', error: true });
@@ -204,7 +228,10 @@ export function HistorialPage({ usuario }) {
     .map(s => ({ ...s, activa: s.id === activaId })), [sesiones, filtros.dia, zona, activaId]);
 
   const cambiar = (k, v) => setFiltros(f => ({ ...f, [k]: v }));
-  const limpiar = () => setFiltros(f => ({ modo: '', paso_mm: '', medio: '', origen: '', dia: '', eliminadas: f.eliminadas }));
+  const limpiar = () => {
+    setTextoPaso('');
+    setFiltros(f => ({ modo: '', paso_mm: '', medio: '', origen: '', dia: '', eliminadas: f.eliminadas }));
+  };
 
   const eliminar = async (s) => {
     const ok = await confirmacion.current.confirmar({
@@ -249,11 +276,15 @@ export function HistorialPage({ usuario }) {
           </select>
         </div>
         <div className="campo-compacto">
-          <label htmlFor="f-paso" className="etiqueta-campo">Paso</label>
-          <select id="f-paso" name="paso_mm" className="form-select form-select-sm campo-tms" value={filtros.paso_mm} onChange={e => cambiar('paso_mm', e.target.value)}>
-            <option value="">Todos</option>
-            {PASOS.map(p => <option key={p.mm} value={p.mm}>{p.etiqueta}</option>)}
-          </select>
+          <label htmlFor="f-paso" className="etiqueta-campo">Paso (mm)</label>
+          <input id="f-paso" name="paso_mm" list="f-paso-opciones" className="form-control form-control-sm campo-tms cifra campo-paso-filtro"
+            inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="Todos"
+            value={textoPaso} onChange={e => setTextoPaso(e.target.value)}
+            aria-invalid={errorPaso ? true : undefined} aria-describedby={errorPaso ? 'f-paso-error' : undefined} />
+          <datalist id="f-paso-opciones">
+            {pasosConocidos.map(mm => <option key={mm} value={String(mm)}>{etiquetaPaso(mm)}</option>)}
+          </datalist>
+          {errorPaso && <p id="f-paso-error" className="texto-error texto-paso mb-0">{errorPaso}</p>}
         </div>
         <div className="campo-compacto">
           <label htmlFor="f-medio" className="etiqueta-campo">Medio</label>

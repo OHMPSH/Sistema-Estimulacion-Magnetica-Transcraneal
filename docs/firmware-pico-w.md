@@ -47,9 +47,10 @@ Respuesta:
   "modo_operacion": "real",
   "sesion_activa": {
     "id": 46, "modo": "AC", "paso_mm": 10, "medio": "solucion_salina",
-    "grid_n": 7, "z_levels_mm": [0, 10, 20], "puntos_esperados": 147,
+    "zona_mm": { "x": 60, "y": 60, "z": 20 },
+    "grid_nx": 7, "grid_ny": 7, "z_levels_mm": [0, 10, 20], "puntos_esperados": 147,
     "ultimo_seq": 0,
-    "barrido": { "grid_size_mm": 60, "z_max_mm": 20, "standoff_mm": 5, "paso_predeterminado_mm": 5 },
+    "barrido": { "limite_x_mm": 60, "limite_y_mm": 60, "limite_z_mm": 20, "standoff_mm": 5, "paso_predeterminado_mm": 5 },
     "sensor":  { "modelo": "HMC5883L", "rango_ga": 1.9, "lsb_por_ga": 820, "lecturas_por_punto": 1, "offset_ut": { "x": 0, "y": 0, "z": 0 } }
   },
   "intervalo_latido_s": 5,
@@ -58,7 +59,9 @@ Respuesta:
 ```
 
 - `sesion_activa` es `null` si no hay ninguna sesión abierta, si el sistema está en **modo simulación**, o si la sesión abierta es simulada. Mientras sea `null`, la Pico no debe enviar lecturas.
-- Cuando aparece una sesión con un `id` nuevo, la Pico empieza a recorrer la malla de esa sesión: `grid_n × grid_n` puntos en X–Y con paso `paso_mm`, en cada plano de `z_levels_mm`.
+- Cuando aparece una sesión con un `id` nuevo, la Pico empieza a recorrer la malla de esa sesión: `grid_nx × grid_ny` puntos en X–Y con paso `paso_mm`, en cada plano de `z_levels_mm`, en orden x → y → z.
+- **Zona de muestreo** (`zona_mm`, desde la migración 007): el operador elige en cada sesión el tamaño X × Y × Z, sin pasar de los límites de la base (`barrido.limite_*_mm`). Las coordenadas que manda la Pico son **de la zona**: `xMM` de 0 a `zona_mm.x`, `yMM` de 0 a `zona_mm.y`, `zMM` uno de `z_levels_mm` (0 = el standoff). La zona va **centrada bajo la bobina**: el eje de la bobina está en (`zona_mm.x / 2`, `zona_mm.y / 2`). Para mover la mesa, el firmware convierte a coordenadas de máquina: `x_máquina = x_bobina − zona_mm.x / 2 + xMM` (igual en Y), donde `x_bobina` es la posición de máquina del centro de la bobina (constante de calibración del firmware).
+- `paso_mm` es **libre** (desde la migración 006): cualquier valor de 1 mm en adelante con un decimal, por ejemplo `7.5`. Las posiciones son `i × paso_mm` redondeadas a décimas (`0, 7.5, 15 … 60`); si el paso no divide la placa, el último punto queda antes del borde. Manda `zMM` exactamente como aparece en `z_levels_mm`.
 - `ultimo_seq` es el mayor `seq` que el servidor ya tiene de esa sesión. Si la Pico se reinicia a mitad de una sesión, **continúa en `ultimo_seq + 1`** (no vuelve a 1).
 - `sensor.rango_ga` indica la ganancia que el firmware debe programar en el registro B del HMC5883L (ver 4.2).
 - `servidor_ts_ms` sirve para estimar el desfase de reloj. El servidor también lo calcula y lo registra en su log (`[dispositivo] Desfase de reloj…`).
@@ -84,7 +87,7 @@ Reglas de cada lectura:
 | Campo | Regla |
 |---|---|
 | `seq` | entero positivo, **único dentro de la sesión**, consecutivo desde 1 (o desde `ultimo_seq + 1`) |
-| `xMM`, `yMM` | número entre 0 y `grid_size_mm` (60 mm) |
+| `xMM`, `yMM` | número entre 0 y `zona_mm.x` / `zona_mm.y` de la sesión |
 | `zMM` | uno de los `z_levels_mm` de la sesión (dependen del paso: 0, 5, 10, 15, 20 con 5 mm; 0, 10, 20 con 10 mm; 0, 20 con 20 mm) |
 | `raw.x`, `raw.y`, `raw.z` | **cuentas crudas** del HMC5883L: enteros entre −4096 y 2047 (−4096 = desborde) |
 | `ts_ms` | opcional: epoch en ms (UTC) de cuando se leyó; `0` u omitido si la Pico no tiene hora |

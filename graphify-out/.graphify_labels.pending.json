@@ -14,11 +14,10 @@
   "25": "Medicion.js",
   "29": "003_configuracion.sql",
   "30": "004_dispositivo.sql",
-  "31": "app.js",
-  "32": "dispositivo.js",
-  "33": "api.integ.js",
-  "34": "scripts",
-  "35": "database.js",
-  "36": "Dispositivo.js",
+  "31": "Física de espira exacta (K(k), E(k) por AGM)",
+  "32": "Cookie tms_sesion (HttpOnly, SameSite=Strict, 12 h deslizante)",
+  "33": "Parámetros de cada medición: velocidad, paso, medio (7.0)",
+  "34": "Migración 002 (usuarios y sesiones_login)",
+  "35": "006_paso_libre.sql",
   "37": "idx_sesiones_eliminada"
 }
