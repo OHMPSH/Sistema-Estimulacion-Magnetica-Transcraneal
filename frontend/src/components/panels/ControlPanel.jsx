@@ -1,119 +1,103 @@
 /**
  * components/panels/ControlPanel.jsx
- * Panel de control: barra de configuración de la medición (velocidad
- * DC/AC, paso y medio; CLAUDE.md 7.0), botones de acción y progreso.
+ * Barra de configuración de la medición (velocidad DC/AC, paso y medio;
+ * CLAUDE.md 7.0), acciones y progreso del barrido.
  *
  * Los tres parámetros se envían al iniciar y se guardan con la sesión.
- * Mientras hay un barrido en curso, la barra muestra los de la sesión
- * activa (que puede haber iniciado otra persona) y no se puede cambiar.
+ * Con un barrido en curso, la barra muestra los de esa sesión (que
+ * pudo iniciar otra persona) y no se puede cambiar.
  */
 import React from 'react';
-import { PASOS, MEDIOS, etiquetaPaso, etiquetaMedio } from '../../utils/geometria.js';
+import { PASOS, MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo } from '../../utils/geometria.js';
+import { entero } from '../../utils/formato.js';
 
-const MODOS = [
-  { valor: 'DC', etiqueta: 'DC — Rápida', icono: 'bi-lightning-charge-fill', clase: 'selected-dc' },
-  { valor: 'AC', etiqueta: 'AC — Normal', icono: 'bi-activity',              clase: 'selected-ac' },
-];
-
-/** Grupo de botones de opción (uno elegido) */
-function GrupoOpciones({ etiqueta, icono, opciones, valor, onCambio, deshabilitado, claseElegido = 'selected-param' }) {
+/** Grupo de opciones como radios con aspecto de botones */
+function GrupoOpciones({ nombre, leyenda, icono, opciones, valor, onCambio, deshabilitado }) {
   return (
-    <div className="col-12 col-md-auto" role="group" aria-label={etiqueta}>
-      <div className="kpi-label mb-2"><i className={`bi ${icono}`} aria-hidden="true" /> {etiqueta}</div>
-      <div className="d-flex flex-wrap gap-2">
+    <fieldset className="grupo-opciones" disabled={deshabilitado}>
+      <legend className="etiqueta-campo"><i className={`bi ${icono}`} aria-hidden="true" /> {leyenda}</legend>
+      <div className="opciones-botones">
         {opciones.map(o => (
-          <button key={o.valor} type="button"
-            className={`mode-btn${valor === o.valor ? ` ${o.clase ?? claseElegido}` : ''}`}
-            aria-pressed={valor === o.valor}
-            onClick={() => onCambio(o.valor)} disabled={deshabilitado}>
-            {o.icono && <i className={`bi ${o.icono}`} aria-hidden="true" />} {o.etiqueta}
-          </button>
+          <label key={o.valor} className={`opcion-boton${valor === o.valor ? ' activa' : ''}`}>
+            <input type="radio" name={nombre} value={o.valor} checked={valor === o.valor} onChange={() => onCambio(o.valor)} />
+            {o.etiqueta}
+          </label>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
 export function ControlPanel({
-  isActive, iniciando, deteniendo, parametros, onCambiarParametros, sesionActiva,
-  totalScanned, totalPuntos, currentZIdx, zLevels,
-  progressPct, scanLabel, onStart, onRequestStop, errorAccion,
-  puedeControlar = false,
+  enCurso, iniciando, deteniendo, parametros, onCambiarParametros, sesion,
+  recibidas, totalPuntos, zActualMM, progreso, etiquetaEstado,
+  onIniciar, onDetener, errorAccion, puedeControlar,
 }) {
-  // Con un barrido en curso se muestran los parámetros de esa sesión
-  const vista = isActive && sesionActiva
-    ? { modo: sesionActiva.modo, pasoMM: sesionActiva.paso_mm, medio: sesionActiva.medio }
+  const vista = enCurso && sesion
+    ? { modo: sesion.modo, pasoMM: sesion.paso_mm, medio: sesion.medio }
     : parametros;
-  const bloqueado = isActive || iniciando || !puedeControlar;
-  const zActualMM = zLevels[currentZIdx] ?? 0;
+  const bloqueado = enCurso || iniciando || !puedeControlar;
 
   return (
-    <div className="control-panel fade-in">
-      <div className="control-panel-title">
-        <i className="bi bi-sliders2" aria-hidden="true" style={{ color: 'var(--guinda-bright)' }} />
-        Control de Adquisición
-        {isActive && sesionActiva && (
-          <span style={{ fontSize: '.75rem', fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>
-            [Sesión {sesionActiva.id}: {sesionActiva.modo} · {etiquetaPaso(sesionActiva.paso_mm)} · {etiquetaMedio(sesionActiva.medio)}]
+    <section className="control-panel" aria-labelledby="titulo-control">
+      <div className="panel-cabecera">
+        <h2 id="titulo-control" className="panel-titulo">
+          <i className="bi bi-sliders2 icono-guinda" aria-hidden="true" /> Configuración de la medición
+        </h2>
+        {enCurso && sesion && (
+          <span className="panel-detalle">
+            Sesión {sesion.id}: {etiquetaModo(sesion.modo)} · {etiquetaPaso(sesion.paso_mm)} · {etiquetaMedio(sesion.medio)}
+            {sesion.iniciada_por ? ` · ${sesion.iniciada_por}` : ''}
           </span>
         )}
       </div>
 
-      {/* Barra de configuración de la medición */}
-      <div className="row g-3 align-items-end mb-3">
-        <GrupoOpciones etiqueta="Velocidad" icono="bi-toggles"
+      <div className="control-fila">
+        <GrupoOpciones nombre="velocidad" leyenda="Velocidad" icono="bi-speedometer2"
           opciones={MODOS} valor={vista.modo}
           onCambio={modo => onCambiarParametros({ modo })} deshabilitado={bloqueado} />
-        <GrupoOpciones etiqueta="Paso de medición (X, Y y Z)" icono="bi-grid-3x3"
+        <GrupoOpciones nombre="paso" leyenda="Paso (X, Y y Z)" icono="bi-grid-3x3"
           opciones={PASOS.map(p => ({ valor: p.mm, etiqueta: p.etiqueta }))} valor={vista.pasoMM}
           onCambio={pasoMM => onCambiarParametros({ pasoMM })} deshabilitado={bloqueado} />
-        <GrupoOpciones etiqueta="Medio" icono="bi-droplet-half"
+        <GrupoOpciones nombre="medio" leyenda="Medio" icono="bi-droplet-half"
           opciones={MEDIOS.map(m => ({ valor: m.valor, etiqueta: m.etiqueta }))} valor={vista.medio}
           onCambio={medio => onCambiarParametros({ medio })} deshabilitado={bloqueado} />
       </div>
 
-      <div className="row g-3 align-items-end">
-        {/* Botones (solo operador y admin) */}
-        {puedeControlar && (
-          <div className="col-12 col-md-auto">
-            <div className="kpi-label mb-2"><i className="bi bi-play-circle" aria-hidden="true" /> Acciones</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" className="btn-tms btn-start" onClick={onStart}
-                disabled={isActive || iniciando || !vista.modo}>
-                <i className="bi bi-play-fill" aria-hidden="true" /> {iniciando ? 'Iniciando…' : 'Iniciar Medición'}
-              </button>
-              <button type="button" className="btn-tms btn-stop" onClick={onRequestStop} disabled={!isActive || deteniendo}>
-                <i className="bi bi-stop-fill" aria-hidden="true" /> {deteniendo ? 'Deteniendo…' : 'Detener'}
-              </button>
-            </div>
+      <div className="control-fila control-fila-acciones">
+        {puedeControlar ? (
+          <div className="acciones">
+            <button type="button" className="btn-tms btn-start" onClick={onIniciar}
+              disabled={enCurso || iniciando || !vista.modo}
+              title={!vista.modo ? 'Elige la velocidad (DC o AC) para iniciar' : undefined}>
+              <i className="bi bi-play-fill" aria-hidden="true" /> {iniciando ? 'Iniciando…' : 'Iniciar medición'}
+            </button>
+            <button type="button" className="btn-tms btn-stop" onClick={onDetener} disabled={!enCurso || deteniendo}>
+              <i className="bi bi-stop-fill" aria-hidden="true" /> {deteniendo ? 'Deteniendo…' : 'Detener'}
+            </button>
           </div>
+        ) : (
+          <p className="texto-secundario mb-0">Tu rol solo permite observar: las mediciones las inicia un operador o un admin.</p>
         )}
 
-        {/* Barra de progreso */}
-        <div className="col-12 col-md" style={{ opacity: totalScanned > 0 || isActive ? 1 : 0.4 }}>
-          <div className="scan-progress">
-            <div className="scan-info">
-              <span>{scanLabel}</span>
-              <span>{progressPct}%</span>
-            </div>
-            <div className="progress-tms" role="progressbar" aria-label="Progreso del barrido"
-              aria-valuemin={0} aria-valuemax={totalPuntos} aria-valuenow={totalScanned}>
-              <div className="progress-tms-bar" style={{ width: `${progressPct}%` }} />
-            </div>
-            <div className="scan-info mt-1">
-              <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                {isActive ? `Z${currentZIdx} · ${zActualMM} mm` : ''}
-              </span>
-              <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                {totalScanned} / {totalPuntos} pts
-              </span>
-            </div>
+        <div className="scan-progress">
+          <div className="scan-info">
+            <span role="status" aria-live="polite">{etiquetaEstado}</span>
+            <span className="cifra">{progreso}%</span>
+          </div>
+          <div className="progress-tms" role="progressbar" aria-label="Progreso del barrido"
+            aria-valuemin={0} aria-valuemax={totalPuntos} aria-valuenow={recibidas}
+            aria-valuetext={`${recibidas} de ${totalPuntos} puntos`}>
+            <div className="progress-tms-bar" style={{ transform: `scaleX(${progreso / 100})` }} />
+          </div>
+          <div className="scan-info mt-1">
+            <span className="cifra">{enCurso && zActualMM !== null ? `Plano Z = ${zActualMM}\u00a0mm` : ''}</span>
+            <span className="cifra">{entero(recibidas)} / {entero(totalPuntos)}{'\u00a0'}puntos</span>
           </div>
         </div>
       </div>
 
-      {/* Errores de las acciones (por ejemplo, 409 si otra persona ya inició un barrido) */}
-      <p className="auth-error mt-2 mb-0" role="alert" aria-live="assertive">{errorAccion}</p>
-    </div>
+      <p className="texto-error mt-2 mb-0" role="alert">{errorAccion}</p>
+    </section>
   );
 }

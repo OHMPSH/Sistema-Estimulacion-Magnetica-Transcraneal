@@ -14,6 +14,7 @@
  *   iniciarSesion(usuario, password)  → { ok, error? }
  *   cerrarSesion()
  *   cambiarPassword(actual, nueva)    → { ok, error? }
+ *   guardarPreferencias({ tema })     → { ok, error? } (PATCH /api/auth/preferencias)
  * ─────────────────────────────────────────────────────────────
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -90,9 +91,20 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const guardarPreferencias = useCallback(async (cambio) => {
+    try {
+      const json = await leerJSON(await enviarJSON('/api/auth/preferencias', cambio, 'PATCH'));
+      if (!json.ok) return { ok: false, error: json.error };
+      setUsuario(u => (u ? { ...u, preferencias: json.preferencias ?? { ...(u.preferencias ?? {}), ...cambio } } : u));
+      return { ok: true };
+    } catch {
+      return { ok: false, error: SIN_CONEXION };
+    }
+  }, []);
+
   const valor = useMemo(
-    () => ({ usuario, cargando, sesionExpirada, iniciarSesion, cerrarSesion, cambiarPassword }),
-    [usuario, cargando, sesionExpirada, iniciarSesion, cerrarSesion, cambiarPassword]
+    () => ({ usuario, cargando, sesionExpirada, iniciarSesion, cerrarSesion, cambiarPassword, guardarPreferencias }),
+    [usuario, cargando, sesionExpirada, iniciarSesion, cerrarSesion, cambiarPassword, guardarPreferencias]
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

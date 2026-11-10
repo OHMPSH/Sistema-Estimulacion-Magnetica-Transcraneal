@@ -1,0 +1,150 @@
+/**
+ * tests/integracion/api.integ.js — de extremo a extremo contra tms_db_test.
+ * Ejecutar desde server/:  npm run test:integracion
+ * (Necesita la base de pruebas: sudo mysql < tests/setup_test_db.sql)
+ */
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { levantar, cliente, esperar, leerCSV } from './helper.js';
+import { crearGeneradorMuestras } from '../../services/simulacionPura.js';
+import { mallaDeBarrido } from '../../services/geometria.js';
+
+const carpetaServidor = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+let entorno;
+let admin;
+
+before(async () => {
+  entorno = await levantar();
+  if (entorno.error) return;
+  admin = cliente(entorno.base);
+  assert.equal((await admin.login('admin', 'admin')).status, 200);
+});
+after(async () => { if (!entorno?.error) await entorno.cerrar(); });
+
+const omitir = t => { if (entorno.error) { t.skip(entorno.error); return true; } return false; };
+
+/** Crea una sesión simulada rápida y espera a que se cierre sola */
+async function sesionSimulada(c, cuerpo) {
+  const r = await c.post('/sesiones', cuerpo);
+  assert.equal(r.status, 201, JSON.stringify(r.datos));
+  await esperar(async () => (await c.get('/sesiones/activa')).datos.sesion === null);
+  return r.datos.sesion.id;
+}
+
+test('Sesión simulada con semilla fija: el CSV coincide con el simulador (tolerancia 1e-9)', async (t) => {
+  if (omitir(t)) return;
+  const sim = { ms_por_punto: { DC: 20, AC: 20 }, semilla: 4242, prob_hueco: 0, prob_saturacion: 0 };
+  assert.equal((await admin.put('/configuracion/simulacion', { valor: sim })).status, 200);
+  const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 20 });
+
+  const csv = await admin.get(`/sesiones/${id}/csv`);
+  assert.equal(csv.status, 200);
+  assert.match(csv.res.headers.get('content-disposition'), new RegExp(`tms_sesion_${id}_\\d{8}T\\d{6}Z\\.csv`));
+  const { meta, columnas, filas } = leerCSV(csv.datos);
+  assert.deepEqual(columnas, ['timestamp_utc', 'ts_dispositivo_utc', 'seq', 'x_mm', 'y_mm', 'z_mm', 'bx_uT', 'by_uT', 'bz_uT', 'magnitud_uT', 'raw_x', 'raw_y', 'raw_z', 'saturado']);
+  assert.equal(meta.puntos_esperados, '32');
+  assert.equal(meta.puntos_recibidos, '32');
+  assert.equal(meta.huecos, '0');
+  const configSim = JSON.parse(meta.config_simulacion);
+  assert.equal(configSim.semilla, 4242);
+
+  const malla = mallaDeBarrido(JSON.parse(meta.config_barrido), 20);
+  const siguiente = crearGeneradorMuestras({ simulacion: configSim, barrido: JSON.parse(meta.config_barrido), sensor: JSON.parse(meta.config_sensor), malla });
+  assert.equal(filas.length, malla.totalPuntos);
+  for (let i = 0; i < malla.totalPuntos; i++) {
+    const m = siguiente(i);
+    const f = filas[i];
+    assert.equal(Number(f.seq), i + 1);
+    assert.deepEqual([Number(f.x_mm), Number(f.y_mm), Number(f.z_mm)], [m.punto.xMM, m.punto.yMM, m.punto.zMM]);
+    for (const [c, v] of [['bx_uT', m.bx], ['by_uT', m.by], ['bz_uT', m.bz]]) {
+      assert.ok(Math.abs(Number(f[c]) - v) < 1e-9, `${c} del punto ${i}: ${f[c]} vs ${v}`);
+    }
+  }
+});
+
+test('Pico W emulada con pérdidas y duplicados: ningún seq duplicado ni faltante', async (t) => {
+  if (omitir(t)) return;
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 200);
+  const token = (await admin.post('/dispositivo/token')).datos.token;
+  const sinToken = await cliente(entorno.base).post('/dispositivo/latido', {});
+  assert.equal(sinToken.status, 401);
+  const s = await admin.post('/sesiones', { modo: 'AC', paso_mm: 20 });
+  assert.equal(s.status, 201);
+  assert.equal(s.datos.sesion.origen, 'hw');
+
+  const emulador = spawn(process.execPath, [join(carpetaServidor, 'scripts', 'emular-pico.js'),
+    '--url', entorno.base, '--token', token, '--lote', '4', '--ms-por-lectura', '1',
+    '--perdida', '0.3', '--duplicar', '0.3', '--semilla', '11'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let salida = '';
+  emulador.stdout.on('data', d => { salida += d; });
+  try {
+    await esperar(() => salida.includes('Malla completa'), 40000, 200);
+  } finally {
+    emulador.kill();
+  }
+  const med = await admin.get(`/sesiones/${s.datos.sesion.id}/mediciones`);
+  const seqs = med.datos.data.map(m => m.seq);
+  assert.equal(seqs.length, 32, `filas: ${seqs.length}`);
+  assert.deepEqual(seqs, Array.from({ length: 32 }, (_, i) => i + 1));
+  assert.ok(/duplicadas [1-9]/.test(salida), 'el emulador debió provocar duplicados');
+
+  assert.equal((await admin.put(`/sesiones/${s.datos.sesion.id}`)).status, 200);
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'simulacion' })).status, 200);
+  assert.equal((await admin.del('/dispositivo/token')).status, 200);
+});
+
+test('Roles: 401 sin sesión, 403 con un rol insuficiente', async (t) => {
+  if (omitir(t)) return;
+  const anonimo = cliente(entorno.base);
+  assert.equal((await anonimo.get('/status')).status, 200);
+  assert.equal((await anonimo.get('/sesiones')).status, 401);
+  assert.equal((await anonimo.get('/stream')).status, 401);
+  const obs = cliente(entorno.base);
+  assert.equal((await obs.login('observador', 'observador123')).status, 200);
+  assert.equal((await obs.get('/sesiones')).status, 200);
+  assert.equal((await obs.post('/sesiones', { modo: 'DC', paso_mm: 20 })).status, 403);
+  assert.equal((await obs.put('/configuracion/modo_operacion', { valor: 'real' })).status, 403);
+  assert.equal((await obs.get('/usuarios')).status, 403);
+  const op = cliente(entorno.base);
+  assert.equal((await op.login('operador', 'operador123')).status, 200);
+  assert.equal((await op.del('/sesiones/1')).status, 403);
+  assert.equal((await op.post('/dispositivo/token')).status, 403);
+});
+
+test('Borrado lógico y restauración', async (t) => {
+  if (omitir(t)) return;
+  const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 20 });
+  assert.equal((await admin.del(`/sesiones/${id}`)).status, 200);
+  assert.equal((await admin.del(`/sesiones/${id}`)).status, 409);
+  assert.ok(!(await admin.get('/sesiones')).datos.data.some(s => s.id === id));
+  assert.equal((await admin.get(`/sesiones/${id}/csv`)).status, 404);
+  const conEliminadas = await admin.get('/sesiones?incluir_eliminadas=1');
+  assert.ok(conEliminadas.datos.data.find(s => s.id === id).eliminada_en);
+  const op = cliente(entorno.base);
+  await op.login('operador', 'operador123');
+  assert.equal((await op.get('/sesiones?incluir_eliminadas=1')).status, 403);
+  assert.equal((await op.post(`/sesiones/${id}/restaurar`)).status, 403);
+  assert.equal((await admin.post(`/sesiones/${id}/restaurar`)).status, 200);
+  assert.ok((await admin.get('/sesiones')).datos.data.some(s => s.id === id));
+  // Las mediciones nunca se borraron
+  const [[{ n }]] = await entorno.pool.query('SELECT COUNT(*) AS n FROM mediciones WHERE sesion_id = ?', [id]);
+  assert.equal(Number(n), 32);
+});
+
+test('409 por sesión doble y por cambiar el modo con una sesión abierta', async (t) => {
+  if (omitir(t)) return;
+  await admin.put('/configuracion/simulacion', { valor: { ms_por_punto: { DC: 200, AC: 200 } } });
+  const primera = await admin.post('/sesiones', { modo: 'DC', paso_mm: 20 });
+  assert.equal(primera.status, 201);
+  const op = cliente(entorno.base);
+  await op.login('operador', 'operador123');
+  assert.equal((await op.post('/sesiones', { modo: 'AC', paso_mm: 10 })).status, 409);
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 409);
+  assert.equal((await admin.put('/configuracion/barrido', { valor: { standoff_mm: 6 } })).status, 409);
+  assert.equal((await admin.del(`/sesiones/${primera.datos.sesion.id}`)).status, 409);
+  assert.equal((await op.put(`/sesiones/${primera.datos.sesion.id}`)).status, 200);
+  assert.equal((await op.put(`/sesiones/${primera.datos.sesion.id}`)).status, 409);
+});

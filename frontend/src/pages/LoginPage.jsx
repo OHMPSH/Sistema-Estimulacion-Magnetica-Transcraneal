@@ -6,6 +6,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 
+// Enfocar el usuario solo con ratón o trackpad: en un teléfono abriría el teclado de golpe
+const enfocarAlInicio = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
+
 export function LoginPage() {
   const { iniciarSesion, sesionExpirada } = useAuth();
   const [usuario,  setUsuario]  = useState('');
@@ -32,12 +35,12 @@ export function LoginPage() {
 
   return (
     <main className="auth-page">
-      <form className="auth-card fade-in" onSubmit={enviar} noValidate>
+      <form className="auth-card" onSubmit={enviar} noValidate>
         <div className="auth-brand">
-          <div className="navbar-logo" aria-hidden="true">TMS</div>
+          <div className="navbar-logo" aria-hidden="true" translate="no">TMS</div>
           <div>
             <h1 className="auth-title">Sistema de Adquisición de Datos</h1>
-            <div className="auth-subtitle">Instituto Politécnico Nacional · ESIME</div>
+            <div className="auth-subtitle">Instituto Politécnico Nacional, ESIME Zacatenco</div>
           </div>
         </div>
 
@@ -51,7 +54,7 @@ export function LoginPage() {
             id="login-usuario" name="usuario" type="text" className="campo-tms"
             autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
             value={usuario} onChange={e => setUsuario(e.target.value)}
-            autoFocus required
+            autoFocus={enfocarAlInicio} required
           />
         </div>
 

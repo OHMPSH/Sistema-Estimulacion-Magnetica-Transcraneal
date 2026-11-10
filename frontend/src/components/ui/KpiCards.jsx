@@ -1,95 +1,52 @@
 /**
  * components/ui/KpiCards.jsx
- * Cuatro tarjetas de indicadores en tiempo real.
+ * Cuatro indicadores. La posición y el plano son los de la ÚLTIMA
+ * lectura recibida (no la siguiente: así se corrige el desfase B1).
  */
-import React from 'react';
-import { Z_COLORS_HEX } from '../../constants/system.js';
+import React, { memo } from 'react';
+import { numero, duracion } from '../../utils/formato.js';
 
-function formatElapsed(sec) {
-  const m = String(Math.floor(sec / 60)).padStart(2, '0');
-  const s = String(sec % 60).padStart(2, '0');
-  return `${m}:${s}`;
-}
-
-export function KpiCards({ isActive, currentZIdx, zLevels, currentPos, magnitudeValue, lastTimestamp, elapsedSec, totalScanned }) {
-  const zMM     = zLevels[currentZIdx] ?? 0;
-  const zColor  = Z_COLORS_HEX[currentZIdx] ?? Z_COLORS_HEX[0];
+export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLevels, decimales, placaCM }) {
+  const zIdx = ultima ? ultima.zIdx : null;
+  const textoEstado = { adquiriendo: 'Adquiriendo', terminada: 'Terminada', detenida: 'Detenida', inactiva: 'Inactiva' }[estado];
 
   return (
-    <div className="row g-3 mb-4">
-
-      {/* Estado de adquisición */}
-      <div className="col-6 col-lg-3 fade-in">
-        <div className="kpi-card accent-emerald">
-          <div className="kpi-label">
-            <i className="bi bi-activity" /> Estado
-          </div>
-          <div className={`acquisition-badge${isActive ? ' active' : ''}`}>
-            <div className={`status-dot${isActive ? ' blink' : ''}`} />
-            <span>{isActive ? 'ADQUIRIENDO' : 'INACTIVO'}</span>
-          </div>
-          <div className="kpi-unit mt-2">
-            {isActive ? `Sesión: ${formatElapsed(elapsedSec)}` : totalScanned > 0 ? `Completado: ${formatElapsed(elapsedSec)}` : '—'}
-          </div>
+    <div className="kpi-grid">
+      <article className="kpi-card acento-estado" aria-labelledby="kpi-estado">
+        <h3 id="kpi-estado" className="kpi-label"><i className="bi bi-activity" aria-hidden="true" /> Estado</h3>
+        <div className={`acquisition-badge estado-${estado}`}>
+          <span className="status-dot" aria-hidden="true" /> {textoEstado}
         </div>
-      </div>
+        <p className="kpi-unit">{estado === 'inactiva' ? 'Sin sesión' : `Duración ${duracion(segundos)}`}</p>
+      </article>
 
-      {/* Plano Z actual */}
-      <div className="col-6 col-lg-3 fade-in" style={{ animationDelay: '.05s' }}>
-        <div className="kpi-card accent-guinda">
-          <div className="kpi-label">
-            <i className="bi bi-layers" /> Plano Z Actual
-          </div>
-          <div className="kpi-value" style={{ color: zColor }}>
-            {isActive || totalScanned > 0 ? `Z${currentZIdx}` : '—'}
-          </div>
-          <div className="kpi-unit">
-            {isActive || totalScanned > 0 ? `${zMM} mm sobre base` : '— mm sobre base'}
-          </div>
-          {/* Indicador de 5 niveles */}
-          <div className="d-flex gap-1 mt-2">
-            {zLevels.map((_, zi) => (
-              <div
-                key={zi}
-                className={`z-level-pill${(isActive || totalScanned > 0) && zi === currentZIdx ? ` active-z${zi}` : ''}`}
-                title={`Z${zi} = ${zLevels[zi]}mm`}
-              >
-                Z{zi}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <article className="kpi-card acento-guinda" aria-labelledby="kpi-plano">
+        <h3 id="kpi-plano" className="kpi-label"><i className="bi bi-layers" aria-hidden="true" /> Plano Z de la última lectura</h3>
+        <p className="kpi-value cifra">{ultima ? `${ultima.zMM}\u00a0mm` : '—'}</p>
+        <ol className="z-pills" aria-label="Planos de la sesión">
+          {zLevels.map((z, i) => (
+            <li key={z} className={`z-level-pill${i === zIdx ? ` activo z${i}` : ''}`} aria-current={i === zIdx ? 'true' : undefined}>
+              {z}{'\u00a0'}mm
+            </li>
+          ))}
+        </ol>
+      </article>
 
-      {/* Magnitud |B| */}
-      <div className="col-6 col-lg-3 fade-in" style={{ animationDelay: '.10s' }}>
-        <div className="kpi-card accent-yellow">
-          <div className="kpi-label">
-            <i className="bi bi-lightning-charge" /> Magnitud Total |B|
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--yellow)' }}>
-            {magnitudeValue ?? '—'}
-          </div>
-          <div className="kpi-unit">μT (microtesla)</div>
-        </div>
-      </div>
+      <article className="kpi-card acento-mag" aria-labelledby="kpi-mag">
+        <h3 id="kpi-mag" className="kpi-label"><i className="bi bi-lightning-charge" aria-hidden="true" /> |B| de la última lectura</h3>
+        <p className="kpi-value cifra color-mag">
+          {ultima ? (ultima.saturado ? 'Saturada' : numero(ultima.magnitud, decimales)) : '—'}
+        </p>
+        <p className="kpi-unit">µT (microtesla)</p>
+      </article>
 
-      {/* Posición XY + Timestamp */}
-      <div className="col-6 col-lg-3 fade-in" style={{ animationDelay: '.15s' }}>
-        <div className="kpi-card accent-cyan">
-          <div className="kpi-label">
-            <i className="bi bi-geo-alt" /> Posición XY
-          </div>
-          <div className="kpi-value mono" style={{ fontSize: '1.2rem' }}>
-            {currentPos ? `(${currentPos.xMM}, ${currentPos.yMM})` : '—'}
-          </div>
-          <div className="kpi-unit">posición en placa 6×6 cm</div>
-          <div className="kpi-unit mt-1" style={{ color: 'var(--text-dim)' }}>
-            {lastTimestamp ?? '—'}
-          </div>
-        </div>
-      </div>
-
+      <article className="kpi-card acento-bx" aria-labelledby="kpi-pos">
+        <h3 id="kpi-pos" className="kpi-label"><i className="bi bi-geo-alt" aria-hidden="true" /> Posición de la última lectura</h3>
+        <p className="kpi-value cifra kpi-value-chico">
+          {ultima ? `(${numero(ultima.xMM, 1)}, ${numero(ultima.yMM, 1)})\u00a0mm` : '—'}
+        </p>
+        <p className="kpi-unit">En la placa de {placaCM}{'\u00a0'}×{'\u00a0'}{placaCM}{'\u00a0'}cm{ultima?.seq ? ` · lectura ${ultima.seq}` : ''}</p>
+      </article>
     </div>
   );
-}
+});

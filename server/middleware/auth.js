@@ -6,6 +6,7 @@
  *   leerCookie     — lee una cookie de req.headers.cookie, a mano
  *   requiereLogin  — exige una sesión de login vigente → req.usuario
  *   requiereRol    — exige que el rol del usuario esté en la lista
+ *   requiereDispositivo — exige el token de la Pico W → req.dispositivo
  *
  * Respuestas:
  *   401 — no hay sesión, expiró o el usuario está desactivado
@@ -19,6 +20,7 @@
  */
 
 import * as SesionLogin from '../models/SesionLogin.js';
+import * as Dispositivo from '../models/Dispositivo.js';
 import {
   NOMBRE_COOKIE, DURACION_S, RENOVAR_CADA_S,
   hashDeToken, ponerCookie, quitarCookie,
@@ -125,4 +127,33 @@ export function requiereRol(...roles) {
     }
     next();
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+// DISPOSITIVO (Pico W, Fase 4)
+// Independiente del login de usuarios: la Pico no tiene cookie, manda
+// su token en la cabecera  Authorization: Bearer <token>.
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Exige un token de dispositivo válido → req.dispositivo
+ * Busca el SHA-256 del token en `dispositivos` con activo = 1.
+ * Responde 401 si falta, no coincide o el dispositivo está desactivado.
+ */
+export async function requiereDispositivo(req, res, next) {
+  try {
+    const cabecera = req.get('authorization') ?? '';
+    const coincide = /^Bearer\s+([A-Za-z0-9_-]{20,128})\s*$/.exec(cabecera);
+    if (!coincide) {
+      return res.status(401).json({ ok: false, error: 'Falta el token del dispositivo (Authorization: Bearer <token>)' });
+    }
+    const dispositivo = await Dispositivo.buscarPorTokenHash(hashDeToken(coincide[1]));
+    if (!dispositivo) {
+      return res.status(401).json({ ok: false, error: 'Token de dispositivo inválido o dispositivo desactivado' });
+    }
+    req.dispositivo = dispositivo;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }

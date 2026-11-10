@@ -1,15 +1,33 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="dark">
+<html lang="es" data-theme="dark" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0d0d0f" />
   <title>TMS — Sistema de Adquisición de Datos | IPN</title>
 
-  <!-- Bootstrap e iconos se empaquetan con Vite (ver src/main.jsx) -->
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap"
-        rel="stylesheet" />
+  <!-- Tema antes de pintar (evita el parpadeo): la preferencia guardada en
+       este navegador; luego ConfigContext la sincroniza con la del usuario -->
+  <script>
+    (function () {
+      var t = 'oscuro';
+      try { t = localStorage.getItem('tms_tema') || 'oscuro'; } catch (e) { /* sin almacenamiento */ }
+      if (t === 'sistema') {
+        t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro';
+      }
+      var claro = t === 'claro';
+      var r = document.documentElement;
+      r.setAttribute('data-theme', claro ? 'light' : 'dark');
+      r.setAttribute('data-bs-theme', claro ? 'light' : 'dark');
+      r.style.colorScheme = claro ? 'light' : 'dark';
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', claro ? '#F4F5F7' : '#0d0d0f');
+    })();
+  </script>
+
+  <!-- Bootstrap, los iconos y las fuentes (Rajdhani, Inter y Share Tech Mono,
+       con @fontsource) se empaquetan con Vite: ver src/main.jsx. Nada se
+       descarga de un CDN, así funciona aunque el hotspot no tenga internet. -->
 </head>
 <body>
   <div id="root"></div>

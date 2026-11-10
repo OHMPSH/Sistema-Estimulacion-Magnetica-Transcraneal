@@ -1,0 +1,46 @@
+# ═══════════════════════════════════════════════════════════════
+#  /etc/systemd/system/tms-server.service
+#  Backend del TMS (Node.js + Express) en la Raspberry Pi 5.
+#
+#  Instalar (ver COMANDOS.md, paso 9):
+#    sudo cp /opt/tms/deploy/tms-server.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable --now tms-server
+#  Ver el log:
+#    journalctl -u tms-server -f
+# ═══════════════════════════════════════════════════════════════
+
+[Unit]
+Description=TMS - backend de adquisicion de datos (Node.js)
+Documentation=file:///opt/tms/COMANDOS.md
+After=network-online.target mariadb.service
+Wants=network-online.target mariadb.service
+
+[Service]
+Type=simple
+# Usuario de sistema sin privilegios ni shell (se crea en el paso 9)
+User=tms
+Group=tms
+WorkingDirectory=/opt/tms/server
+EnvironmentFile=/opt/tms/server/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+
+# Para que `git rev-parse` (versión del software en cada sesión) funcione
+# aunque /opt/tms pertenezca a otro usuario
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=/opt/tms
+
+# Endurecimiento: el servicio solo lee sus archivos y no escribe en disco
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -3,27 +3,24 @@
  * Decide qué pantalla mostrar según la sesión del usuario:
  *   sin usuario                → LoginPage
  *   debe_cambiar_password      → CambiarPasswordPage
- *   con sesión                 → Dashboard (el de siempre)
- * El Dashboard solo se monta con sesión, así el SSE y las peticiones
- * a la API nunca salen sin la cookie.
+ *   con sesión                 → Shell (Navbar + menú lateral + la página de la URL)
+ * El Shell solo se monta con sesión, así el SSE y las peticiones a la
+ * API nunca salen sin la cookie.
  */
-import React, { useState, useCallback } from 'react';
-import { useServerStatus }    from './hooks/useServerStatus.js';
-import { useAcquisition }     from './hooks/useAcquisition.js';
-import { Navbar }             from './components/ui/Navbar.jsx';
-import { KpiCards }           from './components/ui/KpiCards.jsx';
-import { DataTable }          from './components/ui/DataTable.jsx';
-import { ControlPanel }       from './components/panels/ControlPanel.jsx';
-import { HistorialPage }      from './components/panels/HistorialPage.jsx';
-import { LineChartComponent } from './components/charts/LineChart.jsx';
-import { Canvas3D }           from './components/charts/Canvas3D.jsx';
-import Superficie3D           from './components/charts/Superficie3D.jsx'; 
-import { StopModal }          from './components/modals/StopModal.jsx';
-import { StartModal }         from './components/modals/StartModal.jsx';
-import { useAuth }            from './context/AuthContext.jsx';
-import { LoginPage }          from './pages/LoginPage.jsx';
+import React, { useCallback, useRef, useState } from 'react';
+import { useAuth } from './context/AuthContext.jsx';
+import { ConfigProvider, useConfig } from './context/ConfigContext.jsx';
+import { useServerStatus } from './hooks/useServerStatus.js';
+import { useDispositivo } from './hooks/useDispositivo.js';
+import { useSesionActiva } from './hooks/useSesionActiva.js';
+import { useNavegacion } from './hooks/useNavegacion.js';
+import { Navbar } from './components/layout/Navbar.jsx';
+import { MenuLateral } from './components/layout/MenuLateral.jsx';
+import { LoginPage } from './pages/LoginPage.jsx';
 import { CambiarPasswordPage } from './pages/CambiarPasswordPage.jsx';
-import { mallaDePaso }        from './utils/geometria.js';
+import { DashboardPage } from './pages/DashboardPage.jsx';
+import { HistorialPage } from './pages/HistorialPage.jsx';
+import { ConfiguracionPage } from './pages/ConfiguracionPage.jsx';
 
 export default function App() {
   const { usuario, cargando } = useAuth();
@@ -33,136 +30,48 @@ export default function App() {
   }
   if (!usuario) return <LoginPage />;
   if (usuario.debe_cambiar_password) return <CambiarPasswordPage />;
-  return <Dashboard />;
+  return (
+    <ConfigProvider>
+      <Shell />
+    </ConfigProvider>
+  );
 }
 
-function Dashboard() {
+function Shell() {
   const { usuario, cerrarSesion } = useAuth();
-  // Permisos por rol (el servidor los aplica de todos modos; aquí solo se ocultan botones)
-  const puedeControlar = usuario.rol === 'operador' || usuario.rol === 'admin';
-  const puedeEliminar  = usuario.rol === 'admin';
-
-  // Página activa: 'dashboard' o 'historial'
-  const [activePage, setActivePage] = useState('dashboard');
-
+  const { modoOperacion, guardarClave, tema, cambiarTema } = useConfig();
   const { online } = useServerStatus();
+  const dispositivo = useDispositivo();
+  const medicion = useSesionActiva();
+  const { vista, seccion, navegar } = useNavegacion();
 
-  const {
-    configuracion, modoOperacion, sesionActiva, geometria,
-    isActive, iniciando, deteniendo, errorAccion,
-    totalScanned, currentZIdx, currentPos,
-    elapsedSec, progressPct, scanLabel,
-    chartLabels, chartBx, chartBy, chartBz,
-    tableRows, points3D, sessions,
-    startAcquisition, stopAcquisition, deleteSession, recargarHistorial,
-    cambiarModoOperacion,
-  } = useAcquisition();
-
-  // Parámetros elegidos en la barra de configuración de la medición (CLAUDE.md 7.0).
-  // El paso arranca en el predeterminado de la configuración.
-  const [parametros, setParametros] = useState({ modo: null, pasoMM: null, medio: 'campo_magnetico' });
-  const pasoPredeterminado = configuracion?.data?.barrido?.paso_predeterminado_mm ?? 5;
-  const parametrosEfectivos = { ...parametros, pasoMM: parametros.pasoMM ?? pasoPredeterminado };
-  const geometriaElegida = mallaDePaso(configuracion?.data?.barrido, parametrosEfectivos.pasoMM);
-  const cambiarParametros = useCallback(cambio => setParametros(p => ({ ...p, ...cambio })), []);
-
-  // Último valor de magnitud para el KPI
-  const lastRow        = tableRows[0] ?? null;
-  const magnitudeValue = lastRow ? lastRow.magnitud.toFixed(4) : null;
-  const lastTimestamp  = lastRow ? lastRow.tsStr : null;
-
-  const handleStartClick   = useCallback(() => window.__startModalShow?.(), []);
-  const handleStartConfirm = useCallback(p => startAcquisition(p), [startAcquisition]);
-  const handleStopRequest  = useCallback(() => window.__stopModalShow?.(), []);
-  const handleStopConfirm  = useCallback(() => stopAcquisition(), [stopAcquisition]);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const botonMenu = useRef(null);
+  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
+  const cambiarModo = useCallback(modo => guardarClave('modo_operacion', modo), [guardarClave]);
 
   return (
     <>
-      <Navbar online={online} activePage={activePage} onPageChange={setActivePage}
-        usuario={usuario} onLogout={cerrarSesion}
-        modoOperacion={modoOperacion} onCambiarModo={cambiarModoOperacion}
-        puedeCambiarModo={usuario.rol === 'admin'} sesionAbierta={isActive} />
+      <a className="saltar-contenido" href="#contenido">Saltar al contenido</a>
+      <Navbar ref={botonMenu} online={online} modoOperacion={modoOperacion} dispositivo={dispositivo}
+        onAbrirMenu={() => setMenuAbierto(true)} menuAbierto={menuAbierto} />
 
-      <div className="main-container">
+      <MenuLateral abierto={menuAbierto} onCerrar={cerrarMenu} refRetorno={botonMenu}
+        usuario={usuario} vista={vista} onNavegar={navegar}
+        modoOperacion={modoOperacion} onCambiarModo={cambiarModo} sesionAbierta={medicion.enCurso}
+        tema={tema} onCambiarTema={cambiarTema} onCerrarSesion={cerrarSesion} />
 
-        {/* ─── DASHBOARD EN VIVO ─────────────────────────── */}
-        {activePage === 'dashboard' && (
-          <>
-            <ControlPanel
-              isActive={isActive} iniciando={iniciando} deteniendo={deteniendo}
-              parametros={parametrosEfectivos} onCambiarParametros={cambiarParametros}
-              sesionActiva={sesionActiva}
-              totalScanned={totalScanned} totalPuntos={isActive ? geometria.totalPuntos : (totalScanned > 0 ? geometria.totalPuntos : geometriaElegida.totalPuntos)}
-              currentZIdx={currentZIdx} zLevels={geometria.zLevels}
-              progressPct={progressPct} scanLabel={scanLabel}
-              onStart={handleStartClick}
-              onRequestStop={handleStopRequest}
-              errorAccion={errorAccion}
-              puedeControlar={puedeControlar}
-            />
-
-            <p className="section-label"><span>//</span> INDICADORES EN TIEMPO REAL</p>
-            <KpiCards
-              isActive={isActive} currentZIdx={currentZIdx} zLevels={geometria.zLevels}
-              currentPos={currentPos} magnitudeValue={magnitudeValue}
-              lastTimestamp={lastTimestamp} elapsedSec={elapsedSec}
-              totalScanned={totalScanned}
-            />
-
-<p className="section-label"><span>//</span> VISUALIZACIÓN DE CAMPO</p>
-            
-            {/* Gráfica de vectores a lo largo de toda la pantalla arriba */}
-            <div className="row mb-4">
-              <div className="col-12 fade-in">
-                <LineChartComponent labels={chartLabels} bx={chartBx} by={chartBy} bz={chartBz} />
-              </div>
-            </div>
-
-            {/* Los dos visores 3D dividiendo el espacio abajo */}
-            <div className="row g-3 mb-4">
-              <div className="col-12 col-xl-6 fade-in">
-                 {/* Visor antiguo de flechas vectoriales */}
-                <Canvas3D points3D={points3D} zLevels={geometria.zLevels} gridSizeMM={geometria.gridSizeMM} />
-              </div>
-              
-              <div className="col-12 col-xl-6 fade-in">
-                {/* Nuevo visor topográfico por planos Z */}
-                <Superficie3D mediciones={points3D} totalPuntos={geometria.totalPuntos} />
-              </div>
-            </div>
-
-            <p className="section-label"><span>//</span> REGISTRO DE MEDICIONES</p>
-            <DataTable rows={tableRows} />
-          </>
+      <main id="contenido" className="main-container" tabIndex={-1}>
+        {vista === 'dashboard' && <DashboardPage usuario={usuario} medicion={medicion} />}
+        {vista === 'historial' && <HistorialPage usuario={usuario} />}
+        {vista === 'configuracion' && (
+          <ConfiguracionPage usuario={usuario} seccion={seccion} onNavegar={navegar} sesionAbierta={medicion.enCurso} />
         )}
-
-        {/* ─── MEDICIONES PASADAS ────────────────────────── */}
-        {activePage === 'historial' && (
-          <HistorialPage
-            sessions={sessions}
-            barrido={configuracion?.data?.barrido}
-            onDelete={deleteSession}
-            onRecargar={recargarHistorial}
-            puedeEliminar={puedeEliminar}
-          />
-        )}
-
-      </div>
+      </main>
 
       <footer className="tms-footer">
-        <span>TMS DATA ACQUISITION SYSTEM</span> · Instituto Politécnico Nacional ·
-        Tesis de Ingeniería · {new Date().getFullYear()}
+        Sistema de adquisición de datos TMS · Instituto Politécnico Nacional, ESIME Zacatenco · Tesis de ingeniería
       </footer>
-
-      {puedeControlar && (
-        <>
-          <StartModal parametros={parametrosEfectivos} geometria={geometriaElegida}
-            modoOperacion={modoOperacion} onConfirm={handleStartConfirm} />
-          <StopModal totalScanned={totalScanned} totalPuntos={geometria.totalPuntos}
-            currentZIdx={currentZIdx} zLevels={geometria.zLevels}
-            elapsedSec={elapsedSec} onConfirm={handleStopConfirm} />
-        </>
-      )}
     </>
   );
 }

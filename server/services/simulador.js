@@ -12,16 +12,19 @@
  * el anterior ya se guardó, así nunca se acumulan puntos si la base
  * va lenta. El ritmo es simulacion.ms_por_punto[modo].
  *
- * Cada punto pasa por services/ingesta.js, igual que una lectura real.
+ * Cada punto pasa por services/ingesta.js, igual que una lectura real:
+ * la ingesta numera seq desde 1 y guarda marcada como `saturado` la
+ * lectura que pasa del fondo de escala (Fase 4).
  * La física y el ruido están en services/simulacionPura.js.
  *
- * La configuración se copia al arrancar: un cambio de configuración
- * durante el barrido no altera la sesión en curso.
+ * Usa las copias de la configuración que se guardaron con la sesión al
+ * crearla (Fase 5): un cambio de configuración durante el barrido no
+ * altera la sesión en curso, y la sesión se puede reproducir.
  * ─────────────────────────────────────────────────────────────
  */
 
 import { obtener } from './configuracion.js';
-import { mallaParaPaso } from '../config/barrido.js';
+import { mallaDeBarrido } from './geometria.js';
 import { crearGeneradorMuestras } from './simulacionPura.js';
 import { registrarMedicion, ErrorIngesta } from './ingesta.js';
 
@@ -38,16 +41,17 @@ export const simulando = () => actual?.sesion.id ?? null;
 export function arrancar(sesion, alTerminar) {
   if (actual) detener(actual.sesion.id);
 
-  const simulacion = obtener('simulacion');
-  const malla = mallaParaPaso(sesion.paso_mm);
-  const siguiente = crearGeneradorMuestras({
-    simulacion, barrido: obtener('barrido'), sensor: obtener('sensor'), malla,
-  });
+  // Las copias guardadas con la sesión (Fase 5); si no las hay, la configuración vigente
+  const simulacion = sesion.config_simulacion ?? obtener('simulacion');
+  const barrido = sesion.config_barrido ?? obtener('barrido');
+  const sensor = sesion.config_sensor ?? obtener('sensor');
+  const malla = mallaDeBarrido(barrido, sesion.paso_mm);
+  const siguiente = crearGeneradorMuestras({ simulacion, barrido, sensor, malla });
   const msPorPunto = simulacion.ms_por_punto[sesion.modo];
 
   const estado = {
     sesion, malla, indice: 0, temporizador: null, detenido: false,
-    huecos: 0, rechazadas: 0,
+    huecos: 0, saturadas: 0, rechazadas: 0,
   };
   actual = estado;
 
@@ -62,10 +66,11 @@ export function arrancar(sesion, alTerminar) {
       estado.huecos += 1;
     } else {
       try {
-        await registrarMedicion(sesion, { ...muestra.punto, bx: muestra.bx, by: muestra.by, bz: muestra.bz });
+        const m = await registrarMedicion(sesion, { ...muestra.punto, bx: muestra.bx, by: muestra.by, bz: muestra.bz });
+        if (m.saturado) estado.saturadas += 1;   // se guarda marcada, como en el sensor real
       } catch (err) {
         if (err instanceof ErrorIngesta && err.status === 422) {
-          estado.rechazadas += 1;   // saturación inyectada: el punto queda sin lectura
+          estado.rechazadas += 1;   // no debería pasar: la malla siempre es válida
         } else if (err instanceof ErrorIngesta && (err.status === 409 || err.status === 404)) {
           estado.detenido = true;   // alguien cerró la sesión entre dos puntos
           return;
@@ -78,7 +83,7 @@ export function arrancar(sesion, alTerminar) {
     if (estado.detenido) return;
     estado.indice += 1;
     if (estado.indice >= malla.totalPuntos) {
-      console.log(`[simulador] Sesión ${sesion.id} completa (${estado.huecos} huecos, ${estado.rechazadas} saturaciones rechazadas).`);
+      console.log(`[simulador] Sesión ${sesion.id} completa (${estado.huecos} huecos, ${estado.saturadas} saturadas, ${estado.rechazadas} rechazadas).`);
       estado.detenido = true;
       if (actual === estado) actual = null;
       alTerminar(sesion.id);

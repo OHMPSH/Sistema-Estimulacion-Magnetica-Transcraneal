@@ -1,50 +1,62 @@
-#  SAVD | Sistema Automatizado de Adquisición y Visualización de Datos
+# SAVD / TMS — Sistema de adquisición y visualización de datos
 
-Plataforma *Full-Stack IoT* de telemetría distribuida diseñada para la caracterización tridimensional de campos electromagnéticos inducidos por equipos de Estimulación Magnética Transcraneal (TMS). 
+Sistema para la tesis de ingeniería (IPN, ESIME Zacatenco) sobre la **caracterización del campo magnético** en un montaje de estimulación magnética transcraneal (TMS) sobre un phantom de solución salina.
 
-Este proyecto resuelve el problema de alta latencia inherente a las arquitecturas de adquisición secuenciales. Al implementar un paradigma de digitalización concurrente y procesamiento en el borde (*Edge Computing*), el SAVD reduce el ciclo de mapeo topográfico de tres horas a treinta minutos, proveyendo a los investigadores de herramientas de monitoreo en tiempo real sobre modelos físicos (*phantoms* de solución salina).
+Un sensor recorre una malla sobre una placa de 60 × 60 mm, en planos Z de 0 a 20 mm, con un paso de 0,5, 1 o 2 cm (845, 147 o 32 puntos). En cada punto se guardan Bx, By y Bz en µT y |B|. Varias personas miran el barrido en vivo desde laptops y teléfonos conectados al mismo hotspot.
 
----
+## Cómo funciona
 
-##  Arquitectura del Sistema
+```
+ Pico W + HMC5883L ──HTTPS (token)──┐
+                                    ▼
+ Navegadores ──HTTPS──► Nginx (Raspberry Pi 5) ──► Node.js + Express (MVC) ──► MariaDB
+                         │  /      → dashboard React (dist/)        │
+                         │  /api/  → backend, SSE en vivo ◄──────────┘
+```
 
-El proyecto se divide en tres capas funcionales, integrando hardware de adquisición concurrente, una base de datos relacional de grado industrial y una interfaz web reactiva.
+| Parte | Tecnología | Qué hace |
+|---|---|---|
+| Servidor | Raspberry Pi 5, Nginx (HTTPS con certificado autofirmado) | Sirve el dashboard y reenvía `/api/` al backend. |
+| Backend | Node.js 20 + Express 4 + mysql2, MVC (rutas → middleware → controladores → modelos, más `services/`) | Login con roles, sesiones de medición, simulador, ingesta de la Pico W, eventos en vivo por SSE, CSV con metadatos. |
+| Base de datos | MariaDB | Sesiones con sus parámetros y metadatos de reproducibilidad, mediciones en DOUBLE con sus cuentas crudas, usuarios, configuración y el dispositivo. Todo en UTC. |
+| Dashboard | React 18 + Vite 5, Bootstrap 5, Chart.js, Three.js y Plotly | Gráfica Bx/By/Bz, mapa 3D de flechas, superficie de \|B\| por plano, tabla, indicadores, historial y configuración. Tema oscuro, claro o del sistema. |
+| Adquisición | Raspberry Pi Pico W (RP2040) con un magnetómetro **HMC5883L** por I2C | Manda latidos y lotes de lecturas crudas al servidor. El HMC5883L se usa como **sensor de prueba** del sistema. |
 
-| Capa Arquitectónica | Tecnología / Hardware | Descripción Técnica |
-| :--- | :--- | :--- |
-| **Instrumentación y Adquisición** | Raspberry Pi Pico 2W (C++ / MicroPython) | Digitalización simultánea de los tres ejes espaciales. El muestreo analógico está orquestado por una **instancia** dedicada bajo el paradigma de Programación Orientada a Objetos, garantizando concurrencia. |
-| **Acondicionamiento Analógico** | Filtro Activo MFB de Bessel | Acondicionamiento de señal con respuesta de fase lineal para la supresión de ruido electromagnético de alta frecuencia, previniendo distorsiones transitorias. |
-| **Servidor Central (Backend)** | SBC Raspberry Pi 5 + Node.js (Express) | Nodo maestro de la red local (LAN) que expone una API REST para procesar las tramas JSON recibidas vía Wi-Fi (TCP/HTTP) desde la capa de adquisición. |
-| **Persistencia de Datos** | MariaDB (Motor InnoDB) | Base de datos relacional estructurada en la Tercera Forma Normal (3FN), garantizando el cumplimiento ACID para la protección e integridad del historial métrico. |
-| **Telemetría y Visualización** | React.js + Vite | Interfaz Gráfica de Usuario (*Dashboard*) que consume la API REST para renderizar los vectores electromagnéticos dinámicamente, eliminando la carencia de retroalimentación en tiempo real. |
+### Dos modos de operación
 
----
+- **Simulación:** el servidor genera el barrido con la física de una espira (integrales elípticas), ruido gaussiano con semilla y, si se configuran, huecos y saturaciones. Sirve para probar todo sin hardware.
+- **Real:** la Pico W pregunta en cada latido si hay una sesión abierta y envía lotes de cuentas crudas; el servidor las convierte a µT con la ganancia y el offset configurados, marca las saturadas (−4096) y descarta los duplicados por número de secuencia.
 
-##  Características Principales
+En los dos modos, todos los navegadores ven el mismo barrido en vivo; quien entra tarde o recarga la página ve todo lo ya medido.
 
-* **Digitalización Simultánea (3-DOF):** Captura concurrente de las componentes vectoriales espaciales para erradicar el cuello de botella del hardware genérico secuencial.
-* **Telemetría Distribuida:** Monitoreo multiplataforma que independiza la supervisión del ensayo de la estación de trabajo física.
-* **Integridad Transaccional:** Almacenamiento riguroso de cada lectura con *timestamps* de alta precisión y coordenadas milimétricas, blindado ante fallos de energía.
-* **Diseño Escalable:** Arquitectura Modelo-Vista-Controlador (MVC) en el *backend*, preparada para futuras integraciones de algoritmos de control de lazo cerrado.
+### Usuarios
 
----
+Entrar exige usuario y contraseña. Roles: **admin** (todo), **operador** (inicia y detiene barridos, edita las notas de sus sesiones, exporta) y **observador** (mira y exporta).
 
-##  Instalación y Despliegue Local
+## Estructura
 
-**1. Clonar el repositorio:**
-git clone https://github.com/tu-usuario/savd-tms-iot.git
+```
+server/      backend (server.js, app.js, config/, routes/, middleware/, controllers/, models/, services/,
+             migrations/, scripts/crear-admin.js, scripts/emular-pico.js, tests/, setup_db.sql)
+frontend/    dashboard (src/pages, src/components, src/context, src/hooks, src/styles)
+nginx/       tms.conf (proxy inverso y HTTPS)
+deploy/      tms-server.service (systemd)
+docs/        firmware-pico-w.md (protocolo de la Pico), fase7-revision-diseno.md, prompts-sesiones.md
+firmware/    pico_w_cliente_ejemplo.py (ejemplo en MicroPython, sin probar en hardware)
+```
 
-**2. Configuración de la Base de Datos (MariaDB):**
-Ejecutar el script de aprovisionamiento en la SBC Raspberry Pi 5:
-sudo mysql -u root < database/setup_db.sql
+## Instalación
 
-**3. Despliegue del Servidor (Node.js):**
-cd backend
-npm install
-npm run start
+La guía completa para la Raspberry Pi 5 (MariaDB, Node, Nginx, systemd, acceso desde el hotspot, Pico W, respaldos y solución de problemas) está en **[COMANDOS.md](COMANDOS.md)**.
 
-**4. Compilación del Dashboard Web (React):**
-cd frontend
-npm install
-npm run build
-npm run preview
+Desarrollo local, en resumen:
+
+```bash
+cd server && cp .env.example .env && npm install && npm run dev      # API en 127.0.0.1:4000
+cd frontend && npm install && npm run dev                            # http://localhost:5173
+cd server && npm test                                                # tests unitarios (sin base de datos)
+```
+
+## Estado
+
+Las fases 1 a 8 del plan de trabajo están hechas; el detalle, las decisiones y lo pendiente están en [CLAUDE.md](CLAUDE.md). Falta probar el firmware con la Pico W y el sensor reales, y confirmar quién controla los motores y cómo se mueve el eje Z.

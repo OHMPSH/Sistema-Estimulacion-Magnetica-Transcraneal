@@ -19,9 +19,8 @@
  *
  * Saturación inyectada: la componente bz se reemplaza por
  * 1,5 × el fondo de escala del sensor (2047 / lsb_por_ga × 100 µT,
- * con el signo del campo). La ingesta la rechaza con 422 por estar fuera del rango, y
- * el punto queda sin lectura. En la Fase 4, la lectura saturada pasará
- * a guardarse marcada con `saturado`.
+ * con el signo del campo). Desde la Fase 4, la ingesta la guarda como el
+ * sensor real: bz NULL, crudo −4096 y la lectura marcada `saturado`.
  * ─────────────────────────────────────────────────────────────
  */
 

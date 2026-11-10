@@ -1,78 +1,46 @@
 /**
  * components/modals/StopModal.jsx
- * Modal Bootstrap de confirmación antes de detener la adquisición.
- * Usa el componente Modal de Bootstrap, instalado con npm.
+ * Confirmación antes de detener la adquisición. ref.current.abrir().
  */
-import React, { useEffect, useRef } from 'react';
-// Solo el componente Modal de Bootstrap, empaquetado con Vite
-import Modal from 'bootstrap/js/dist/modal';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import { useModalBootstrap } from './useModalBootstrap.js';
+import { duracion } from '../../utils/formato.js';
 
-export function StopModal({ totalScanned, totalPuntos, currentZIdx, zLevels, elapsedSec, onConfirm }) {
-  const modalRef = useRef(null);
-  const bsModal  = useRef(null);
+export const StopModal = forwardRef(function StopModal({ recibidas, totalPuntos, zActualMM, segundos, onConfirm }, ref) {
+  const elemento = useRef(null);
+  const { mostrar, ocultar } = useModalBootstrap(elemento);
+  useImperativeHandle(ref, () => ({ abrir: mostrar }), [mostrar]);
 
-  useEffect(() => {
-    if (modalRef.current) {
-      bsModal.current = new Modal(modalRef.current);
-    }
-    return () => bsModal.current?.dispose();
-  }, []);
-
-  // Exponer método show() al padre mediante el ref pattern
-  // (el padre llama a window.__stopModalShow que definimos aquí)
-  useEffect(() => {
-    window.__stopModalShow = () => bsModal.current?.show();
-    return () => { delete window.__stopModalShow; };
-  }, []);
-
-  const handleConfirm = () => {
-    bsModal.current?.hide();
-    onConfirm();
-  };
-
-  const formatElapsed = (sec) => {
-    const m = String(Math.floor(sec / 60)).padStart(2, '0');
-    const s = String(sec % 60).padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  const confirmar = () => { ocultar(); onConfirm(); };
 
   return (
-    <div className="modal fade modal-tms" ref={modalRef} tabIndex={-1} aria-hidden="true">
+    <div className="modal fade modal-tms" ref={elemento} tabIndex={-1} aria-hidden="true" aria-labelledby="titulo-detener">
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content">
           <div className="modal-header">
-            <div className="modal-title-tms" style={{ color: '#ff7070' }}>
-              <i className="bi bi-exclamation-triangle-fill me-2" />
-              Confirmar detención
-            </div>
+            <h2 id="titulo-detener" className="modal-title-tms m-0 texto-peligro">
+              <i className="bi bi-exclamation-triangle-fill me-2" aria-hidden="true" /> Confirmar detención
+            </h2>
+            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Cancelar" />
           </div>
-          <div className="modal-body p-4">
-            <p>¿Estás seguro de que deseas <strong>detener la medición</strong>?</p>
-            <p className="mt-2" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Los datos recopilados se <strong>guardarán</strong> en el historial. Esta acción no puede deshacerse.
+          <div className="modal-body">
+            <p>¿Deseas <strong>detener la medición</strong>?</p>
+            <p className="texto-secundario mt-2">
+              Lo medido hasta ahora se <strong>guarda</strong> en el historial, con los puntos que falten marcados como huecos.
+              La sesión no se puede reanudar.
             </p>
-            <div
-              className="mt-3 p-3"
-              style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}
-            >
-              {totalScanned} / {totalPuntos} pts · Z{currentZIdx} ({zLevels[currentZIdx] ?? 0} mm) · {formatElapsed(elapsedSec)}
-            </div>
+            <p className="caja-dato mt-3 mb-0">
+              {recibidas} / {totalPuntos} puntos · plano Z = {zActualMM ?? '—'} mm · {duracion(segundos)}
+            </p>
           </div>
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn-tms"
-              style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 16px' }}
-              data-bs-dismiss="modal"
-            >
-              Cancelar
-            </button>
-            <button type="button" className="btn-tms btn-stop" style={{ borderColor: '#ff4444' }} onClick={handleConfirm}>
-              <i className="bi bi-stop-fill" /> Sí, detener
+            <button type="button" className="btn-tms btn-secundario" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" className="btn-tms btn-stop" onClick={confirmar}>
+              <i className="bi bi-stop-fill" aria-hidden="true" /> Sí, detener
             </button>
           </div>
         </div>
       </div>
     </div>
   );
-}
+});

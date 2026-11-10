@@ -8,11 +8,16 @@
 -- Crea:
 --   • Base de datos: tms_db
 --   • Usuario:       tms_user (la contraseña la eliges tú; ver abajo)
---   • Tabla:         sesiones   — un registro por proceso de medición
---   • Tabla:         mediciones — lecturas del sensor Hall
 --   • Tabla:         usuarios       — personas que entran al dashboard
 --   • Tabla:         sesiones_login — sesiones de usuario (cookie tms_sesion)
+--   • Tabla:         sesiones       — un registro por proceso de medición
+--   • Tabla:         mediciones     — lecturas del magnetómetro HMC5883L
 --   • Tabla:         configuracion  — parámetros del sistema (valores por defecto)
+--   • Tabla:         dispositivos   — la Pico W (token como hash)
+--
+-- Una instalación limpia con este archivo queda igual que una base
+-- antigua a la que se le aplicaron las migraciones 001 a 005: NO hace
+-- falta ejecutar las migraciones después de este script.
 --
 -- Después de ejecutarlo, crea el primer administrador:
 --   cd server && npm run crear-admin -- --predeterminado   (admin / admin)
@@ -43,51 +48,10 @@ FLUSH PRIVILEGES;
 USE tms_db;
 
 -- ─────────────────────────────────────────────────────────────
--- TABLA: sesiones
--- Registra cada proceso de medición (inicio + fin + modo)
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS sesiones (
-  id            INT          AUTO_INCREMENT PRIMARY KEY,  -- identificador único
-  modo          ENUM('DC','AC') NOT NULL,                 -- velocidad: DC rápida, AC normal
-  origen        ENUM('sim','hw') NOT NULL DEFAULT 'sim',  -- simulador del servidor o Pico W
-  paso_mm       TINYINT UNSIGNED NOT NULL DEFAULT 5,      -- paso en X, Y y Z: 5, 10 o 20 mm
-  medio         ENUM('campo_magnetico','solucion_salina') NOT NULL DEFAULT 'campo_magnetico',
-  iniciada_en   DATETIME     NOT NULL,                    -- cuándo empezó
-  terminada_en  DATETIME     NULL                         -- cuándo terminó (NULL si activa)
-);
-
--- ─────────────────────────────────────────────────────────────
--- TABLA: mediciones
--- Almacena cada lectura vectorial del sensor Hall (Bx, By, Bz)
--- Una sesión completa tiene 13×13×5 = 845 filas
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS mediciones (
-  id          INT           AUTO_INCREMENT PRIMARY KEY,
-  sesion_id   INT           NOT NULL,                   -- referencia a sesiones
-  x_mm        FLOAT         NOT NULL,                   -- posición X en la placa (0..60 mm)
-  y_mm        FLOAT         NOT NULL,                   -- posición Y en la placa (0..60 mm)
-  z_mm        FLOAT         NOT NULL,                   -- altura del sensor (0,5,10,15,20 mm)
-  `bx`        FLOAT         NOT NULL,                   -- componente X del campo (μT)
-  `by`        FLOAT         NOT NULL,                   -- componente Y del campo (μT)
-  `bz`        FLOAT         NOT NULL,                   -- componente Z del campo (μT)
-  magnitud    FLOAT         NOT NULL,                   -- |B| = √(Bx²+By²+Bz²) en μT
-  timestamp   DATETIME(3)   NOT NULL,                   -- fecha y hora con milisegundos
-
-  -- Llave foránea: si se borra la sesión, se borran sus mediciones
-  CONSTRAINT fk_sesion
-    FOREIGN KEY (sesion_id) REFERENCES sesiones(id)
-    ON DELETE CASCADE
-);
-
--- Índice para acelerar búsquedas por sesión
-CREATE INDEX IF NOT EXISTS idx_mediciones_sesion
-  ON mediciones(sesion_id);
-
--- ─────────────────────────────────────────────────────────────
 -- TABLA: usuarios
 -- Personas que entran al dashboard.
 --   admin      — todo, incluidos los usuarios y la configuración
---   operador   — inicia y detiene barridos, exporta
+--   operador   — inicia y detiene barridos, edita las notas de sus sesiones, exporta
 --   observador — solo mira y exporta
 -- (Igual que migrations/002_usuarios.sql)
 -- ─────────────────────────────────────────────────────────────
@@ -132,6 +96,77 @@ CREATE INDEX IF NOT EXISTS idx_sesiones_login_usuario ON sesiones_login(usuario_
 CREATE INDEX IF NOT EXISTS idx_sesiones_login_expira  ON sesiones_login(expira_en);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLA: sesiones
+-- Cada proceso de medición, con los parámetros elegidos (CLAUDE.md 7.0)
+-- y los metadatos de reproducibilidad (Fase 5).
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS sesiones (
+  id                INT          AUTO_INCREMENT PRIMARY KEY,
+  usuario_id        INT          NULL,                        -- quién la inició
+  modo              ENUM('DC','AC') NOT NULL,                 -- velocidad: DC rápida, AC normal
+  origen            ENUM('sim','hw') NOT NULL DEFAULT 'sim',  -- simulador del servidor o Pico W
+  paso_mm           TINYINT UNSIGNED NOT NULL DEFAULT 5,      -- paso en X, Y y Z: 5, 10 o 20 mm
+  medio             ENUM('campo_magnetico','solucion_salina') NOT NULL DEFAULT 'campo_magnetico',
+  iniciada_en       DATETIME     NOT NULL,                    -- UTC
+  terminada_en      DATETIME     NULL,                        -- UTC (NULL si está abierta)
+  notas             TEXT         NULL,                        -- texto libre (máx. 5000 por la API)
+  puntos_esperados  INT          NULL,                        -- grid_n² × planos según el paso
+  puntos_recibidos  INT          NULL,                        -- filas guardadas, calculado al cerrar
+  huecos            JSON         NULL,                        -- {"total": n, "posiciones": [{xMM,yMM,zMM}…]} (≤ 1000)
+  config_barrido    JSON         NULL,                        -- copias de la configuración al iniciar
+  config_sensor     JSON         NULL,
+  config_simulacion JSON         NULL,                        -- solo en simulación (incluye la semilla)
+  version_software  VARCHAR(64)  NULL,                        -- versión del servidor + commit
+  version_firmware  VARCHAR(40)  NULL,                        -- firmware de la Pico (modo real)
+  eliminada_en      DATETIME     NULL,                        -- borrado lógico (NULL = visible)
+
+  CONSTRAINT fk_sesiones_usuario
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    ON DELETE SET NULL
+);
+
+-- Índices para los filtros del historial y el borrado lógico
+CREATE INDEX IF NOT EXISTS idx_sesiones_iniciada  ON sesiones(iniciada_en);
+CREATE INDEX IF NOT EXISTS idx_sesiones_filtros   ON sesiones(modo, paso_mm, medio, origen);
+CREATE INDEX IF NOT EXISTS idx_sesiones_eliminada ON sesiones(eliminada_en);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLA: mediciones
+-- Cada lectura vectorial del magnetómetro (Bx, By, Bz).
+-- Una sesión completa de 0,5 cm tiene 13×13×5 = 845 filas.
+-- Números en DOUBLE (Fase 5): sin los artefactos de float32.
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS mediciones (
+  id             INT           AUTO_INCREMENT PRIMARY KEY,
+  sesion_id      INT           NOT NULL,                 -- referencia a sesiones
+  seq            INT           NULL,                     -- número de lectura en la sesión (Fase 4)
+  x_mm           DOUBLE        NOT NULL,                 -- posición X en la placa (0..60 mm)
+  y_mm           DOUBLE        NOT NULL,                 -- posición Y en la placa (0..60 mm)
+  z_mm           DOUBLE        NOT NULL,                 -- altura del sensor (planos según el paso)
+  `bx`           DOUBLE        NULL,                     -- componente X del campo (μT); NULL si ese eje saturó
+  `by`           DOUBLE        NULL,                     -- componente Y del campo (μT)
+  `bz`           DOUBLE        NULL,                     -- componente Z del campo (μT)
+  magnitud       DOUBLE        NULL,                     -- |B| = √(Bx²+By²+Bz²) en μT; NULL si saturó
+  raw_x          SMALLINT      NULL,                     -- cuentas crudas del HMC5883L (−4096 = desborde)
+  raw_y          SMALLINT      NULL,
+  raw_z          SMALLINT      NULL,
+  saturado       BOOLEAN       NOT NULL DEFAULT 0,       -- 1 si algún eje se desbordó
+  timestamp      DATETIME(3)   NOT NULL,                 -- hora de recepción en el servidor (UTC)
+  ts_dispositivo DATETIME(3)   NULL,                     -- hora de la lectura según la Pico (UTC)
+
+  -- Llave foránea: si se borra la sesión (solo por SQL), se borran sus mediciones
+  CONSTRAINT fk_sesion
+    FOREIGN KEY (sesion_id) REFERENCES sesiones(id)
+    ON DELETE CASCADE,
+  -- Idempotencia: la Pico puede reenviar un lote sin duplicar filas.
+  -- También es el índice (sesion_id, seq) con el que se ordena el CSV.
+  CONSTRAINT uq_mediciones_sesion_seq UNIQUE (sesion_id, seq)
+);
+
+-- Índice para acelerar búsquedas por sesión
+CREATE INDEX IF NOT EXISTS idx_mediciones_sesion ON mediciones(sesion_id);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLA: configuracion
 -- Una fila por grupo de parámetros. El servidor la carga al arrancar
 -- y la mantiene en memoria; solo un admin la cambia.
@@ -156,8 +191,27 @@ INSERT IGNORE INTO configuracion (clave, valor, actualizado_en) VALUES
   ('visualizacion',  '{"ventana_grafica":80,"filas_tabla":60,"decimales":3,"escala_superficie":"Jet","rotacion_auto":true,"reducir_animaciones":false}', UTC_TIMESTAMP()),
   ('datos',          '{"zona_horaria":"America/Mexico_City"}', UTC_TIMESTAMP());
 
--- Índices para los filtros del historial
-CREATE INDEX IF NOT EXISTS idx_sesiones_iniciada ON sesiones(iniciada_en);
-CREATE INDEX IF NOT EXISTS idx_sesiones_filtros  ON sesiones(modo, paso_mm, medio, origen);
+-- ─────────────────────────────────────────────────────────────
+-- TABLA: dispositivos
+-- Una fila por cada Pico W autorizada; solo se guarda el SHA-256 del
+-- token. (Igual que migrations/004_dispositivo.sql)
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS dispositivos (
+  id             INT          AUTO_INCREMENT PRIMARY KEY,
+  nombre         VARCHAR(40)  NOT NULL,
+  token_hash     CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,   -- SHA-256 del token
+  activo         BOOLEAN      NOT NULL DEFAULT 1,
+  creado_en      DATETIME     NOT NULL,                                 -- UTC
+  ultimo_latido  DATETIME(3)  NULL,                                     -- UTC
+  ip             VARCHAR(45)  NULL,
+  firmware       VARCHAR(40)  NULL,
+  rssi           SMALLINT     NULL,                                     -- dBm
+  uptime_s       INT UNSIGNED NULL,
+
+  CONSTRAINT uq_dispositivos_nombre UNIQUE (nombre),
+  CONSTRAINT uq_dispositivos_token  UNIQUE (token_hash)
+);
+
+INSERT IGNORE INTO dispositivos (nombre, creado_en) VALUES ('pico-w-1', UTC_TIMESTAMP());
 
 SELECT 'Base de datos TMS creada correctamente.' AS resultado;

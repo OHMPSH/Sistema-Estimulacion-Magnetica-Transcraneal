@@ -2,7 +2,7 @@
 
 Este archivo es la fuente de contexto para cualquier sesión de Claude que trabaje en este repositorio. Léelo completo antes de tocar código. Al terminar una fase, **actualiza la sección "Estado de las fases"** (y lo que haya cambiado en las demás secciones) para que la siguiente sesión parta del estado real.
 
-Los prompts listos para cada fase pendiente están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md).
+Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md). **Las 8 fases están hechas** (ver la sección 6); lo que queda está en las notas de la Fase 8.
 
 ---
 
@@ -67,32 +67,46 @@ El sistema trae un acceso **admin / admin**, sin cambio obligatorio de contrase�
 ```
 PT/
 ├── CLAUDE.md                     ← este archivo
-├── COMANDOS.md                   ← guía de arranque (se actualiza en la Fase 8)
+├── COMANDOS.md                   ← guía completa de instalación en la Raspberry Pi 5 (Fase 8)
+├── README.md                     ← descripción real del sistema
+├── deploy/tms-server.service     ← unit de systemd (usuario tms, Restart=on-failure)
+├── docs/fase7-revision-diseno.md ← revisión de interfaz, plan de diseño y contrastes
 ├── docs/prompts-sesiones.md      ← prompts de cada fase pendiente
+├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, HMC5883L (X, Z, Y; −4096), hotspot
+├── firmware/pico_w_cliente_ejemplo.py ← ejemplo en MicroPython (referencia, sin probar en hardware)
 ├── nginx/tms.conf                ← NO TOCAR
 ├── server/                       ← Node.js + Express (ESM, "type":"module")
-│   ├── server.js                 ← entrada: cors, json(100kb), router en /api y /, errores
+│   ├── server.js                 ← entrada: dotenv, testConnection, iniciarServicios y listen
+│   ├── app.js                    ← crearApp() (cors, json(100kb), routers en /api y /, errores) e iniciarServicios()
 │   ├── .env / .env.example       ← el .env está ignorado por git
 │   ├── setup_db.sql              ← crea la BD, el usuario (permisos mínimos) y las tablas
 │   ├── migrations/001_sesiones_hora_local_a_utc.sql
 │   ├── migrations/002_usuarios.sql            ← tablas usuarios y sesiones_login (Fase 2)
+│   ├── migrations/003_configuracion.sql       ← configuracion y sesiones.origen/paso_mm/medio (Fase 3)
+│   ├── migrations/004_dispositivo.sql         ← dispositivos y mediciones.seq/raw/saturado/ts_dispositivo (Fase 4)
+│   ├── migrations/005_trazabilidad.sql        ← DOUBLE en mediciones; metadatos y borrado lógico en sesiones (Fase 5)
 │   ├── config/database.js        ← pool de mysql2, timezone 'Z', SET time_zone '+00:00'
 │   ├── config/barrido.js         ← lee la configuración: tamanoPlacaMM(), mallaParaPaso(paso), limiteCampoUT()
 │   ├── config/roles.js           ← ROLES ('admin','operador','observador') y TEMAS
 │   ├── middleware/cors.js        ← orígenes de CORS_ORIGINS; un origen ajeno no recibe cabeceras (sin 500)
-│   ├── middleware/auth.js        ← leerCookie, requiereLogin → req.usuario y req.sesionLoginId, requiereRol(...)
-│   ├── middleware/validar.js     ← validarIdSesion → req.idSesion, validarModo → req.modo,
-│   │                                validarMedicion → req.medicion, y los de la Fase 2: validarLogin,
+│   ├── middleware/auth.js        ← leerCookie, requiereLogin → req.usuario y req.sesionLoginId, requiereRol(...),
+│   │                                requiereDispositivo (Bearer de la Pico → req.dispositivo)
+│   ├── middleware/validar.js     ← validarIdSesion → req.idSesion, validarNuevaSesion, validarFiltrosSesiones,
+│   │                                validarLatido, validarLoteDispositivo, validarCambiosDispositivo (Fase 4),
+│   │                                y los de la Fase 2: validarLogin,
 │   │                                validarCambioPassword, validarPreferencias, validarIdUsuario,
 │   │                                validarNuevoUsuario, validarCambiosUsuario, validarPasswordNueva
 │   │                                (400 si falta algo o el tipo es incorrecto, 422 si un valor es inválido)
 │   ├── middleware/errores.js     ← 404 y manejador de errores, siempre en JSON
-│   ├── routes/auth.routes.js · usuarios.routes.js · mediciones.routes.js
+│   ├── routes/auth.routes.js · usuarios.routes.js · mediciones.routes.js · dispositivo.routes.js
 │   ├── controllers/auth.controller.js · usuarios.controller.js
 │   ├── controllers/mediciones.controller.js  ← sesiones y mediciones; delega en services/
 │   ├── controllers/configuracion.controller.js · routes/configuracion.routes.js
+│   ├── controllers/dispositivo.controller.js  ← estado, token, latido y lotes de la Pico W
 │   ├── models/Configuracion.js   ← SQL de la tabla configuracion (acepta JSON ya convertido o como texto)
-│   ├── models/Medicion.js        ← SQL; insertarMedicion solo inserta si la sesión está abierta
+│   ├── models/Medicion.js        ← SQL; insertarMedicion solo inserta si la sesión está abierta;
+│   │                                insertarLote: transacción con FOR UPDATE sobre la sesión (idempotente por seq)
+│   ├── models/Dispositivo.js     ← SQL de dispositivos (token como SHA-256)
 │   ├── models/Usuario.js         ← SQL de usuarios; actualizar() protege al último admin con FOR UPDATE
 │   ├── models/SesionLogin.js     ← SQL de sesiones_login
 │   ├── services/passwords.js     ← scrypt (hashPassword, verificarPassword, errorDePassword)
@@ -100,32 +114,51 @@ PT/
 │   ├── services/limiteIntentos.js ← 5 fallos por usuario+IP en 15 min, en memoria
 │   ├── services/configuracion.js ← caché en memoria; cargar() antes del listen; actualizar() valida, guarda y difunde
 │   ├── services/validacionConfiguracion.js ← reglas por clave (puro); ganancias HMC5883L; limiteSensorUT()
-│   ├── services/tiempoReal.js    ← SSE: conectar, difundir, un solo ping de 25 s
+│   ├── services/tiempoReal.js    ← SSE: ids, búfer de 2000, Last-Event-ID, retry 3000, drain, resincronizar, ping de 25 s
+│   ├── services/bufferEventos.js ← puro: búfer circular del SSE
+│   ├── services/trazabilidad.js  ← puro: calcularHuecos, encabezadoCSV, lineaCSV, nombreArchivoCSV
+│   ├── services/version.js       ← versión de package.json + commit (git rev-parse --short HEAD)
 │   ├── services/sesiones.js      ← una sola sesión abierta (cola de promesas), iniciar/finalizar, cierre de huérfanas
-│   ├── services/ingesta.js       ← registrarMedicion(sesion, lectura): valida, |B|, inserta, difunde
+│   ├── services/ingesta.js       ← registrarMedicion (simulador: seq desde 1, desborde → saturado) y
+│   │                                registrarLoteDispositivo (Pico W); valida, |B|, inserta, difunde
+│   ├── services/conversionSensor.js ← puro: cuentas → µT, −4096, validación de lecturas, clasificarLote
+│   ├── services/dispositivo.js   ← estado de la Pico en memoria, temporizador de 1 s, event: dispositivo
 │   ├── services/simulador.js     ← setTimeout encadenado sobre la malla de la sesión; usa ingesta.js
 │   ├── services/simulacionPura.js · fisicaEspira.js · aleatorio.js · geometria.js ← puros, con tests
-│   ├── tests/simulador.test.js   ← npm test (node --test)
-│   └── scripts/crear-admin.js    ← npm run crear-admin (o ADMIN_PASSWORD=…; --predeterminado = admin/admin)
+│   ├── tests/*.test.js           ← unitarios (npm test = test:unit): simulador, conversion, ingesta-dispositivo,
+│   │                                trazabilidad, passwords (y límite de intentos), validadores — 53 pruebas
+│   ├── tests/integracion/        ← helper.js + api.integ.js (npm run test:integracion, contra tms_db_test)
+│   ├── tests/setup_test_db.sql   ← setup_db.sql con el nombre tms_db_test
+│   ├── scripts/crear-admin.js    ← npm run crear-admin (o ADMIN_PASSWORD=…; --predeterminado = admin/admin)
+│   └── scripts/emular-pico.js    ← npm run emular-pico -- --token … (latido, lotes, pérdidas, duplicados)
 ├── frontend/                     ← React 18 + Vite 5
 │   ├── vite.config.js            ← proxy /api → 127.0.0.1:4000; build.outDir '../dist'
-│   ├── index.html                ← fuentes de Google por CDN; Bootstrap ya va empaquetado
+│   ├── index.html                ← aplica el tema guardado antes de pintar; nada de CDN
 │   └── src/
-│       ├── main.jsx              ← importa el CSS de Bootstrap e iconos; envuelve App en AuthProvider
-│       ├── App.jsx               ← login / cambio forzado / Dashboard; la página activa vive en el estado (no en la URL)
+│       ├── main.jsx              ← importa Bootstrap, iconos y las fuentes (@fontsource); envuelve App en AuthProvider
+│       ├── App.jsx               ← login / cambio forzado / Shell (Navbar + MenuLateral + página de la URL);
+│       │                            useSesionActiva vive aquí para no perder datos al cambiar de página
 │       ├── api/cliente.js        ← apiFetch, enviarJSON, leerJSON; credentials 'same-origin'; un 401 devuelve al login
-│       ├── context/AuthContext.jsx  ← useAuth(): usuario, cargando, iniciarSesion, cerrarSesion, cambiarPassword
-│       ├── pages/LoginPage.jsx · CambiarPasswordPage.jsx  ← versión mínima (diseño final en las Fases 6 y 7)
-│       ├── constants/system.js   ← colores y límites de la interfaz (ya sin geometría ni simulación)
-│       ├── utils/geometria.js    ← PASOS, MEDIOS, mallaDePaso(barrido, paso): mismo cálculo que el servidor
-│       ├── hooks/useAcquisition.js  ← sin simulación: configuración, SSE (medicion, sesion, configuracion), iniciar/detener
+│       ├── context/AuthContext.jsx   ← useAuth(): usuario, iniciarSesion, cerrarSesion, cambiarPassword, guardarPreferencias
+│       ├── context/ConfigContext.jsx ← useConfig(): config, opciones, modoOperacion, guardarClave, tema/temaEfectivo/
+│       │                                cambiarTema (data-theme + data-bs-theme + color-scheme), reducirMovimiento
+│       ├── pages/                ← LoginPage · CambiarPasswordPage · DashboardPage · HistorialPage · ConfiguracionPage
+│       ├── utils/geometria.js    ← PASOS, MEDIOS, MODOS, mallaDePaso(barrido, paso), indiceEnMalla (mismo cálculo que el servidor)
+│       ├── utils/formato.js      ← Intl: numero(v, decimales), fechaHora(v, zona), horaPrecisa, diaLocal, duracion
+│       ├── hooks/useStream.js       ← un único EventSource compartido (useEventoStream, useAlConectarStream)
+│       ├── hooks/useSesionActiva.js ← carga /sesiones/activa al (re)conectar y con `resincronizar`; dedup por seq;
+│       │                               un render por cuadro (rAF); iniciar/detener con guardia contra doble clic
+│       ├── hooks/useDispositivo.js  ← estado de la Pico W y texto "hace N s" recalculado cada segundo
+│       ├── hooks/useNavegacion.js   ← ?vista=dashboard|historial|configuracion&seccion=… con la History API
+│       ├── hooks/useTokensTema.js   ← lee los tokens CSS del tema para Chart.js, Three.js y Plotly
 │       ├── hooks/useServerStatus.js ← consulta /api/status cada 15 s
-│       ├── components/charts/  LineChart.jsx · Canvas3D.jsx · Superficie3D.jsx
-│       ├── components/panels/  ControlPanel.jsx (barra: velocidad, paso, medio) · HistorialPage.jsx (filtros; CSV armado en el navegador)
-│       ├── components/ui/      Navbar.jsx · KpiCards.jsx · DataTable.jsx
-│       ├── components/modals/  StartModal.jsx · StopModal.jsx (usan bootstrap/js/dist/modal)
-│       └── styles/global.css
-└── mnt/                          ← carpeta sobrante; se borra en la Fase 8
+│       ├── components/layout/  Navbar.jsx · MenuLateral.jsx (role="dialog", foco atrapado, Esc, ✕, clic fuera)
+│       ├── components/charts/  LineChart.jsx · Canvas3D.jsx · Superficie3D.jsx (lazy, plotly.js-gl3d-dist-min)
+│       ├── components/panels/  ControlPanel.jsx (velocidad, paso, medio, progreso)
+│       ├── components/ui/      KpiCards.jsx · DataTable.jsx · LimiteErrores.jsx
+│       ├── components/modals/  StartModal · StopModal · ModalConfirmacion (refs + useModalBootstrap; sin globales)
+│       ├── components/config/  SeccionFormulario (genérico por clave) · SeccionUsuarios · SeccionDispositivo · TokenDispositivo
+│       └── styles/global.css     ← :root (oscuro, intacto) + tokens semánticos + [data-theme="light"]
 ```
 
 ### Recorrido de una medición (desde la Fase 3)
@@ -133,11 +166,11 @@ PT/
 0. El usuario inicia sesión (`POST /api/auth/login`); todas las peticiones siguientes, incluido el SSE, llevan la cookie `tms_sesion`.
 1. Al abrir el dashboard, el navegador lee `GET /api/configuracion` (configuración, opciones y la sesión abierta, si hay) y se suscribe al SSE.
 2. Un operador o admin elige velocidad, paso y medio en la barra del panel y confirma: `POST /api/sesiones {modo, paso_mm, medio}`. El servidor crea la sesión (409 si ya hay otra), con `origen` según `modo_operacion`, y difunde `event: sesion {tipo:'iniciada', sesion}` con su geometría.
-3. En simulación, `services/simulador.js` recorre la malla de la sesión (x → y → z) con `setTimeout` encadenado a `ms_por_punto[modo]`. En modo real, por ahora las lecturas llegan por `POST /api/mediciones` (la Pico W, en la Fase 4).
-4. Todo pasa por `services/ingesta.js`: valida contra la malla de la sesión y el fondo de escala del sensor, calcula |B|, guarda con la hora del servidor en UTC y difunde `event: medicion`.
-5. **Todos** los navegadores dibujan solo lo que llega por SSE, y descartan las lecturas de otra sesión. Nadie genera datos en el navegador.
-6. Al recorrer toda la malla, la sesión se cierra sola; también se puede cerrar con `PUT /api/sesiones/:id`. En los dos casos se difunde `event: sesion {tipo:'finalizada', motivo:'completa'|'manual'}`.
-7. El historial usa `GET /api/sesiones` y `GET /api/sesiones/:id/mediciones`, y el CSV se arma en el navegador.
+3. En simulación, `services/simulador.js` recorre la malla de la sesión (x → y → z) con `setTimeout` encadenado a `ms_por_punto[modo]`. En modo real, la Pico W pregunta en cada latido si hay sesión (`sesion_activa`) y manda lotes de cuentas crudas a `POST /api/dispositivo/mediciones`.
+4. Todo pasa por `services/ingesta.js`: valida contra la malla de la sesión, numera o respeta `seq`, convierte (Pico) o marca como saturado el eje que pasa del fondo de escala (simulador), calcula |B|, guarda con la hora del servidor en UTC y difunde `event: medicion`.
+5. **Todos** los navegadores dibujan solo lo que llega por SSE (y lo ya medido, con `GET /sesiones/activa` al conectarse), y descartan las lecturas de otra sesión. Nadie genera datos en el navegador.
+6. Al recorrer toda la malla, la sesión simulada se cierra sola; también se puede cerrar con `PUT /api/sesiones/:id`. Al cerrar se calculan `puntos_recibidos` y `huecos`, y se difunde `event: sesion {tipo:'finalizada', motivo:'completa'|'manual', sesion}`.
+7. El historial usa `GET /api/sesiones` (filtros en el servidor) y el CSV lo genera el servidor (`GET /api/sesiones/:id/csv`).
 
 ### API actual (todas las rutas responden también sin el prefijo `/api`)
 
@@ -145,7 +178,7 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 
 | Método y ruta | Rol | Qué hace | Códigos |
 |---|---|---|---|
-| `GET /api/status` | público | Health-check, con `modo_operacion` | 200 |
+| `GET /api/status` | público | Health-check: `version` (package.json), `commit`, `version_software`, `modo_operacion` | 200 |
 | `GET /api/configuracion` | sesión | `{data:{clave:valor…}, opciones:{pasos_mm, medios, ganancias_hmc5883l}, sesion_activa}` | 200 |
 | `PUT /api/configuracion/:clave {valor}` | admin | `valor` puede ser parcial en las claves que son objetos (se mezcla). Difunde `event: configuracion` | 200, 400, 404 clave desconocida, 409 (modo, barrido o sensor con sesión abierta), 422 |
 | `POST /api/auth/login {usuario,password}` | público | Crea la cookie `tms_sesion` (el usuario se normaliza a minúsculas) | 200, 400, 401 (mensaje único), 429 con `Retry-After` |
@@ -157,13 +190,23 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `POST /api/usuarios {usuario,nombre,rol,password}` | admin | Crea con `debe_cambiar_password` | 201, 400, 409 si ya existe, 422 |
 | `PATCH /api/usuarios/:id {nombre?,rol?,activo?}` | admin | Desactivar borra sus sesiones de login | 200, 400, 404, 409 último admin, 422 |
 | `POST /api/usuarios/:id/restablecer-password {password}` | admin | Deja `debe_cambiar_password` y cierra sus sesiones | 200, 400, 404, 422 |
-| `GET /api/stream` | sesión | SSE con los eventos `medicion`, `sesion` y `configuracion` | — |
+| `GET /api/stream` | sesión | SSE con `id:` y los eventos `medicion`, `sesion`, `configuracion`, `dispositivo` y `resincronizar`; reenvía desde `Last-Event-ID` (búfer de 2000) | — |
 | `POST /api/sesiones {modo, paso_mm?, medio?}` | op | Crea la sesión (7.0) y arranca el simulador en modo simulación. Responde `{sesionId, sesion}` con `grid_n`, `z_levels_mm` y `puntos_esperados` | 201, 409 si ya hay otra abierta, 422 |
 | `PUT /api/sesiones/:id` | op | Cierra la sesión y detiene el simulador | 200, 404, 409 si ya estaba cerrada |
-| `GET /api/sesiones?modo=&paso_mm=&medio=&origen=` | sesión | Lista con COUNT, MAX, MIN, `origen`, `paso_mm` y `medio`; filtros opcionales (vacío = sin filtro). Incluye `activa` | 200, 422 |
-| `DELETE /api/sesiones/:id` | admin | Borrado **físico** en cascada (lógico en la Fase 5) | 200, 404, 409 si está en curso |
-| `POST /api/mediciones {sesionId,xMM,yMM,zMM,bx,by,bz}` | op | Solo en modo real y para la sesión abierta de origen `hw` (la Fase 4 la reemplaza por la ingesta de la Pico W) | 201, 400, 404, 409 en simulación o sesión no abierta, 422 |
-| `GET /api/sesiones/:id/mediciones` | sesión | Exporta las mediciones de una sesión | 200 |
+| `GET /api/sesiones?modo=&paso_mm=&medio=&origen=&incluir_eliminadas=` | sesión | Lista con COUNT, MAX y MIN (sin saturadas), `saturadas`, metadatos de la Fase 5 (`usuario_id`, `iniciada_por`, `notas`, `puntos_esperados`, `puntos_recibidos`, `huecos`, versiones, `eliminada_en`). Excluye las eliminadas salvo `incluir_eliminadas=1` (solo admin). Incluye `activa` | 200, 403, 422 |
+| `GET /api/sesiones/activa` | sesión | `{sesion, mediciones}` de la sesión abierta (mismo formato que `event: medicion`), o `{sesion: null, mediciones: []}` | 200 |
+| `PATCH /api/sesiones/:id {notas}` | admin u operador que la inició | Máx. 5000 caracteres; difunde `event: sesion {tipo:'notas'}` | 200, 400, 403, 404, 422 |
+| `DELETE /api/sesiones/:id` | admin | **Borrado lógico** (`eliminada_en`); difunde `{tipo:'eliminada'}` | 200, 404, 409 si está en curso o ya eliminada |
+| `POST /api/sesiones/:id/restaurar` | admin | Quita el borrado lógico; difunde `{tipo:'restaurada'}` | 200, 404, 409 si no estaba eliminada |
+| `GET /api/sesiones/:id/csv` | sesión | CSV en streaming con encabezado `# clave: valor` y columnas con unidades (7.4) | 200, 404 (también si está eliminada) |
+| `POST /api/mediciones` | — | **Retirada** (Fase 4): responde 410 e indica la ruta de la Pico | 410 |
+| `GET /api/dispositivo/estado` | sesión | `{ok, existe, enLinea, ultimoLatido, firmware, rssi, ip, uptime_s, tieneToken, activo, desfase_ms, umbral_desconexion_s}` | 200 |
+| `POST /api/dispositivo/token` | admin | Genera el token (32 bytes base64url) y lo devuelve **una vez**; reemplaza al anterior | 201 |
+| `DELETE /api/dispositivo/token` | admin | Revoca el token | 200, 404 |
+| `PATCH /api/dispositivo {activo}` | admin | Activa o desactiva la Pico | 200, 400, 404 |
+| `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, grid_n, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
+| `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
+| `GET /api/sesiones/:id/mediciones` | sesión | Mediciones en JSON, con `seq`, crudos y `saturado` | 200, 404 (también si está eliminada) |
 
 **Detalles del login (Fase 2):**
 - El token es de 32 bytes aleatorios (base64url); en la base solo se guarda su SHA-256. La cookie es `HttpOnly; SameSite=Strict; Path=/; Max-Age=43200`, más `Secure` con `NODE_ENV=production`. Por eso, **en producción solo funciona por HTTPS** (Nginx).
@@ -176,14 +219,17 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 
 ### Esquema actual de MariaDB
 
-- `sesiones(id, modo ENUM('DC','AC'), origen ENUM('sim','hw'), paso_mm TINYINT UNSIGNED, medio ENUM('campo_magnetico','solucion_salina'), iniciada_en DATETIME, terminada_en DATETIME NULL)`, con índices en `iniciada_en` y en `(modo, paso_mm, medio, origen)` (migración 003).
+- `sesiones(id, usuario_id FK NULL, modo ENUM('DC','AC'), origen ENUM('sim','hw'), paso_mm TINYINT UNSIGNED, medio ENUM, iniciada_en, terminada_en NULL, notas TEXT, puntos_esperados, puntos_recibidos, huecos JSON {total, posiciones≤1000}, config_barrido/config_sensor/config_simulacion JSON, version_software VARCHAR(64), version_firmware VARCHAR(40), eliminada_en DATETIME NULL)`, con índices en `iniciada_en`, `(modo, paso_mm, medio, origen)` y `eliminada_en` (migraciones 003 y 005).
 - `configuracion(clave VARCHAR(40) PK, valor JSON, actualizado_en DATETIME, actualizado_por FK a usuarios NULL con ON DELETE SET NULL)` (migración 003).
-- `mediciones(id, sesion_id FK con ON DELETE CASCADE, x_mm, y_mm, z_mm, bx, by, bz, magnitud FLOAT, timestamp DATETIME(3))`, con índice en `sesion_id`.
+- `mediciones(id, sesion_id FK con ON DELETE CASCADE, seq INT NULL, x_mm, y_mm, z_mm, bx, by, bz, magnitud FLOAT (bx/by/bz/magnitud NULL si saturó), raw_x/raw_y/raw_z SMALLINT NULL, saturado BOOL, timestamp DATETIME(3), ts_dispositivo DATETIME(3) NULL)`, con índice en `sesion_id` y `UNIQUE(sesion_id, seq)` (migración 004).
+- `dispositivos(id, nombre UNIQUE, token_hash CHAR(64) UNIQUE NULL, activo, creado_en, ultimo_latido DATETIME(3), ip, firmware, rssi, uptime_s)`, con la fila `pico-w-1` (migración 004).
+- **La migración 004 ya se aplicó en la base local** (2026-11-10, con `tms_user`; respaldo previo en `~/tms-respaldos/tms_db_antes_fase4.sql`). La Pico `pico-w-1` quedó sin token.
 - `usuarios(id, usuario VARCHAR(32) UNIQUE, nombre VARCHAR(100), rol ENUM('admin','operador','observador'), hash_password, activo BOOL, debe_cambiar_password BOOL, preferencias JSON NULL, creado_en DATETIME, ultimo_acceso DATETIME NULL)` (migración 002).
 - `sesiones_login(id CHAR(64) PK = SHA-256 del token, usuario_id FK con ON DELETE CASCADE, creada_en, expira_en, ultimo_uso, ip VARCHAR(45), user_agent VARCHAR(255))`, con índices en `usuario_id` y `expira_en` (migración 002).
 - **La migración 002 ya se aplicó en la base local del usuario** (2026-11-09, con `tms_user`, que ahí todavía tiene ALL PRIVILEGES). Existe el usuario `admin` / `admin` (ver la sección 1).
 - **La migración 003 ya se aplicó en la base local** (2026-11-10, igual que la 002). Las 24 sesiones existentes quedaron como `sim`, 5 mm y campo magnético. Al arrancar por primera vez, el servidor cerró las sesiones 16 y 28, que seguían abiertas desde junio. Como la migración 001 no se ejecutó, su `terminada_en` (hora UTC de la última medición) queda unas 6 h después de su `iniciada_en` (hora local).
-- Todas las columnas numéricas son **FLOAT (float32)**: el CSV muestra valores como `2.3410000801086426`. Se pasan a DOUBLE en la Fase 5.
+- Desde la migración 005 las columnas numéricas de `mediciones` son **DOUBLE**. Las filas guardadas antes conservan su error de float32 (`2.3410000801086426`); las nuevas no. Las sesiones anteriores a la 005 tienen `puntos_esperados` y `puntos_recibidos` rellenados por la migración, pero `huecos` NULL (no calculados).
+- **La migración 005 ya se aplicó en la base local** (2026-11-10; respaldo previo en `~/tms-respaldos/tms_db_antes_fase5.sql`).
 - **Todo se guarda en UTC.** Las sesiones creadas antes de la Fase 1 en la BD local del usuario siguen en hora local: la migración 001 **no se ha ejecutado** y la decide el usuario.
 - En `setup_db.sql`, el usuario de la aplicación (`tms_user`) tiene solo `SELECT, INSERT, UPDATE, DELETE`, así que **las migraciones se ejecutan como root** (`sudo mysql tms_db < archivo.sql`). En la máquina de desarrollo del usuario, `tms_user` puede tener todavía `ALL PRIVILEGES` de la versión anterior. **Pide confirmación antes de ejecutar migraciones sobre su base**, o pídele que las ejecute.
 
@@ -231,7 +277,9 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 
 - **Verifica la API con `curl`** contra el servidor real y la MariaDB local, que está activa en 127.0.0.1:3306. **Borra las sesiones de prueba que crees** y deja la base como la encontraste.
 - **Verifica el frontend en el navegador integrado:** levanta el backend y Vite en segundo plano, abre `http://localhost:5173` y revisa la consola. Al terminar, detén los procesos.
-- `cd server && npm test` ejecuta `node --test`, que encuentra solo los `*.test.js` (en Node 22, `node --test tests/` no acepta una carpeta). Hoy: `tests/simulador.test.js` (10 pruebas, sin base de datos). La lógica pura va en módulos que no importan `config/database.js`, para poder probarla sin `.env`.
+- `cd server && npm test` (= `npm run test:unit`) ejecuta `node --test`, que encuentra solo los `*.test.js`: 53 pruebas sin base de datos. La lógica pura va en módulos que no importan `config/database.js`; `validadores.test.js` pone variables `DB_*` de relleno antes de importar (el pool no se conecta hasta la primera consulta).
+- `npm run test:integracion` levanta `app.js` en un puerto aleatorio contra **`tms_db_test`** (nunca `tms_db`; el helper lo impide), vacía sus tablas y crea admin/operador/observador. Sin la base, las pruebas se omiten con el comando para crearla. Variables: `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_USER`, `TEST_DB_PASSWORD`, `TEST_DB_NAME`.
+- **Sin sudo** (la contraseña de sudo no está disponible para Claude), los tests de integración se pueden correr con una MariaDB temporal del usuario: `mariadb-install-db --no-defaults --datadir=<dir>` y `mariadbd --no-defaults --datadir=<dir> --socket=~/.cache/tmsdb/sock --port=3307` (el socket debe tener una ruta de menos de 108 caracteres), luego `sed 's/CAMBIA_ESTA_CONTRASENA/x/' tests/setup_test_db.sql | mariadb -S ~/.cache/tmsdb/sock -u root` y `TEST_DB_PORT=3307 TEST_DB_PASSWORD=x npm run test:integracion`. Así se verificaron en la Fase 8.
 
 ---
 
@@ -242,11 +290,11 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 | 1. Base del backend | ✅ Hecha (commit `Fase1`) | Router en `/api` y `/`; CORS sin 500; pool en UTC; validación de entradas con 400/422; 404 y 409 para sesiones; errores en JSON; credenciales solo en `.env` y `.env.example`; migración 001; Bootstrap empaquetado; `npm audit fix`. |
 | 2. Login y usuarios | ✅ Hecha (sin commit todavía) | Tablas `usuarios` y `sesiones_login` (migración 002 y `setup_db.sql`); contraseñas con scrypt; cookie `tms_sesion` HttpOnly con token hasheado; 5 intentos por usuario+IP en 15 min (429); roles admin/operador/observador en todas las rutas (solo `/status` es público); cambio de contraseña forzado; protección del último admin; `npm run crear-admin`; limpieza horaria. Frontend: `AuthContext`, `LoginPage`, `CambiarPasswordPage`, `api/cliente.js` (401 → login), botones ocultos por rol y "Salir" en la Navbar. Verificado con 73 pruebas de curl y en el navegador. |
 | 3. Configuración, modos y simulador en el servidor | ✅ Hecha (sin commit todavía) | Migración 003: tabla `configuracion` y `sesiones.origen/paso_mm/medio`. Configuración en memoria con validación por clave y SSE. Una sola sesión abierta; cierre de huérfanas al arrancar. Simulador en el servidor (espira exacta con K y E por AGM, mulberry32, Box–Muller, huecos y saturaciones) a través de `services/ingesta.js`. Parámetros por sesión (7.0): velocidad, paso de 0,5/1/2 cm en X, Y y Z, y medio; filtros en el historial. Frontend sin simulación: todo por SSE, barra de configuración de la medición, etiqueta SIMULACIÓN/REAL y selector para admin. 10 tests con `npm test`; 66 comprobaciones con curl; probado en el navegador con dos pestañas. |
-| 4. Pico W como cliente | ⏳ Pendiente | — |
-| 5. Datos y trazabilidad | ⏳ Pendiente | — |
-| 6. Frontend funcional | ⏳ Pendiente | — |
-| 7. Accesibilidad y diseño (skills) | ⏳ Pendiente | — |
-| 8. Tests y despliegue | ⏳ Pendiente | — |
+| 4. Pico W como cliente | ✅ Hecha (sin commit todavía) | Migración 004 (`dispositivos`; `seq`, crudos, `saturado` y `ts_dispositivo` en `mediciones`, `UNIQUE(sesion_id, seq)`). Token de la Pico como SHA-256 (`requiereDispositivo`), latido con `sesion_activa` y `ultimo_seq`, lotes idempotentes en una transacción con `FOR UPDATE`, conversión cuentas → µT con offset, −4096 → saturado. Estado en línea con temporizador de 1 s y `event: dispositivo`. `POST /mediciones` responde 410. Emulador (`npm run emular-pico`), `docs/firmware-pico-w.md` y ejemplo en MicroPython. Frontend: `useStream` (un EventSource), `useDispositivo`, indicador en la Navbar (solo modo real) y panel provisional del token. 23 tests; verificado con curl, el emulador (pérdida 0,3 y duplicados: 147 seq sin huecos ni duplicados) y el navegador. |
+| 5. Datos y trazabilidad | ✅ Hecha (sin commit todavía) | Migración 005 (DOUBLE; `usuario_id`, `notas`, puntos esperados/recibidos, `huecos`, copias de configuración, versiones, `eliminada_en`). `services/version.js` (versión real en `/status`). Copias de la configuración al iniciar (el simulador usa las de la sesión); huecos y puntos recibidos al cerrar (también las huérfanas). Borrado lógico y restaurar, notas con permisos, `GET /sesiones/activa`, SSE con ids, búfer de 2000, `Last-Event-ID`, `retry`, `drain` y `resincronizar`; CSV en streaming con metadatos. Frontend (hecho junto con la Fase 6): carga de lo ya medido, historial con id real, origen, puntos, huecos, notas, eliminar con modal, ver eliminadas y restaurar. 33 tests; verificado con curl (845/147/32 puntos, huecos con `prob_hueco` 0,05, roles, reconexión del SSE) y en el navegador. |
+| 6. Frontend funcional | ✅ Hecha (sin commit todavía) | Reorganización en `pages/`, `components/layout/`, `context/` (Auth y Config) y hooks (`useStream`, `useSesionActiva`, `useDispositivo`, `useNavegacion`, `useTokensTema`); `useAcquisition` y `constants/system.js` eliminados. Navegación en la URL con la History API. Menú lateral accesible. Configuración por secciones (Barrido, Sensor, Simulación, Dispositivo con token, Visualización, Usuarios). Tema oscuro/claro/sistema con persistencia en el usuario y en localStorage (sin parpadeo). Gráficas corregidas (7.5). `plotly.js` → `plotly.js-gl3d-dist-min` cargado aparte. Bundle: de 5 746 kB (1 731 kB gzip) a 860 kB (247 kB gzip) inicial + 1 707 kB (542 kB gzip) diferido. Verificado en el navegador (ver notas). |
+| 7. Accesibilidad y diseño (skills) | ✅ Hecha (sin commit todavía) | Revisión con `web-design-guidelines` y correcciones con `frontend-design`; informe, plan, tokens finales y tabla de contraste AA en [docs/fase7-revision-diseno.md](docs/fase7-revision-diseno.md). Fuentes con @fontsource (sin CDN). Filtros del historial en la URL, foco al primer error, aviso de cambios sin guardar, `scroll-padding-top`, áreas seguras, `translate="no"`, espacios de no separación. Bx claro → `#0062A8`. El plan no esperó aprobación porque el usuario pidió trabajar sin pausas. |
+| 8. Tests y despliegue | ✅ Hecha (sin commit todavía) | `app.js` separado de `server.js`. Tests unitarios de validadores (400/422/403/404), contraseñas y límite de intentos (53 en total). Tests de integración (5) contra `tms_db_test`: CSV contra el simulador con semilla fija (1e-9), Pico emulada con pérdidas y duplicados, roles, borrado lógico y 409; pasan contra una MariaDB temporal. `setup_db.sql` limpio = base migrada (esquemas comparados tabla por tabla). COMANDOS.md reescrita para una Raspberry Pi 5 limpia; `deploy/tms-server.service`; README real; `mnt/` borrada. Despliegue probado sin root: `npm ci --omit=dev`, build a `<raíz>/dist`, servidor en producción y Nginx con una **copia** de `tms.conf` en puertos altos (HTTPS por IP y por `.local`, redirección, cookie `Secure`, SSE). |
 
 **Notas que deja la Fase 2 para las siguientes:**
 - El observador ve la barra de parámetros de la medición deshabilitada, sin Iniciar ni Detener. El menú lateral y los permisos finos de la interfaz llegan en la Fase 6.
@@ -258,12 +306,47 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 **Notas que deja la Fase 3 para las siguientes:**
 - **Límite del sensor:** la ingesta rechaza (422) cualquier componente por encima del **fondo de escala del ADC**, 2047 / `lsb_por_ga` × 100 µT (249,6 µT con el 1,9 Ga por defecto; 187,8 µT con 1,3 Ga), no del rango nominal. Así lo hace el HMC5883L real: por encima, el registro desborda (−4096).
 - **Rango por defecto 1,9 Ga (decisión del usuario, 2026-11-10).** Con `campo_centro_ut` 120, radio 25 mm y standoff 5 mm, el campo junto al hilo de la espira en Z = 0 llega a 213 µT. Con 1,3 Ga (fondo 187,8 µT) se perdían 4 de los 845 puntos; con 1,9 Ga (249,6 µT) no satura ninguno y un barrido de 0,5 cm guarda los 845 (verificado). Ya está cambiado en la migración 003, en `setup_db.sql`, en `POR_DEFECTO` y en la base local.
-- **Saturación inyectada** (`prob_saturacion`): el simulador pone `bz` = ±1,5 × el fondo de escala; la ingesta lo rechaza y el punto queda sin lectura. En la Fase 4 debe guardarse marcado como `saturado`, igual que esos 4 puntos reales.
-- **Semilla:** la sesión todavía no guarda la semilla usada; llega en la Fase 5 dentro de `config_simulacion`. Mientras tanto, mientras la configuración no cambie, la misma semilla reproduce exactamente el mismo barrido (verificado).
+- **Saturación inyectada** (`prob_saturacion`): el simulador pone `bz` = ±1,5 × el fondo de escala; desde la Fase 4 la ingesta lo guarda marcado como `saturado` (bz NULL, crudo −4096).
+- **Semilla:** desde la Fase 5 se guarda con la sesión en `config_simulacion`, y el simulador usa esa copia.
 - `PUT /api/configuracion/:clave` usa siempre el cuerpo `{ "valor": … }`, porque `express.json` no acepta un texto suelto. En `sensor`, `lsb_por_ga` se recalcula del rango y no se puede fijar a mano.
-- **Recarga a mitad del barrido:** la pestaña reconoce la sesión abierta (por `GET /api/configuracion`) y sigue recibiendo puntos, pero su contador empieza desde ese momento, y el "% del plano" es aproximado hasta la Fase 5 (`GET /sesiones/activa`).
-- El modal de inicio ahora es una **confirmación** con el resumen (velocidad, paso, medio, malla y total). Siguen los globales `window.__startModalShow`/`__stopModalShow`, que se quitan en la Fase 6.
-- El historial sigue numerando las tarjetas por posición ("Sesión #32"); el id real llega en la Fase 5. Los filtros son en el navegador; la API también acepta los mismos filtros.
+- **Recarga a mitad del barrido:** resuelto en las Fases 5 y 6 con `GET /sesiones/activa` (se dibujan todos los puntos anteriores y el "% del plano" es exacto).
+- El modal de inicio es una **confirmación** con el resumen (velocidad, paso, medio, malla y total). Desde la Fase 6 los modales se abren con refs (sin globales de `window`).
+- El historial muestra el id real desde la Fase 5 y filtra en el servidor (el día se filtra en el navegador, en la zona horaria de `datos.zona_horaria`).
+
+**Notas que deja la Fase 4 para las siguientes:**
+- **Saturación (decisión):** el eje que vale −4096 se guarda NULL, con su crudo, y la lectura `saturado = 1`; `magnitud` también queda NULL. Las saturadas **no cuentan** para MAX ni MIN (`CASE WHEN saturado = 0`), y `GET /sesiones` devuelve además `saturadas`. El simulador hace lo mismo: un eje por encima del fondo de escala ya no se rechaza (422), se guarda como saturado con crudo −4096 (los demás crudos quedan NULL).
+- `seq`: el simulador lo numera desde 1 por sesión en `services/ingesta.js` (contador en memoria que se inicializa con `MAX(seq)`); los huecos del simulador **no** dejan saltos en `seq`. La Pico manda su propio `seq` y, si se reinicia, sigue desde `ultimo_seq + 1` del latido.
+- Solo hay un dispositivo "principal" (el de menor id): el estado en línea, el token y `PATCH /dispositivo` actúan sobre él. La tabla admite más, pero la interfaz no.
+- Las sesiones `hw` **no se cierran solas** al completar la malla (la Pico puede mandar varias lecturas por punto): las cierra el operador. El emulador avisa "Malla completa".
+- El latido se escribe en la BD como máximo cada 30 s si no cambia nada importante (firmware, IP o volver a estar en línea). El desfase de reloj (servidor − Pico) se guarda en memoria (`desfase_ms` en el estado) y se registra en el log cuando cambia más de 1 s.
+- `frontend/src/hooks/useStream.js` ya es el EventSource único que pide la Fase 6. El panel del token es provisional (dashboard, admin y modo real); pasa a Configuración › Dispositivo en la Fase 6.
+- `.claude/launch.json` tiene las entradas `backend` y `frontend` para el navegador integrado.
+- Para matar el emulador desde un comando, no uses `pkill -f emular-pico` en la misma línea que lo lanza: el patrón coincide con la propia shell. Guarda el PID con `$!`.
+
+**Notas que deja la Fase 5 para las siguientes:**
+- `huecos` se guarda como objeto `{total, posiciones}` (no una lista sola) para que el total no se pierda cuando hay más de 1000. Un punto cuenta como medido si tiene al menos una lectura **no saturada** a menos de 1 mm (`TOLERANCIA_POSICION_MM`); por eso una lectura saturada deja un hueco.
+- `puntos_recibidos` es el número de filas guardadas (incluye las saturadas).
+- `version_firmware` sale del último latido al iniciar; si la sesión real se crea antes del primer latido, se completa con el primero que llegue (`sesiones.anotarFirmware`).
+- Los ids del SSE empiezan en `Date.now()` al arrancar el proceso: un `Last-Event-ID` de un proceso anterior siempre queda fuera del búfer y recibe `resincronizar`.
+- Borrado definitivo: no está en la API. COMANDOS.md documenta la consulta SQL (sesiones eliminadas hace más de 30 días).
+- Las sesiones eliminadas responden 404 en `/mediciones` y `/csv` para todos; un admin debe restaurarlas antes de exportar.
+
+**Notas que deja la Fase 6 para las siguientes:**
+- **Ajustes del tema claro (contraste AA, documentado):** Bz `#007A55` → `#00704D` (sobre la superficie `#EDEFF2` no llegaba a 4,5:1) y Bx `#007C8C` → `#0062A8` (azul: el verde azulado no se distinguía de Bz en la gráfica; ajuste de la Fase 7). Texto secundario claro `#5C6273`. El oscuro no cambió (se verificó con un diff del bloque `:root`).
+- **Mapa 3D:** mapeo diestro laboratorio (x, y, z) → Three.js (x − c, z, −(y − c)) y vector (Bx, Bz, −By); antes era un espejo. Ejes: X cian, Y magenta, Z verde (como Bx, By, Bz). Flechas de 1,5 a 9 mm según |B| / |B| máximo de la sesión, con leyenda. El canvas se crea dentro del efecto (tras `forceContextLoss` no se puede reutilizar y StrictMode monta dos veces). Materiales compartidos por plano; nunca se liberan las geometrías de `ArrowHelper`.
+- **Gráfica de líneas:** eje X = índice del punto en la malla (`indiceEnMalla`), así los huecos se ven como cortes.
+- **Superficie:** se redibuja como máximo cada 350 ms; `cmin`/`cmax` de toda la sesión; `uirevision` conserva la cámara.
+- `frontend/.npmrc` tiene `legacy-peer-deps=true` para que npm no instale `plotly.js` (dependencia par de react-plotly.js); con eso desaparecen las vulnerabilidades críticas de `maplibre-gl`.
+- El historial descarta respuestas viejas (condición de carrera al cambiar varios filtros seguidos; encontrada y corregida al verificar).
+- "Medir cero" del sensor queda **pendiente**: el backend no lo soporta.
+- Medición de rendimiento: durante un barrido de 845 puntos a 20 ms/punto no hubo ninguna tarea larga (> 50 ms) en el hilo principal. El panel del navegador estaba oculto, así que no se pudo medir el tiempo entre cuadros.
+- Los mensajes 422 del servidor nombran el campo técnico (`umbral_desconexion_s debe ser…`); el formulario los muestra junto al campo.
+
+**Notas que deja la Fase 7:**
+- Escala tipográfica: Rajdhani 700 para títulos (h1 1,6 rem; h2 1,15–1,2 rem), Inter 400/500 para la interfaz (13–14 px, minúscula normal, sin mayúsculas espaciadas ni «//»), Share Tech Mono solo en cifras con `tabular-nums`. Mínimo 12 px.
+- Un solo movimiento con sentido: el destello de la fila nueva de la tabla (más el punto de «Adquiriendo»). Todo se apaga con movimiento reducido.
+- `--text-dim` y `--guinda-bright` del tema oscuro no llegan a AA como texto: no se usan para texto (solo bordes, iconos y fondos de botón con texto blanco).
+- Títulos en mayúscula inicial (norma del español), no *Title Case*.
 
 **Cuestiones abiertas que el usuario todavía no ha confirmado:**
 - Si la solución salina con voltaje debe simularse con otra física (hoy es la misma espira; el medio solo es una etiqueta).
@@ -271,10 +354,18 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - Cómo se mueve el eje Z.
 - La dirección I2C real del sensor.
 
+**Notas que deja la Fase 8 (pendientes y mejoras futuras):**
+- ⚠ **Contraseña publicada:** el `.env` local usa `DB_PASSWORD=tms_password`, que aparece en el historial de git (commit `22d3e7f`, quitada en `010cb13`). No se reescribió el historial. En la Raspberry usa otra contraseña (COMANDOS.md 3.1); si el repositorio es público, cámbiala también en local.
+- **Acceso desde el hotspot (comprobado con Nginx y una copia de `tms.conf`):** por HTTPS funciona con la IP o cualquier nombre, porque `tms.conf` es el único servidor en el 443. Por HTTP, el sitio `default` de Raspberry Pi OS captura `http://<IP>`; la guía lo deshabilita y recomienda el nombre de host `tms` → `https://tms.local` por mDNS. `tms.ipn.local` no se resuelve por mDNS (dos etiquetas).
+- La versión en `/status` es `3.0.0+desconocido` si `/opt/tms` no es un repositorio git (por ejemplo, copiado con rsync); el unit de systemd agrega `safe.directory` para el caso con git.
+- Pendiente con hardware: probar el firmware de ejemplo con la Pico W y el HMC5883L reales (escaneo I2C, orden X, Z, Y, signos con un imán).
+- Pendiente de decidir: «Medir cero» del sensor (necesita un endpoint), qué hacer con `lecturas_por_punto > 1` (promediar en la Pico o en el servidor), si las sesiones `hw` deben cerrarse solas al completar la malla, y las cuestiones abiertas de abajo.
+- Mejoras posibles: pasar Lighthouse o axe cuando se puedan instalar; mostrar en el historial la superficie de una sesión pasada; paginar `GET /sesiones` si el historial crece mucho; traducir a lenguaje llano los mensajes 422 del servidor.
+
 **Vulnerabilidades que quedan:**
-- En el servidor: 2 moderadas en `nodemon`, solo de desarrollo.
-- En el frontend: `esbuild` y `vite`, que solo afectan al servidor de desarrollo (corregirlas exige subir Vite de versión mayor, y no se hace).
-- También en el frontend: `plotly.js` → `maplibre-gl`, que desaparece en la Fase 6 al usar `plotly.js-gl3d-dist-min`.
+- En producción (`npm audit --omit=dev`): **0** en el servidor y **0** en el frontend (2026-11-10).
+- Solo de desarrollo: 2 moderadas en `nodemon` → `minimatch` (`npm audit fix` no las resuelve) y `esbuild`/`vite` en el frontend (corregirlas exige subir Vite de versión mayor, y no se hace). No llegan a la Raspberry: allí se instala con `--omit=dev` y Vite solo se usa para compilar.
+- `plotly.js` → `maplibre-gl` desapareció en la Fase 6 (`plotly.js-gl3d-dist-min` + `.npmrc` con `legacy-peer-deps`).
 
 ---
 
@@ -357,8 +448,8 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
 
 ### 7.3 Pico W (Fase 4)
 - **Tabla `dispositivos`:** `id, nombre, token_hash, activo, creado_en, ultimo_latido DATETIME(3), ip, firmware, rssi, uptime_s`.
-- **Token:** lo genera un admin con `POST /api/dispositivo/token`, que lo muestra **una sola vez**. Se guarda como SHA-256. El dispositivo lo envía como `Authorization: Bearer <token>`.
-- **Latido:** `POST /api/dispositivo/latido {firmware, rssi, uptime_s, ts_dispositivo_ms}` cada `intervalo_latido_s`. Responde `{ ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, barrido, sensor} | null, servidor_ts_ms }`. Así la Pico sabe cuándo empezar a enviar sin necesidad de otra tecnología.
+- **Token:** lo genera un admin con `POST /api/dispositivo/token`, que lo muestra **una sola vez**. Se guarda como SHA-256. El dispositivo lo envía como `Authorization: Bearer <token>`. Se revoca con `DELETE /api/dispositivo/token` (agregado en la Fase 4).
+- **Latido:** `POST /api/dispositivo/latido {firmware, rssi, uptime_s, ts_dispositivo_ms}` cada `intervalo_latido_s`. Responde `{ ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, grid_n, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} | null, intervalo_latido_s, servidor_ts_ms }`. Así la Pico sabe cuándo empezar a enviar sin necesidad de otra tecnología, y `ultimo_seq` le permite seguir numerando tras un reinicio.
 - **Ingesta por lotes:** `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms}]}`.
   - Solo en modo real y con la sesión abierta.
   - El servidor convierte las cuentas a µT con la configuración del sensor y resta el offset.
@@ -406,26 +497,26 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
 - **Navegación en la URL** con la History API (`?vista=dashboard|historial|configuracion&seccion=…`), sin react-router.
 - **Gráficas:** se mantienen las cinco, con los ajustes de la Fase 6 (ver el prompt correspondiente).
 
-### 7.6 Hallazgos de la auditoría que siguen abiertos
+### 7.6 Hallazgos de la auditoría (todos atendidos)
 
-| Hallazgo | Fase que lo resuelve |
+| Hallazgo | Cómo quedó |
 |---|---|
-| Datos simulados y reales mezclados (C1) | Fases 3 y 5 |
-| Unidades y calibración (C3) | Fases 3 a 5 |
-| Pérdida silenciosa de muestras (C4) | Fases 4 a 6 |
-| Inyección y borrado sin autenticación (A3) | Fase 2 (autenticación y roles, hecho); Fase 5 (borrado lógico) |
-| Simulador incorrecto (A5) | Fase 3 (hecho) |
-| Ningún test (A6) | Fase 8 |
-| Metadatos de reproducibilidad (A7) | Fase 5 |
-| Precisión float32 (M1) | Fase 5 |
-| Gráficas engañosas (M2–M4) | Fase 6 |
-| Condiciones de carrera (M5) | Fases 3 y 6 |
-| Ritmo marcado por el navegador (M6) | Fase 3 (hecho) |
-| Rendimiento (M7) | Fase 6 |
-| SSE sin ids (M8) | Fase 5 |
-| CSV sin metadatos (M10) | Fase 5 |
-| KPI desfasado (B1) | Fase 6 |
-| Documentación y carpeta `mnt/` (B5) | Fase 8 |
+| Datos simulados y reales mezclados (C1) | Resuelto: `origen` por sesión, modo de operación bloqueado con una sesión abierta, etiqueta SIMULACIÓN, filtro por origen (Fases 3 y 5). |
+| Unidades y calibración (C3) | Resuelto: µT en toda la API, cuentas crudas guardadas, conversión con ganancia y offset en el servidor, copias de la configuración del sensor por sesión (Fases 3 a 5). |
+| Pérdida silenciosa de muestras (C4) | Resuelto: `seq` idempotente con reintentos, huecos calculados y listados, SSE recuperable con `Last-Event-ID` (Fases 4 a 6). |
+| Inyección y borrado sin autenticación (A3) | Resuelto: login con roles (Fase 2), token de la Pico (Fase 4), borrado lógico (Fase 5). |
+| Simulador incorrecto (A5) | Resuelto en la Fase 3 (espira exacta, verificado contra la fórmula en el eje). |
+| Ningún test (A6) | Resuelto: 53 unitarios y 5 de integración (Fase 8). |
+| Metadatos de reproducibilidad (A7) | Resuelto: configuración, semilla, versiones de software y firmware con cada sesión; CSV con encabezado (Fase 5). |
+| Precisión float32 (M1) | Resuelto para los datos nuevos (DOUBLE, Fase 5); los viejos conservan su error. |
+| Gráficas engañosas (M2–M4) | Resuelto: eje X por posición con huecos visibles, escala de color fija por sesión, flechas relativas al máximo y orientación diestra (Fase 6). |
+| Condiciones de carrera (M5) | Resuelto: cola de sesiones, transacción con `FOR UPDATE` en los lotes, guardia contra doble inicio, respuestas viejas descartadas en el historial (Fases 3 a 6). |
+| Ritmo marcado por el navegador (M6) | Resuelto en la Fase 3. |
+| Rendimiento (M7) | Resuelto: un render por cuadro, Plotly diferido y limitado, Three.js bajo demanda, bundle inicial de 860 kB (Fase 6). |
+| SSE sin ids (M8) | Resuelto en la Fase 5. |
+| CSV sin metadatos (M10) | Resuelto en la Fase 5. |
+| KPI desfasado (B1) | Resuelto: el KPI muestra la última lectura recibida (Fase 6). |
+| Documentación y carpeta `mnt/` (B5) | Resuelto: COMANDOS.md, README, firmware y diseño documentados; `mnt/` borrada (Fase 8). |
 
 ## graphify
 

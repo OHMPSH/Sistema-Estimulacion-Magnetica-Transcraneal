@@ -4,7 +4,7 @@
  * Validación de entradas antes de llegar al controlador.
  *
  * Cada middleware deja el valor ya convertido y validado en `req`
- * (req.idSesion, req.modo, req.medicion, req.credenciales…) o responde:
+ * (req.idSesion, req.nuevaSesion, req.lote, req.credenciales…) o responde:
  *   400 — falta el cuerpo o tiene un formato inválido
  *   422 — los valores no cumplen las reglas (físicas del barrido,
  *         formato de usuario, longitud de contraseña…)
@@ -15,18 +15,18 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { tamanoPlacaMM } from '../config/barrido.js';
 import { ROLES, TEMAS } from '../config/roles.js';
 import { PASOS_MM, MEDIOS } from '../services/geometria.js';
 import { CLAVES } from '../services/validacionConfiguracion.js';
 import { obtener as obtenerConfiguracion } from '../services/configuracion.js';
 import { errorDePassword, LONGITUD_MAXIMA } from '../services/passwords.js';
+import { MAX_LECTURAS_LOTE, tsDispositivoValido } from '../services/conversionSensor.js';
 
 const MODOS = ['DC', 'AC'];
 const ORIGENES = ['sim', 'hw'];
 
-const esNumeroFinito = v => typeof v === 'number' && Number.isFinite(v);
 const esEnteroPositivo = v => Number.isSafeInteger(v) && v > 0;
+const esObjeto = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 const rechazar = (res, status, errores) =>
   res.status(status).json({ ok: false, error: errores.join('; '), errores });
@@ -69,8 +69,8 @@ export function validarNuevaSesion(req, res, next) {
 }
 
 /**
- * Query de GET /api/sesiones → req.filtros { modo?, pasoMM?, medio?, origen? }
- * Un valor vacío equivale a "sin filtro".
+ * Query de GET /api/sesiones → req.filtros { modo?, pasoMM?, medio?, origen?, incluirEliminadas? }
+ * Un valor vacío equivale a "sin filtro". incluir_eliminadas=1 solo para admin (403).
  */
 export function validarFiltrosSesiones(req, res, next) {
   const q = req.query;
@@ -95,8 +95,36 @@ export function validarFiltrosSesiones(req, res, next) {
   if (origen !== undefined) {
     if (ORIGENES.includes(origen)) filtros.origen = origen; else errores.push(`origen debe ser ${ORIGENES.join(' o ')}`);
   }
+  // Ver también las eliminadas (borrado lógico): solo admin
+  const eliminadas = texto(q.incluir_eliminadas);
+  if (eliminadas !== undefined) {
+    if (!['0', '1'].includes(eliminadas)) errores.push('incluir_eliminadas debe ser 0 o 1');
+    else if (eliminadas === '1') {
+      if (req.usuario?.rol !== 'admin') {
+        return rechazar(res, 403, ['Solo un admin puede ver las sesiones eliminadas']);
+      }
+      filtros.incluirEliminadas = true;
+    }
+  }
   if (errores.length > 0) return rechazar(res, 422, errores);
   req.filtros = filtros;
+  next();
+}
+
+/** Máximo de caracteres de las notas de una sesión */
+export const NOTAS_MAXIMO = 5000;
+
+/** body de PATCH /sesiones/:id → req.notas (texto, puede quedar vacío) */
+export function validarNotas(req, res, next) {
+  const body = req.body;
+  if (!esObjeto(body)) return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
+  if (body.notas === undefined) return rechazar(res, 400, ['Campos faltantes: notas']);
+  if (body.notas !== null && typeof body.notas !== 'string') return rechazar(res, 400, ['notas debe ser un texto']);
+  const notas = (body.notas ?? '').trim();
+  if (notas.length > NOTAS_MAXIMO) {
+    return rechazar(res, 422, [`notas admite como máximo ${NOTAS_MAXIMO} caracteres (recibidos: ${notas.length})`]);
+  }
+  req.notas = notas;
   next();
 }
 
@@ -120,44 +148,68 @@ export function validarClaveConfiguracion(req, res, next) {
   next();
 }
 
+// ─────────────────────────────────────────────────────────────
+// DISPOSITIVO (Pico W, Fase 4)
+// ─────────────────────────────────────────────────────────────
+
 /**
- * body de POST /api/mediciones → req.medicion
- * Unidades: posiciones en mm, campo en μT.
- * Aquí se revisan la forma y los tipos, y que x e y caigan en la placa
- * vigente. El plano Z (que depende del paso de la sesión) y el rango
- * del sensor los revisa services/ingesta.js, que también usa el simulador.
+ * body de POST /dispositivo/latido → req.latido
+ * { firmware?, rssi?, uptime_s?, ts_dispositivo_ms? }: todos opcionales,
+ * pero si vienen deben tener el tipo correcto.
  */
-export function validarMedicion(req, res, next) {
-  const body = req.body;
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+export function validarLatido(req, res, next) {
+  const body = req.body ?? {};
+  if (typeof body !== 'object' || Array.isArray(body)) {
     return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
   }
-
+  const { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts } = body;
   const errores = [];
-  const requeridos = ['sesionId', 'xMM', 'yMM', 'zMM', 'bx', 'by', 'bz'];
-  const faltantes = requeridos.filter(k => body[k] === undefined || body[k] === null);
-  if (faltantes.length > 0) {
-    return rechazar(res, 400, [`Campos faltantes: ${faltantes.join(', ')}`]);
+  if (firmware !== undefined && (typeof firmware !== 'string' || firmware.length > 40)) {
+    errores.push('firmware debe ser un texto de hasta 40 caracteres');
   }
-
-  const { sesionId, xMM, yMM, zMM, bx, by, bz } = body;
-
-  if (!esEnteroPositivo(sesionId)) errores.push('sesionId debe ser un entero positivo');
-
-  const placa = tamanoPlacaMM();
-  for (const [nombre, v] of [['xMM', xMM], ['yMM', yMM]]) {
-    if (!esNumeroFinito(v)) errores.push(`${nombre} debe ser un número`);
-    else if (v < 0 || v > placa) errores.push(`${nombre} fuera de la placa (0 a ${placa} mm): ${v}`);
+  if (rssi !== undefined && (!Number.isInteger(rssi) || rssi < -127 || rssi > 0)) {
+    errores.push('rssi debe ser un entero entre −127 y 0 (dBm)');
   }
-  if (!esNumeroFinito(zMM)) errores.push('zMM debe ser un número');
-
-  for (const [nombre, v] of [['bx', bx], ['by', by], ['bz', bz]]) {
-    if (!esNumeroFinito(v)) errores.push(`${nombre} debe ser un número finito`);
+  if (uptime !== undefined && (!Number.isSafeInteger(uptime) || uptime < 0 || uptime > 4294967295)) {
+    errores.push('uptime_s debe ser un entero no negativo');
   }
-
+  if (ts !== undefined && ts !== 0 && !tsDispositivoValido(ts)) {
+    errores.push('ts_dispositivo_ms debe ser un epoch en milisegundos (UTC), o 0 si la Pico aún no sincronizó su reloj');
+  }
   if (errores.length > 0) return rechazar(res, 422, errores);
+  req.latido = { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts || null };
+  next();
+}
 
-  req.medicion = { sesionId, xMM, yMM, zMM, bx, by, bz };
+/**
+ * body de POST /dispositivo/mediciones → req.lote { sesionId, lecturas }
+ * Aquí solo se revisa la forma del lote; cada lectura la valida el
+ * servicio de ingesta, para rechazar solo las malas y aceptar el resto.
+ */
+export function validarLoteDispositivo(req, res, next) {
+  const body = req.body;
+  if (!esObjeto(body)) return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
+  const { sesionId, lecturas } = body;
+  if (sesionId === undefined || lecturas === undefined) {
+    return rechazar(res, 400, ['Campos faltantes: sesionId y lecturas']);
+  }
+  if (!Array.isArray(lecturas)) return rechazar(res, 400, ['lecturas debe ser una lista']);
+  const errores = [];
+  if (!esEnteroPositivo(sesionId)) errores.push('sesionId debe ser un entero positivo');
+  if (lecturas.length === 0) errores.push('lecturas no puede estar vacía');
+  if (lecturas.length > MAX_LECTURAS_LOTE) errores.push(`Como máximo ${MAX_LECTURAS_LOTE} lecturas por lote (recibidas: ${lecturas.length})`);
+  if (errores.length > 0) return rechazar(res, 422, errores);
+  req.lote = { sesionId, lecturas };
+  next();
+}
+
+/** body de PATCH /dispositivo → req.cambiosDispositivo { activo } */
+export function validarCambiosDispositivo(req, res, next) {
+  const body = req.body;
+  if (!esObjeto(body)) return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
+  if (body.activo === undefined) return rechazar(res, 400, ['Campos faltantes: activo']);
+  if (typeof body.activo !== 'boolean') return rechazar(res, 400, ['activo debe ser true o false']);
+  req.cambiosDispositivo = { activo: body.activo };
   next();
 }
 
@@ -165,7 +217,6 @@ export function validarMedicion(req, res, next) {
 // USUARIOS Y LOGIN (Fase 2)
 // ─────────────────────────────────────────────────────────────
 
-const esObjeto = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const esTexto  = v => typeof v === 'string';
 
 /** Nombre de usuario: 3 a 32 caracteres, minúsculas, dígitos, punto, guion y guion bajo */

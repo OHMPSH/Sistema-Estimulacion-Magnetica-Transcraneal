@@ -1,66 +1,59 @@
 /**
  * components/ui/DataTable.jsx
- * Tabla de las últimas mediciones con highlight de fila nueva.
+ * Últimas lecturas, la más nueva arriba. Muestra seq, posición, la
+ * marca de saturado y los valores con sus unidades. El número de filas
+ * sale de la configuración de visualización.
  */
-import React from 'react';
-import { Z_COLORS_HEX } from '../../constants/system.js';
+import React, { memo, useMemo } from 'react';
+import { numero, horaPrecisa } from '../../utils/formato.js';
 
-export function DataTable({ rows }) {
+export const DataTable = memo(function DataTable({ mediciones, filas, decimales, zona }) {
+  const visibles = useMemo(() => mediciones.slice(-filas).reverse(), [mediciones, filas]);
+  const v = x => (x === null || x === undefined ? <span className="texto-saturado">SAT</span> : numero(x, decimales));
+
   return (
-    <div className="data-table-card fade-in">
+    <section className="data-table-card" aria-labelledby="titulo-tabla">
       <div className="data-table-header">
-        <div className="chart-title">
-          <i className="bi bi-table me-2" style={{ color: 'var(--guinda-bright)' }} />
-          Últimas Lecturas
-        </div>
-        <span className="records-badge">{rows.length} registros</span>
+        <h2 id="titulo-tabla" className="chart-title"><i className="bi bi-table me-2 icono-guinda" aria-hidden="true" /> Últimas lecturas</h2>
+        <span className="records-badge cifra">{visibles.length} de {mediciones.length}</span>
       </div>
-
-      <div className="data-table-scroll">
+      <div className="data-table-scroll" tabIndex={0} role="region" aria-label="Tabla de las últimas lecturas (se puede desplazar)">
         <table className="tms-table">
+          <caption className="visually-hidden">Últimas {filas} lecturas de la sesión, de la más nueva a la más antigua</caption>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Timestamp</th>
-              <th>Nivel Z</th>
-              <th>Bx (μT)</th>
-              <th>By (μT)</th>
-              <th>Bz (μT)</th>
-              <th>|B| (μT)</th>
+              <th scope="col">Seq</th>
+              <th scope="col">Hora</th>
+              <th scope="col">X (mm)</th>
+              <th scope="col">Y (mm)</th>
+              <th scope="col">Z (mm)</th>
+              <th scope="col">Bx (µT)</th>
+              <th scope="col">By (µT)</th>
+              <th scope="col">Bz (µT)</th>
+              <th scope="col">|B| (µT)</th>
+              <th scope="col">Estado</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 30 }}>
-                  <i className="bi bi-broadcast me-2" />
-                  Esperando inicio de medición…
-                </td>
+            {visibles.length === 0 ? (
+              <tr><td colSpan={10} className="tabla-vacia">Esperando lecturas…</td></tr>
+            ) : visibles.map((r, i) => (
+              <tr key={r.seq ?? `${r.timestamp}-${i}`} className={i === 0 ? 'new-row' : ''}>
+                <td>{r.seq ?? '—'}</td>
+                <td>{horaPrecisa(r.timestamp, zona)}</td>
+                <td>{numero(r.xMM, 1)}</td>
+                <td>{numero(r.yMM, 1)}</td>
+                <td>{numero(r.zMM, 1)}</td>
+                <td className="val-bx">{v(r.bx)}</td>
+                <td className="val-by">{v(r.by)}</td>
+                <td className="val-bz">{v(r.bz)}</td>
+                <td className="val-mag">{r.saturado ? <span className="texto-saturado">—</span> : numero(r.magnitud, decimales)}</td>
+                <td>{r.saturado ? <span className="marca-saturado">Saturada</span> : 'OK'}</td>
               </tr>
-            ) : (
-              rows.map((r, i) => {
-                const zColor = Z_COLORS_HEX[r.zIdx] ?? Z_COLORS_HEX[0];
-                return (
-                  <tr key={r.key} className={i === 0 ? 'new-row' : ''}>
-                    <td style={{ color: 'var(--text-dim)' }}>{rows.length - i}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{r.tsStr}</td>
-                    <td>
-                      <span className="z-badge"
-                        style={{ background: `${zColor}22`, border: `1px solid ${zColor}`, color: zColor }}>
-                        Z{r.zIdx} · {r.zMM}mm
-                      </span>
-                    </td>
-                    <td className="val-bx">{r.bx.toFixed(4)}</td>
-                    <td className="val-by">{r.by.toFixed(4)}</td>
-                    <td className="val-bz">{r.bz.toFixed(4)}</td>
-                    <td className="val-mag">{r.magnitud.toFixed(4)}</td>
-                  </tr>
-                );
-              })
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
-}
+});

@@ -1,543 +1,317 @@
-# GUÍA DE ARRANQUE — TMS v3.0
-## MariaDB + Node.js MVC + React + Nginx
+# Guía de instalación y operación — TMS en la Raspberry Pi 5
 
----
+Esta guía deja el sistema funcionando en una **Raspberry Pi 5 limpia con Raspberry Pi OS** (64 bits): MariaDB, el backend de Node.js como servicio de systemd, el frontend compilado y Nginx con HTTPS. Al final están la Pico W, las comprobaciones, la solución de problemas y los respaldos.
 
-## ESTRUCTURA FINAL
+Convenciones:
+- El proyecto vive en **`/opt/tms`** (es la ruta que usa `nginx/tms.conf`).
+- Los comandos con `sudo` se ejecutan en la Raspberry con tu usuario administrador (por ejemplo `pi`).
+- Donde dice `<IP>`, es la IP de la Raspberry en el hotspot (`hostname -I`).
 
 ```
-PT/
-├── .gitignore
-├── server/
-│   ├── config/                  ← pool de MariaDB, barrido, roles
-│   ├── controllers/             ← auth, usuarios, mediciones
-│   ├── models/                  ← Medicion, Usuario, SesionLogin (todo el SQL)
-│   ├── routes/                  ← auth, usuarios, mediciones
-│   ├── services/                ← contraseñas, cookie de sesión, límite de intentos
-│   ├── scripts/crear-admin.js   ← crea o restablece el usuario admin
-│   ├── .env                     ← credenciales (no subir a Git)
-│   ├── .env.example             ← plantilla del .env
-│   ├── middleware/              ← CORS, validación y errores
-│   ├── migrations/              ← cambios de esquema (ejecutar como root)
-│   ├── package.json
-│   ├── server.js                ← entry point Express
-│   └── setup_db.sql             ← script inicial de MariaDB
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── charts/
-│   │   │   │   ├── Canvas3D.jsx     ← mapa vectorial 3D (flechas)
-│   │   │   │   └── LineChart.jsx    ← gráfica Bx/By/Bz
-│   │   │   ├── modals/
-│   │   │   │   ├── StartModal.jsx
-│   │   │   │   └── StopModal.jsx
-│   │   │   ├── panels/
-│   │   │   │   ├── ControlPanel.jsx
-│   │   │   │   └── HistorialPage.jsx  ← carga desde MariaDB
-│   │   │   └── ui/
-│   │   │       ├── DataTable.jsx
-│   │   │       ├── KpiCards.jsx
-│   │   │       └── Navbar.jsx
-│   │   ├── constants/
-│   │   │   └── system.js            ← constantes físicas
-│   │   ├── hooks/
-│   │   │   ├── useAcquisition.js    ← lógica central + Fetch API
-│   │   │   └── useServerStatus.js
-│   │   ├── styles/
-│   │   │   └── global.css
-│   │   ├── api/cliente.js           ← fetch con cookie; 401 → login
-│   │   ├── context/AuthContext.jsx
-│   │   ├── pages/                   ← LoginPage, CambiarPasswordPage
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-│
-└── nginx/
-    └── tms.conf
+/opt/tms
+├── server/       backend (Express + MariaDB)        → servicio tms-server, 127.0.0.1:4000
+├── frontend/     código del dashboard (React + Vite) → se compila a /opt/tms/dist
+├── dist/         lo que sirve Nginx (se genera)
+├── nginx/        tms.conf (se copia tal cual)
+├── deploy/       tms-server.service (systemd)
+├── docs/         firmware de la Pico W, prompts, revisión de diseño
+└── firmware/     ejemplo en MicroPython para la Pico W
 ```
 
 ---
 
-## PASO 1 — Instalar MariaDB en la Raspberry Pi
+## 1. Paquetes del sistema
 
 ```bash
-# Instalar MariaDB
-sudo apt update
-sudo apt install -y mariadb-server
-
-# Iniciar el servicio
-sudo systemctl start mariadb
-sudo systemctl enable mariadb   # que arranque automático al reiniciar
-
-# Verificar que está corriendo
-sudo systemctl status mariadb
-# Debe mostrar: active (running)
+sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y git curl mariadb-server nginx openssl avahi-daemon
 ```
 
----
-
-## PASO 2 — Crear la base de datos y el usuario
-
-Antes de ejecutar el script, elige una contraseña para el usuario de la
-base y escríbela en dos lugares:
-
-1. En `PT/server/setup_db.sql`, en lugar de `CAMBIA_ESTA_CONTRASENA`.
-2. En `PT/server/.env`, en `DB_PASSWORD` (crea el `.env` copiando la plantilla).
+**Node.js 20 LTS.** El de los repositorios de Raspberry Pi OS puede ser más viejo; se instala el de NodeSource:
 
 ```bash
-cp PT/server/.env.example PT/server/.env
-nano PT/server/.env          # completar DB_PASSWORD y revisar NODE_ENV
+curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
+sudo bash /tmp/nodesource_setup.sh
+sudo apt install -y nodejs
+node --version      # v20.x
 ```
 
-No subas a Git ni el `.env` ni el `setup_db.sql` con la contraseña real.
+Servicios al arrancar:
 
 ```bash
-# Ejecutar el script SQL como root
-# (este comando solo se corre UNA vez)
-sudo mysql -u root < PT/server/setup_db.sql
-
-# Deberías ver al final:
-# +------------------------------------------+
-# | resultado                                |
-# +------------------------------------------+
-# | Base de datos TMS creada correctamente.  |
-# +------------------------------------------+
+sudo systemctl enable --now mariadb nginx
 ```
 
-### Verificar que funcionó
+## 2. Copiar el proyecto a /opt/tms
+
+Con git (si el repositorio está en GitHub):
 
 ```bash
-# Entrar a MariaDB como el nuevo usuario
-mysql -u tms_user -p tms_db
-# Contraseña: la que pusiste en DB_PASSWORD
-
-# Dentro de MariaDB, verificar las tablas:
-SHOW TABLES;
-# Debe mostrar: mediciones | sesiones | sesiones_login | usuarios
-
-# Ver la estructura de la tabla mediciones:
-DESCRIBE mediciones;
-
-# Salir
-EXIT;
+sudo mkdir -p /opt/tms && sudo chown "$USER": /opt/tms
+git clone <URL-del-repositorio> /opt/tms
 ```
 
-### Si ya tenías la base de una versión anterior
+O copiando la carpeta desde tu computadora (sin `node_modules` ni `.env`):
 
-Las versiones anteriores creaban el usuario con una contraseña publicada en
-el repositorio y con todos los privilegios. Cámbiala y reduce los permisos
-(pon la misma contraseña nueva en `DB_PASSWORD` del `.env`):
+```bash
+# en tu computadora, desde la carpeta que contiene PT/
+rsync -av --exclude node_modules --exclude .env --exclude dist PT/ pi@<IP>:/opt/tms/
+```
+
+## 3. Base de datos
+
+### 3.1 Instalación limpia
+
+1. Elige una contraseña para el usuario de la base, **distinta de `tms_password`** (esa aparece en el historial de git del proyecto).
+2. Ponla en el script (sin guardar el cambio en git) y ejecútalo como root:
+
+```bash
+cd /opt/tms/server
+sed 's/CAMBIA_ESTA_CONTRASENA/tu_contraseña/' setup_db.sql | sudo mysql -u root
+```
+
+`setup_db.sql` crea `tms_db`, el usuario `tms_user` con permisos mínimos (`SELECT, INSERT, UPDATE, DELETE`) y **todas** las tablas en su versión final. En una instalación limpia **no hace falta ninguna migración**.
+
+Comprobar:
+
+```bash
+mysql -u tms_user -p tms_db -e "SHOW TABLES;"
+# configuracion, dispositivos, mediciones, sesiones, sesiones_login, usuarios
+```
+
+### 3.2 Si vienes de una versión anterior (migraciones)
+
+Las migraciones están en `server/migrations/` y se ejecutan **una sola vez, en orden y como root**. Todas se pueden repetir sin duplicar nada, salvo la 001. Haz un respaldo antes (sección 13).
+
+| Archivo | Qué hace |
+|---|---|
+| `001_sesiones_hora_local_a_utc.sql` | Pasa `iniciada_en` y `terminada_en` de hora local a UTC. ⚠ **Ajusta `@corte`** antes de ejecutarla (las sesiones posteriores a ese instante ya están en UTC) y **no la ejecutes dos veces**: restaría el desfase otra vez. Lee los comentarios del archivo. |
+| `002_usuarios.sql` | Tablas `usuarios` y `sesiones_login` (login). |
+| `003_configuracion.sql` | Tabla `configuracion`; `origen`, `paso_mm` y `medio` en `sesiones`. |
+| `004_dispositivo.sql` | Tabla `dispositivos` (Pico W); `seq`, crudos, `saturado` y `ts_dispositivo` en `mediciones`. |
+| `005_trazabilidad.sql` | FLOAT → DOUBLE en `mediciones` (las filas viejas conservan su error de float32); metadatos, huecos, notas y borrado lógico en `sesiones`. |
+
+```bash
+cd /opt/tms/server/migrations
+sudo mysql tms_db < 002_usuarios.sql
+sudo mysql tms_db < 003_configuracion.sql
+sudo mysql tms_db < 004_dispositivo.sql
+sudo mysql tms_db < 005_trazabilidad.sql
+```
+
+Si la base vieja usaba la contraseña publicada o `ALL PRIVILEGES`, cámbiala y reduce los permisos:
 
 ```sql
--- dentro de: sudo mysql -u root
+-- sudo mysql -u root
 ALTER USER 'tms_user'@'localhost' IDENTIFIED BY 'tu_contraseña_nueva';
 REVOKE ALL PRIVILEGES ON tms_db.* FROM 'tms_user'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE ON tms_db.* TO 'tms_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-Las versiones anteriores también guardaban la hora de las sesiones en hora
-local. Ahora todo se guarda en UTC. Para corregir las sesiones antiguas,
-ejecuta **una sola vez** y **antes** de levantar el servidor nuevo (lee
-primero los comentarios del archivo para ajustar el desfase):
+## 4. Backend: `.env` de producción e instalación
 
 ```bash
-sudo mysql tms_db < PT/server/migrations/001_sesiones_hora_local_a_utc.sql
+cd /opt/tms/server
+cp .env.example .env
+nano .env
 ```
 
-Para agregar el login (Fase 2) a una base que ya existía, crea las tablas
-`usuarios` y `sesiones_login`. No toca tus sesiones ni tus mediciones y
-se puede repetir sin problema. En una instalación nueva no hace falta,
-porque `setup_db.sql` ya las crea:
+Valores para la Raspberry:
+
+```ini
+PORT=4000
+HOST=127.0.0.1          # solo Nginx habla con el backend
+NODE_ENV=production     # cookie Secure (solo HTTPS) y errores sin detalles internos
+CORS_ORIGINS=http://localhost:5173   # el dashboard y la API comparten origen detrás de Nginx: CORS no interviene
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=tms_user
+DB_PASSWORD=tu_contraseña
+DB_NAME=tms_db
+```
 
 ```bash
-sudo mysql tms_db < PT/server/migrations/002_usuarios.sql
+chmod 600 .env
+npm ci --omit=dev            # solo dependencias de producción (sin nodemon)
 ```
 
-Para la Fase 3 (configuración del sistema, simulador en el servidor y
-parámetros de cada medición), ejecuta también la 003. Crea la tabla
-`configuracion` con sus valores por defecto y agrega a cada sesión su
-origen (simulada o Pico W), su paso (0,5, 1 o 2 cm) y su medio (campo
-magnético o solución salina). Las sesiones existentes quedan como simuladas,
-de 0,5 cm y de campo magnético. Se puede repetir sin problema y no hace
-falta en una instalación nueva:
+## 5. Usuario administrador
 
 ```bash
-sudo mysql tms_db < PT/server/migrations/003_configuracion.sql
+cd /opt/tms/server
+npm run crear-admin -- --predeterminado     # admin / admin, sin cambio obligatorio
 ```
 
-> Al arrancar, el servidor cierra cualquier sesión de medición que haya
-> quedado abierta de una ejecución anterior (por ejemplo, tras un corte de
-> luz) y lo anota en el log.
+> ⚠ Cualquiera conectado al hotspot que conozca admin/admin puede entrar como administrador.
 
----
-
-## PASO 2b — Crear el usuario administrador
-
-Desde la Fase 2 el dashboard pide usuario y contraseña. El acceso del
-sistema es **admin / admin**, sin cambio obligatorio. Créalo (o restáuralo si
-alguien cambió la contraseña) con:
-
-```bash
-cd PT/server
-npm install            # si todavía no instalaste las dependencias
-npm run crear-admin -- --predeterminado
-```
-
-> ⚠ Cualquiera que esté conectado al mismo hotspot y conozca admin/admin
-> puede entrar como administrador.
-
-Si prefieres una contraseña propia para el admin, ejecuta el script sin la
-opción. Pide la contraseña dos veces sin mostrarla (mínimo 8 caracteres):
-
-```bash
-npm run crear-admin
-```
-
-Si no tienes una terminal interactiva (por ejemplo, por SSH sin TTY), pásala
-por variable de entorno. Es temporal: el dashboard te obliga a cambiarla al
-entrar por primera vez.
-
-```bash
-ADMIN_PASSWORD='una-clave-temporal' npm run crear-admin
-```
-
-Después, desde el dashboard o con la API (`POST /api/usuarios`), el admin
-crea a los demás con su rol:
+Para una contraseña propia: `npm run crear-admin` (la pide dos veces; mínimo 8 caracteres). Los demás usuarios se crean en el dashboard: **☰ › Configuración › Usuarios**.
 
 | Rol | Puede |
 |---|---|
-| `admin` | Todo: usuarios, iniciar y detener barridos, eliminar sesiones |
-| `operador` | Iniciar y detener barridos, exportar |
-| `observador` | Solo mirar y exportar |
+| admin | Todo: usuarios, configuración, modo de operación, token de la Pico, eliminar y restaurar sesiones |
+| operador | Iniciar y detener barridos, editar las notas de sus sesiones, exportar |
+| observador | Mirar y exportar |
 
-Cada usuario nuevo entra con una contraseña temporal y debe cambiarla.
-
-> **En producción** (`NODE_ENV=production`) la cookie de sesión lleva
-> `Secure`: el login solo funciona entrando por **https://**. Si entras por
-> http:// verás que el login "no se queda" (cada petición responde 401).
-
----
-
-## PASO 3 — Instalar dependencias del Backend
+## 6. Frontend: compilar a /opt/tms/dist
 
 ```bash
-cd PT/server
-npm install
-
-# Paquetes que se instalan:
-# express  — servidor web
-# mysql2   — cliente MariaDB con async/await
-# dotenv   — leer variables del .env
-# cors     — permitir peticiones del frontend
-# nodemon  — reinicio automático en desarrollo
+cd /opt/tms/frontend
+npm ci                       # incluye Vite (dependencia de desarrollo, necesaria para compilar)
+npm run build                # vite.config.js → outDir '../dist' = /opt/tms/dist
+ls /opt/tms/dist             # index.html  assets/
 ```
 
----
+`/opt/tms/dist` es exactamente el `root` de `nginx/tms.conf`. Las fuentes, Bootstrap y los iconos van empaquetados: el dashboard no necesita internet.
 
-## PASO 4 — Instalar dependencias del Frontend
+## 7. Certificado autofirmado
+
+El mismo comando que documenta `tms.conf`:
 
 ```bash
-# Abrir una nueva terminal
-cd PT/frontend
-npm install
-
-# Paquetes principales:
-# react, react-dom          — framework UI
-# vite, @vitejs/plugin-react — compilador rápido
-# chart.js, react-chartjs-2  — gráfica de líneas
-# three                      — visualización 3D
+sudo mkdir -p /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/tms.key \
+  -out    /etc/nginx/ssl/tms.crt \
+  -subj "/C=MX/ST=CDMX/L=CDMX/O=IPN/OU=ESIME/CN=tms.ipn.local"
+sudo chmod 600 /etc/nginx/ssl/tms.key
 ```
 
----
+Los navegadores mostrarán un aviso la primera vez («la conexión no es privada»): hay que aceptarlo en cada equipo.
 
-## PASO 5 — Levantar el Backend
+## 8. Nginx
+
+`nginx/tms.conf` se copia **tal cual** (no se edita):
 
 ```bash
-cd PT/server
-npm run dev
-
-# Salida esperada:
-# [TMS] Servidor escuchando en http://127.0.0.1:4000
-# [TMS] API disponible en /api
-# [DB] ✓ Conexión a MariaDB establecida.
-
-# Si ves [DB] ✗ ... verifica:
-# 1. Que MariaDB esté corriendo: sudo systemctl status mariadb
-# 2. Las credenciales en PT/server/.env
+sudo cp /opt/tms/nginx/tms.conf /etc/nginx/sites-available/tms.conf
+sudo ln -s /etc/nginx/sites-available/tms.conf /etc/nginx/sites-enabled/tms.conf
+sudo rm /etc/nginx/sites-enabled/default      # ver la sección 10
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
----
+`tms.conf` sirve `/opt/tms/dist` y reenvía `/api/` al backend quitando el prefijo (`proxy_pass http://127.0.0.1:4000/;`). El backend responde en los dos prefijos, así que no hay nada que ajustar.
 
-## PASO 6 — Levantar el Frontend
+## 9. Servicio de systemd
 
 ```bash
-# En una segunda terminal
-cd PT/frontend
-npm run dev
-
-# Salida esperada:
-# VITE v5.x.x  ready in 800ms
-# ➜  Local:   http://localhost:5173/
-# ➜  Network: http://192.168.x.x:5173/
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin tms
+# El servicio (usuario tms) y tu usuario (para npm run crear-admin) deben poder leer el .env
+sudo chown tms:"$(id -gn)" /opt/tms/server/.env && sudo chmod 640 /opt/tms/server/.env
+sudo cp /opt/tms/deploy/tms-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now tms-server
+systemctl status tms-server
+journalctl -u tms-server -f                    # log en vivo (Ctrl+C para salir)
 ```
 
----
+Al arrancar, el log debe mostrar `[DB] ✓ Conexión a MariaDB establecida`, `[config] ✓ Configuración cargada` y `Servidor 3.0.0+<commit> escuchando en http://127.0.0.1:4000 (production)`.
 
-## PASO 7 — Abrir el Dashboard
+Tras actualizar el código: `cd /opt/tms && git pull`, luego `npm ci --omit=dev` en `server/`, `npm ci && npm run build` en `frontend/`, las migraciones nuevas si las hay, y `sudo systemctl restart tms-server`.
 
-```
-http://localhost:5173
-```
+## 10. Cómo entrar desde el hotspot del iPhone
 
-Aparece la pantalla de login. Entra con `admin` / `admin` (si usaste
-`npm run crear-admin` sin `--predeterminado`, la primera vez te pide elegir
-una contraseña nueva). Después, el
-badge superior derecho debe mostrar **"SERVIDOR EN LÍNEA"** en verde, junto a
-tu nombre, tu rol y el botón **Salir**.
+`tms.conf` usa `server_name tms.ipn.local`. Ese nombre **no** se resuelve solo: mDNS (Avahi) solo anuncia un nombre de una etiqueta, como `raspberrypi.local`, y `tms.ipn.local` tiene dos. Comportamiento comprobado con Nginx y una copia de `tms.conf`:
 
----
+- Por **HTTPS** funciona con cualquier nombre o IP: `tms.conf` es el único servidor en el 443, así que Nginx lo usa aunque el nombre no coincida.
+- Por **HTTP** (puerto 80), con el sitio `default` de Raspberry Pi OS activo, `http://<IP>` muestra la página de bienvenida de Nginx. Sin ese sitio (paso 8), `tms.conf` atiende el 80 y redirige a `https://<IP>/`.
 
-## PASO 8 — Pruebas completas
+Opciones, de la más recomendable a la menos:
 
-### 8.1 Health-check del servidor
+1. **Nombre `.local` con mDNS.** Cambia el nombre de la Raspberry a `tms` y entra a **`https://tms.local`** desde laptops (macOS, Windows 10+, Linux con Avahi) y desde iPhone o Android recientes. Sigue funcionando aunque el hotspot cambie la IP.
+   ```bash
+   sudo hostnamectl set-hostname tms
+   sudo systemctl restart avahi-daemon
+   ```
+2. **IP directa:** `https://<IP>`. Lo más simple, pero hay que volver a buscar la IP si el hotspot la cambia.
+3. **Entrada en `hosts`** de cada laptop (`<IP>  tms.ipn.local`): permite usar el nombre del certificado, pero hay que actualizarla en cada equipo cuando cambia la IP. No sirve en teléfonos.
+
+## 11. Pico W
+
+1. En el dashboard, como admin: **☰ › Modo de operación › Real**.
+2. **☰ › Configuración › Dispositivo › Generar token.** Se muestra **una sola vez**: cópialo.
+3. Ponlo en la Pico (`secretos.py`, junto con el Wi-Fi y `SERVIDOR = "https://tms.local"` o la IP). El protocolo, NTP, el orden de registros X, Z, Y del HMC5883L y el escaneo I2C están en [docs/firmware-pico-w.md](docs/firmware-pico-w.md); el ejemplo, en `firmware/pico_w_cliente_ejemplo.py`.
+4. La barra superior mostrará «Pico W en línea · hace N s».
+
+Probar sin hardware, desde la Raspberry o desde una laptop:
+
 ```bash
-curl http://localhost:4000/api/status
-```
-```json
-{ "ok": true, "version": "3.0.0", "uptime": 5.2, "clientes": 1 }
+cd /opt/tms/server
+npm run emular-pico -- --token <TOKEN> --url https://tms.local/api --insecure --perdida 0.3 --duplicar 0.2
 ```
 
-### 8.1b Iniciar sesión con curl
-Todas las rutas salvo `/api/status` exigen la cookie de sesión (sin ella
-responden 401). Con curl se guarda en un archivo con `-c` y se envía con `-b`:
-```bash
-read -rs PW   # escribe la contraseña (no se muestra) y pulsa Enter
-curl -c cookies.txt -X POST http://localhost:4000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d "{\"usuario\": \"admin\", \"password\": \"$PW\"}"
-```
-En los ejemplos siguientes agrega `-b cookies.txt` a cada `curl`. Para
-cerrar la sesión: `curl -b cookies.txt -X POST http://localhost:4000/api/auth/logout`.
-Tras 5 intentos fallidos con el mismo usuario desde la misma IP, el login
-responde 429 durante 15 minutos.
+## 12. Comprobaciones finales
 
-### 8.2 Crear una sesión manualmente (operador o admin)
-Se indican la velocidad (`DC` o `AC`), el paso en mm (5, 10 o 20; se aplica
-igual en X, Y y Z) y el medio (`campo_magnetico` o `solucion_salina`). Si
-faltan el paso o el medio, se usan los predeterminados. En modo simulación,
-el simulador del servidor empieza a generar los puntos y cierra la sesión
-solo al terminar la malla.
 ```bash
-curl -b cookies.txt -X POST http://localhost:4000/api/sesiones \
-  -H "Content-Type: application/json" \
-  -d '{"modo": "DC", "paso_mm": 10, "medio": "solucion_salina"}'
-```
-```json
-{ "ok": true, "sesionId": 1, "sesion": { "id": 1, "modo": "DC", "origen": "sim", "paso_mm": 10,
-  "medio": "solucion_salina", "grid_n": 7, "z_levels_mm": [0, 10, 20], "puntos_esperados": 147, "...": "..." } }
-```
-Si ya hay otra sesión abierta responde 409: solo puede haber una a la vez.
+curl -k https://tms.local/api/status
+# {"ok":true,"version":"3.0.0","commit":"…","version_software":"3.0.0+…","modo_operacion":"simulacion",…}
 
-### 8.2b Ver y cambiar la configuración
-```bash
-curl -b cookies.txt http://localhost:4000/api/configuracion
-# Solo admin. El cuerpo siempre es {"valor": …}; en los objetos basta con los campos que cambian:
-curl -b cookies.txt -X PUT http://localhost:4000/api/configuracion/simulacion \
-  -H "Content-Type: application/json" -d '{"valor": {"ms_por_punto": {"DC": 30}}}'
-curl -b cookies.txt -X PUT http://localhost:4000/api/configuracion/modo_operacion \
-  -H "Content-Type: application/json" -d '{"valor": "real"}'
-```
-El modo de operación, el barrido y el sensor no se pueden cambiar con una
-sesión abierta (409).
-
-### 8.3 Enviar una medición (solo en modo real)
-En modo simulación esta ruta responde 409, porque los datos los genera el
-servidor. En modo real (y hasta que la Fase 4 la reemplace por la ruta de la
-Pico W) acepta lecturas para la sesión abierta. `zMM` debe ser uno de los
-planos de esa sesión según su paso:
-```bash
-curl -b cookies.txt -X POST http://localhost:4000/api/mediciones \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sesionId": 1,
-    "xMM":  30.0,
-    "yMM":  30.0,
-    "zMM":  0,
-    "bx":   2.341,
-    "by":  -1.205,
-    "bz":   45.678
-  }'
-```
-```json
-{
-  "ok": true,
-  "data": {
-    "sesionId": 1, "xMM": 30, "yMM": 30, "zMM": 0,
-    "bx": 2.341, "by": -1.205, "bz": 45.678,
-    "magnitud": 45.7647
-  }
-}
-```
-Cuando funcione, verás la flecha aparecer en el mapa 3D y
-la fila en la tabla, en tiempo real, sin recargar el navegador.
-
-### 8.4 Listar sesiones guardadas en MariaDB
-```bash
-curl -b cookies.txt http://localhost:4000/api/sesiones
-```
-```json
-{
-  "ok": true,
-  "data": [
-    {
-      "id": 1, "modo": "DC",
-      "iniciada_en": "2025-06-12T10:30:00",
-      "terminada_en": null,
-      "total_puntos": 1,
-      "max_magnitud": 45.7647,
-      "min_magnitud": 45.7647
-    }
-  ]
-}
+# Login y una sesión simulada de 2 cm (32 puntos)
+curl -k -c /tmp/c.txt -H 'Content-Type: application/json' -d '{"usuario":"admin","password":"admin"}' https://tms.local/api/auth/login
+curl -k -b /tmp/c.txt -H 'Content-Type: application/json' -d '{"modo":"DC","paso_mm":20}' https://tms.local/api/sesiones
+curl -k -b /tmp/c.txt https://tms.local/api/sesiones | head -c 300
 ```
 
-### 8.5 Cerrar una sesión
+Luego, en un navegador: `https://tms.local` → login → Iniciar medición → el progreso avanza en todas las pestañas abiertas → Mediciones pasadas → Exportar CSV.
+
+## 13. Respaldo y restauración
+
 ```bash
-curl -b cookies.txt -X PUT http://localhost:4000/api/sesiones/1
-```
-```json
-{ "ok": true }
+# Respaldo (no detiene el servicio)
+sudo mysqldump --single-transaction --routines tms_db | gzip > ~/tms_db_$(date +%F).sql.gz
+
+# Restaurar (detén el backend mientras tanto)
+sudo systemctl stop tms-server
+gunzip -c ~/tms_db_2026-11-10.sql.gz | sudo mysql tms_db
+sudo systemctl start tms-server
 ```
 
-### 8.6 Verificar datos directamente en MariaDB
-```bash
-mysql -u tms_user -p tms_db
-# Contraseña: la que pusiste en DB_PASSWORD
-```
+**Borrado definitivo.** `DELETE /api/sesiones/:id` es un borrado lógico (un admin restaura desde *Mediciones pasadas › Ver eliminadas*). Para liberar espacio de verdad, después de un respaldo:
+
 ```sql
--- Ver sesiones
-SELECT * FROM sesiones;
-
--- Ver mediciones de la sesión 1
-SELECT x_mm, y_mm, z_mm, bx, by, bz, magnitud
-FROM mediciones
-WHERE sesion_id = 1
-LIMIT 10;
-
--- Estadísticas por sesión
-SELECT
-  s.id,
-  s.modo,
-  COUNT(m.id) AS total_puntos,
-  ROUND(MAX(m.magnitud), 3) AS max_B,
-  ROUND(AVG(m.magnitud), 3) AS avg_B
-FROM sesiones s
-LEFT JOIN mediciones m ON m.sesion_id = s.id
-GROUP BY s.id;
+-- sudo mysql tms_db
+SELECT id, iniciada_en, eliminada_en FROM sesiones
+ WHERE eliminada_en IS NOT NULL AND eliminada_en < UTC_TIMESTAMP() - INTERVAL 30 DAY;
+DELETE FROM sesiones
+ WHERE eliminada_en IS NOT NULL AND eliminada_en < UTC_TIMESTAMP() - INTERVAL 30 DAY;
 ```
 
-### 8.7 Exportar CSV de una sesión
+## 14. Solución de problemas
+
+| Síntoma | Causa y solución |
+|---|---|
+| El login «no se queda»: cada petición responde 401 | Con `NODE_ENV=production` la cookie lleva `Secure` y el navegador solo la envía por **HTTPS**. Entra por `https://`, no por `http://` ni directo al puerto 4000. |
+| `http://<IP>` muestra «Welcome to nginx!» | Sigue activo el sitio `default`: `sudo rm /etc/nginx/sites-enabled/default && sudo systemctl reload nginx`, o entra por `https://`. |
+| El dashboard no recibe puntos en vivo (pero el historial sí) | El SSE necesita que Nginx no almacene la respuesta: `tms.conf` ya trae `proxy_buffering off` y el backend manda `X-Accel-Buffering: no`. Revisa que se esté usando `tms.conf` (`sudo nginx -T \| grep tms.ipn.local`). Si se corta, el navegador se reconecta solo a los 3 s y recupera lo perdido. |
+| Ayer funcionaba `https://<IP>` y hoy no | El hotspot del iPhone cambió la IP. Usa `https://tms.local` (sección 10) o busca la nueva con `hostname -I`. La Pico W también necesita la IP nueva si no usa el nombre. |
+| `[DB] ✗ Access denied for user 'tms_user'` | La contraseña de `.env` no coincide con la de MariaDB. Cámbiala con `ALTER USER` (sección 3.2). |
+| `Falta una migración` al arrancar | La base es de una versión anterior: ejecuta las migraciones que falten (sección 3.2). |
+| La Pico recibe 401 | Token revocado, regenerado o dispositivo desactivado: genera otro y cárgalo en la Pico. |
+| La Pico recibe 409 | El sistema está en modo simulación o no hay una sesión real abierta. |
+| Olvidé la contraseña del admin | `cd /opt/tms/server && npm run crear-admin -- --predeterminado` (vuelve a admin/admin y cierra sus sesiones). |
+| `EADDRINUSE` en el puerto 4000 | Ya hay otro backend corriendo: `sudo systemctl stop tms-server` o `sudo lsof -i :4000`. |
+
+## 15. Desarrollo en tu computadora
+
 ```bash
-curl -b cookies.txt http://localhost:4000/api/sesiones/1/mediciones
-# Devuelve JSON con todos los puntos de la sesión
+cd PT/server && cp .env.example .env    # NODE_ENV=development, CORS_ORIGINS=http://localhost:5173
+npm install && npm run dev              # http://127.0.0.1:4000
+cd PT/frontend && npm install && npm run dev    # http://localhost:5173 (proxy /api → 4000)
 ```
-También funciona desde el botón **"Exportar CSV"** en la pestaña
-Mediciones Pasadas del Dashboard.
 
----
+### Tests
 
-## PASO 9 — Prueba completa del Dashboard
-
-1. Abre `http://localhost:5173` e inicia sesión como admin u operador
-2. En la barra del panel de control elige la **velocidad** (DC — Rápida o
-   AC — Normal), el **paso** (0,5 cm, 1 cm o 2 cm) y el **medio** (campo
-   magnético o solución salina con voltaje)
-3. Clic en **Iniciar Medición** → revisa el resumen y confirma
-4. Observa (en todas las pestañas y equipos conectados a la vez):
-   - Barra de progreso: avanza de 0 a 100% (845 puntos con 0,5 cm; 147 con 1 cm; 32 con 2 cm)
-   - Gráfica de líneas: Bx (cyan), By (magenta), Bz (verde)
-   - Mapa 3D: **flechas** que crecen en cada punto medido
-     - La dirección de la flecha indica hacia dónde apunta el campo
-     - La longitud es proporcional a |B|
-     - El color indica el plano Z (altura)
-   - Tabla inferior: cada lectura en tiempo real
-5. Al terminar el barrido (o al presionar **Detener**):
-   - La sesión se guarda automáticamente en MariaDB
-   - Ve a **Mediciones Pasadas** → aparece la sesión recién completada
-6. En Mediciones Pasadas puedes filtrar por velocidad, paso, medio, origen y fecha
-7. Abre la sesión y haz clic en **Exportar CSV**
-
-### Tests automáticos
 ```bash
-cd PT/server && npm test
+cd PT/server
+npm test                  # = npm run test:unit; no necesita base de datos (53 pruebas)
+npm run test:integracion  # necesita la base de PRUEBAS tms_db_test (nunca usa tms_db)
 ```
-No necesitan la base de datos. Prueban la física de la espira, el generador
-aleatorio con semilla, el ruido gaussiano y la malla de cada paso.
 
----
+La base de pruebas se crea una vez, como root, con la misma contraseña de `tms_user`:
 
-## PROBLEMAS COMUNES
-
-### Olvidé la contraseña del admin
 ```bash
-cd PT/server && npm run crear-admin -- --predeterminado   # vuelve a admin/admin y cierra sus sesiones
+sed 's/CAMBIA_ESTA_CONTRASENA/la_de_tu_.env/' server/tests/setup_test_db.sql | sudo mysql -u root
 ```
 
-### "No existe la tabla de usuarios" al correr crear-admin
-Falta la migración 002 (ver el PASO 2):
-```bash
-sudo mysql tms_db < PT/server/migrations/002_usuarios.sql
-```
-
-### "Access denied for user 'tms_user'"
-```bash
-# Volver a ejecutar el script SQL
-sudo mysql -u root < PT/server/setup_db.sql
-```
-
-### MariaDB no arranca
-```bash
-sudo systemctl restart mariadb
-sudo journalctl -u mariadb -n 20   # ver últimos errores
-```
-
-### El badge muestra "SIN CONEXIÓN"
-El backend no está corriendo o hay un error de CORS.
-```bash
-# Verificar que el backend está activo
-curl http://localhost:4000/api/status
-
-# Si falla, revisar la terminal donde corre npm run dev
-```
-
-### Puerto 4000 en uso
-```bash
-sudo lsof -i :4000
-kill -9 <PID>
-```
-
-### Reinstalar MariaDB desde cero
-```bash
-sudo apt remove --purge mariadb-server mariadb-client
-sudo apt autoremove
-sudo apt install -y mariadb-server
-sudo systemctl start mariadb
-sudo mysql -u root < PT/server/setup_db.sql
-```
-
----
-
-## RESUMEN DE TERMINALES
-
-```
-Terminal 1:  cd PT/server    → npm run dev    (puerto 4000 + MariaDB)
-Terminal 2:  cd PT/frontend  → npm run dev    (puerto 5173)
-Terminal 3:  curl ...        (pruebas de API, opcional)
-Navegador:   http://localhost:5173
-```
-
-
+Los tests de integración levantan la app en un puerto aleatorio, vacían `tms_db_test`, y prueban de extremo a extremo: el CSV de una sesión simulada contra el simulador con la misma semilla (tolerancia 1e-9), la Pico emulada con pérdidas y duplicados, los roles (401 y 403), el borrado lógico y los 409. Sin la base, se marcan como omitidos con el comando para crearla. Las credenciales se pueden cambiar con `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_USER`, `TEST_DB_PASSWORD`.

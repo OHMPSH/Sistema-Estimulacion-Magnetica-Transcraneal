@@ -28,3 +28,6 @@ nginx/ssl/
 *.key
 *.crt
 *.pem
+
+# ── Firmware: credenciales de la Pico W (Wi-Fi y token) ──────
+firmware/secretos.py

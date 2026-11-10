@@ -7,6 +7,9 @@
  */
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { ROLES_TEXTO } from '../utils/formato.js';
+
+const enfocarAlInicio = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
 
 const LONGITUD_MINIMA = 8;   // la misma regla que valida el servidor
 
@@ -41,12 +44,12 @@ export function CambiarPasswordPage() {
 
   return (
     <main className="auth-page">
-      <form className="auth-card fade-in" onSubmit={enviar} noValidate>
+      <form className="auth-card" onSubmit={enviar} noValidate>
         <div className="auth-brand">
-          <div className="navbar-logo" aria-hidden="true">TMS</div>
+          <div className="navbar-logo" aria-hidden="true" translate="no">TMS</div>
           <div>
             <h1 className="auth-title">Cambia tu contraseña</h1>
-            <div className="auth-subtitle">{usuario.nombre} · {usuario.rol}</div>
+            <div className="auth-subtitle">{usuario.nombre}, {ROLES_TEXTO[usuario.rol] ?? usuario.rol}</div>
           </div>
         </div>
 
@@ -64,7 +67,7 @@ export function CambiarPasswordPage() {
             id="cambio-actual" name="actual" type="password" className="campo-tms"
             autoComplete="current-password"
             value={actual} onChange={e => setActual(e.target.value)}
-            autoFocus required
+            autoFocus={enfocarAlInicio} required
           />
         </div>
 
@@ -97,7 +100,7 @@ export function CambiarPasswordPage() {
           {enviando ? 'Guardando…' : 'Cambiar contraseña'}
         </button>
 
-        <button type="button" className="mode-btn auth-boton auth-boton-secundario" onClick={cerrarSesion}>
+        <button type="button" className="btn-tms btn-secundario auth-boton" onClick={cerrarSesion}>
           <i className="bi bi-box-arrow-right" aria-hidden="true" /> Cerrar sesión
         </button>
       </form>
