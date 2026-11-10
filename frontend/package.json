@@ -9,6 +9,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.2",
     "chart.js": "^4.4.3",
     "plotly.js": "^3.6.0",
     "react": "^18.3.1",

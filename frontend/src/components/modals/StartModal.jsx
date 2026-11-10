@@ -3,15 +3,18 @@
  * Modal de selección de modo de medición (DC / AC).
  */
 import React, { useEffect, useRef } from 'react';
+// Solo el componente Modal de Bootstrap, empaquetado con Vite
+import Modal from 'bootstrap/js/dist/modal';
 
 export function StartModal({ onConfirm }) {
   const modalRef = useRef(null);
   const bsModal  = useRef(null);
 
   useEffect(() => {
-    if (modalRef.current && window.bootstrap) {
-      bsModal.current = new window.bootstrap.Modal(modalRef.current);
+    if (modalRef.current) {
+      bsModal.current = new Modal(modalRef.current);
     }
+    return () => bsModal.current?.dispose();
   }, []);
 
   useEffect(() => {

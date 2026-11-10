@@ -18,6 +18,9 @@ PT/
 │   ├── routes/
 │   │   └── mediciones.routes.js ← declaración de endpoints
 │   ├── .env                     ← credenciales (no subir a Git)
+│   ├── .env.example             ← plantilla del .env
+│   ├── middleware/              ← CORS, validación y errores
+│   ├── migrations/              ← cambios de esquema (ejecutar como root)
 │   ├── package.json
 │   ├── server.js                ← entry point Express
 │   └── setup_db.sql             ← script inicial de MariaDB
@@ -77,6 +80,19 @@ sudo systemctl status mariadb
 
 ## PASO 2 — Crear la base de datos y el usuario
 
+Antes de ejecutar el script, elige una contraseña para el usuario de la
+base y escríbela en dos lugares:
+
+1. En `PT/server/setup_db.sql`, en lugar de `CAMBIA_ESTA_CONTRASENA`.
+2. En `PT/server/.env`, en `DB_PASSWORD` (crea el `.env` copiando la plantilla).
+
+```bash
+cp PT/server/.env.example PT/server/.env
+nano PT/server/.env          # completar DB_PASSWORD y revisar NODE_ENV
+```
+
+No subas a Git ni el `.env` ni el `setup_db.sql` con la contraseña real.
+
 ```bash
 # Ejecutar el script SQL como root
 # (este comando solo se corre UNA vez)
@@ -95,7 +111,7 @@ sudo mysql -u root < PT/server/setup_db.sql
 ```bash
 # Entrar a MariaDB como el nuevo usuario
 mysql -u tms_user -p tms_db
-# Contraseña: tms_password
+# Contraseña: la que pusiste en DB_PASSWORD
 
 # Dentro de MariaDB, verificar las tablas:
 SHOW TABLES;
@@ -106,6 +122,29 @@ DESCRIBE mediciones;
 
 # Salir
 EXIT;
+```
+
+### Si ya tenías la base de una versión anterior
+
+Las versiones anteriores creaban el usuario con una contraseña publicada en
+el repositorio y con todos los privilegios. Cámbiala y reduce los permisos
+(pon la misma contraseña nueva en `DB_PASSWORD` del `.env`):
+
+```sql
+-- dentro de: sudo mysql -u root
+ALTER USER 'tms_user'@'localhost' IDENTIFIED BY 'tu_contraseña_nueva';
+REVOKE ALL PRIVILEGES ON tms_db.* FROM 'tms_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON tms_db.* TO 'tms_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+Las versiones anteriores también guardaban la hora de las sesiones en hora
+local. Ahora todo se guarda en UTC. Para corregir las sesiones antiguas,
+ejecuta **una sola vez** y **antes** de levantar el servidor nuevo (lee
+primero los comentarios del archivo para ajustar el desfase):
+
+```bash
+sudo mysql tms_db < PT/server/migrations/001_sesiones_hora_local_a_utc.sql
 ```
 
 ---
@@ -263,7 +302,7 @@ curl -X PUT http://localhost:4000/api/sesiones/1
 ### 8.6 Verificar datos directamente en MariaDB
 ```bash
 mysql -u tms_user -p tms_db
-# Contraseña: tms_password
+# Contraseña: la que pusiste en DB_PASSWORD
 ```
 ```sql
 -- Ver sesiones

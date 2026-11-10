@@ -8,56 +8,49 @@
  *   1. Cargar variables de entorno desde .env
  *   2. Crear la aplicación Express
  *   3. Registrar middlewares (cors, json)
- *   4. Montar el router de rutas bajo /api
- *   5. Verificar la conexión a MariaDB
- *   6. Iniciar el servidor HTTP
+ *   4. Montar el router de la API
+ *   5. Responder errores en JSON
+ *   6. Verificar la conexión a MariaDB e iniciar el servidor HTTP
  *
  * El acceso externo y HTTPS lo maneja Nginx (proxy inverso).
  * Este servidor solo escucha en 127.0.0.1 por seguridad.
  * ─────────────────────────────────────────────────────────────
  */
 
-import 'dotenv/config';               // carga .env al proceso
+import 'dotenv/config';               // carga .env al proceso (debe ir primero)
 import express from 'express';
-import cors    from 'cors';
 import { testConnection } from './config/database.js';
-import router            from './routes/mediciones.routes.js';
+import router from './routes/mediciones.routes.js';
+import { corsMiddleware } from './middleware/cors.js';
+import { rutaNoEncontrada, manejadorErrores } from './middleware/errores.js';
 
 const app  = express();
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4000;
 const HOST = process.env.HOST || '127.0.0.1';
 
 // ── Middlewares ───────────────────────────────────────────────
+app.disable('x-powered-by');
+app.use(corsMiddleware);
 
-// cors: permite que el frontend (puerto 5173) llame a este servidor
-const origenes = (process.env.CORS_ORIGINS || 'http://localhost:5173')
-  .split(',')
-  .map(o => o.trim());
-
-app.use(cors({
-  origin: (origin, cb) => {
-    // Sin origin = curl/Postman/Pico 2W → permitir siempre
-    if (!origin || origenes.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS bloqueado: ${origin}`));
-  },
-}));
-
-// express.json: convierte el body de las peticiones de texto a objeto JS
-app.use(express.json());
+// express.json: convierte el body JSON a objeto JS (límite explícito)
+app.use(express.json({ limit: '100kb' }));
 
 // ── Rutas ─────────────────────────────────────────────────────
-// Todas las rutas de la API quedan bajo el prefijo /api
+// La API responde en dos prefijos:
+//   /api/...  → desarrollo (el proxy de Vite reenvía la ruta completa)
+//   /...      → producción (Nginx, con `proxy_pass http://127.0.0.1:4000/;`,
+//               quita el prefijo /api antes de reenviar)
+// Así funciona en ambos entornos sin modificar la configuración de Nginx.
 app.use('/api', router);
+app.use('/', router);
 
-// ── 404 ───────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ ok: false, error: 'Ruta no encontrada' });
-});
+// ── Errores (siempre en JSON) ─────────────────────────────────
+app.use(rutaNoEncontrada);
+app.use(manejadorErrores);
 
 // ── Arranque ──────────────────────────────────────────────────
 app.listen(PORT, HOST, async () => {
-  console.log(`\n[TMS] Servidor escuchando en http://${HOST}:${PORT}`);
-  console.log('[TMS] API disponible en /api');
-  // Verificar conexión a MariaDB al iniciar
+  console.log(`\n[TMS] Servidor escuchando en http://${HOST}:${PORT} (${process.env.NODE_ENV || 'sin NODE_ENV'})`);
+  console.log('[TMS] API disponible en /api (desarrollo) y en / (detrás de Nginx)');
   await testConnection();
 });

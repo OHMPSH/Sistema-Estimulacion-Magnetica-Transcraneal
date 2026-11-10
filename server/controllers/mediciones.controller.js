@@ -4,14 +4,14 @@
  * CAPA DE CONTROLADOR (MVC)
  *
  * Recibe peticiones HTTP desde el frontend (Fetch API) o desde
- * el microcontrolador Pico 2W, ejecuta la lógica de negocio y
+ * el microcontrolador Pico W, ejecuta la lógica de negocio y
  * devuelve respuestas JSON.
  *
  * Funciones:
  *   getStatus        — GET  /api/status       health-check
  *   sseHandler       — GET  /api/stream        canal tiempo real
  *   iniciarSesion    — POST /api/sesiones       crea sesión en BD
- *   cerrarSesion     — PUT  /api/sesiones/:id   cierra sesión
+ *   finalizarSesion  — PUT  /api/sesiones/:id   cierra sesión
  *   getSesiones      — GET  /api/sesiones       lista sesiones
  *   deleteSesion     — DELETE /api/sesiones/:id elimina sesión
  *   createMedicion   — POST /api/mediciones     inserta medición
@@ -19,6 +19,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
+import { randomUUID } from 'node:crypto';
 import * as Medicion from '../models/Medicion.js';
 
 // ── Canal SSE ────────────────────────────────────────────────
@@ -68,7 +69,7 @@ export const sseHandler = (req, res) => {
   res.flushHeaders();
 
   // Registrar este cliente en la lista
-  const clientId = Date.now();
+  const clientId = randomUUID();
   sseClients.push({ id: clientId, res });
   console.log(`[SSE] +cliente ${clientId}. Total: ${sseClients.length}`);
 
@@ -89,18 +90,10 @@ export const sseHandler = (req, res) => {
 // SESIONES
 // ─────────────────────────────────────────────────────────────
 
-/** POST /api/sesiones — crea una nueva sesión en MariaDB */
+/** POST /api/sesiones — crea una nueva sesión en MariaDB (modo validado) */
 export const iniciarSesion = async (req, res) => {
-  const { modo } = req.body; // 'DC' o 'AC'
-
-  // Validar que se envió el modo
-  if (!modo || !['DC', 'AC'].includes(modo)) {
-    return res.status(400).json({ ok: false, error: 'modo debe ser DC o AC' });
-  }
-
   try {
-    // El modelo hace el INSERT y devuelve el ID
-    const sesionId = await Medicion.crearSesion(modo);
+    const sesionId = await Medicion.crearSesion(req.modo);
     res.status(201).json({ ok: true, sesionId });
   } catch (err) {
     console.error('[sesion] Error al crear:', err.message);
@@ -108,11 +101,21 @@ export const iniciarSesion = async (req, res) => {
   }
 };
 
+/**
+ * Responde 404 si la sesión no existe o 409 si ya está cerrada.
+ * Se usa cuando una operación sobre una sesión abierta no afectó filas.
+ */
+const responderSesionNoDisponible = async (res, sesionId) => {
+  const sesion = await Medicion.obtenerEstadoSesion(sesionId);
+  if (!sesion) return res.status(404).json({ ok: false, error: `La sesión ${sesionId} no existe` });
+  return res.status(409).json({ ok: false, error: `La sesión ${sesionId} ya está cerrada` });
+};
+
 /** PUT /api/sesiones/:id — marca la sesión como terminada */
 export const finalizarSesion = async (req, res) => {
-  const sesionId = parseInt(req.params.id, 10);
   try {
-    await Medicion.cerrarSesion(sesionId);
+    const cerrada = await Medicion.cerrarSesion(req.idSesion);
+    if (!cerrada) return await responderSesionNoDisponible(res, req.idSesion);
     res.json({ ok: true });
   } catch (err) {
     console.error('[sesion] Error al cerrar:', err.message);
@@ -133,9 +136,11 @@ export const getSesiones = async (_req, res) => {
 
 /** DELETE /api/sesiones/:id — elimina sesión y sus mediciones */
 export const deleteSesion = async (req, res) => {
-  const sesionId = parseInt(req.params.id, 10);
   try {
-    await Medicion.eliminarSesion(sesionId);
+    const eliminada = await Medicion.eliminarSesion(req.idSesion);
+    if (!eliminada) {
+      return res.status(404).json({ ok: false, error: `La sesión ${req.idSesion} no existe` });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('[sesion] Error al eliminar:', err.message);
@@ -149,56 +154,36 @@ export const deleteSesion = async (req, res) => {
 
 /**
  * POST /api/mediciones
- * Recibe una lectura del Pico 2W, la guarda en MariaDB
- * y la reenvía en tiempo real al dashboard vía SSE.
+ * Recibe una lectura (ya validada por validarMedicion), la guarda en
+ * MariaDB y la reenvía en tiempo real al dashboard vía SSE.
  *
  * Body esperado: { sesionId, xMM, yMM, zMM, bx, by, bz }
+ * Unidades: mm y μT. timestamp = hora de recepción del servidor (UTC).
  */
 export const createMedicion = async (req, res) => {
-  const { sesionId, xMM, yMM, zMM, bx, by, bz } = req.body;
+  const { sesionId, xMM, yMM, zMM, zIdx, bx, by, bz } = req.medicion;
 
-  // Validar campos obligatorios
-  const requeridos = ['sesionId', 'xMM', 'yMM', 'zMM', 'bx', 'by', 'bz'];
-  const faltantes  = requeridos.filter(k => req.body[k] == null);
-  if (faltantes.length > 0) {
-    return res.status(400).json({
-      ok: false,
-      error: `Campos faltantes: ${faltantes.join(', ')}`,
-    });
-  }
-
-  // Calcular magnitud del vector: |B| = √(Bx²+By²+Bz²)
-  const magnitud = parseFloat(
-    Math.sqrt(bx ** 2 + by ** 2 + bz ** 2).toFixed(4)
-  );
-
-  // Índice del plano Z (0=0mm, 1=5mm, 2=10mm, 3=15mm, 4=20mm)
-  const Z_NIVELES = [0, 5, 10, 15, 20];
-  const zIdx      = Z_NIVELES.indexOf(Number(zMM));
-
-  // Objeto de medición completo
-  const medicion = {
-    sesionId: parseInt(sesionId, 10),
-    xMM:    parseFloat(xMM),
-    yMM:    parseFloat(yMM),
-    zMM:    parseFloat(zMM),
-    zIdx:   zIdx >= 0 ? zIdx : 0,
-    bx:     parseFloat(bx),
-    by:     parseFloat(by),
-    bz:     parseFloat(bz),
-    magnitud,
-    timestamp: new Date().toISOString(),
-  };
+  // |B| = √(Bx²+By²+Bz²), sin redondear (el redondeo es solo de presentación)
+  const magnitud  = Math.hypot(bx, by, bz);
+  const timestamp = new Date();
 
   try {
-    // 1. Guardar en MariaDB
-    await Medicion.insertarMedicion(medicion.sesionId, medicion);
+    // 1. Guardar en MariaDB (solo si la sesión existe y está abierta)
+    const insertada = await Medicion.insertarMedicion({
+      sesionId, xMM, yMM, zMM, bx, by, bz, magnitud, timestamp,
+    });
+    if (!insertada) return await responderSesionNoDisponible(res, sesionId);
+
+    const medicion = {
+      sesionId, xMM, yMM, zMM, zIdx, bx, by, bz, magnitud,
+      timestamp: timestamp.toISOString(),
+    };
 
     // 2. Enviar al dashboard en tiempo real (SSE)
     broadcast('medicion', medicion);
 
-    // 3. Responder al Pico 2W
-    res.status(200).json({ ok: true, data: medicion });
+    // 3. Responder al cliente (simulación o Pico W)
+    res.status(201).json({ ok: true, data: medicion });
   } catch (err) {
     console.error('[medicion] Error:', err.message);
     res.status(500).json({ ok: false, error: 'Error al guardar medición' });
@@ -207,9 +192,8 @@ export const createMedicion = async (req, res) => {
 
 /** GET /api/sesiones/:id/mediciones — exportar datos de una sesión */
 export const getMedicionesDeSesion = async (req, res) => {
-  const sesionId = parseInt(req.params.id, 10);
   try {
-    const datos = await Medicion.obtenerMedicionesDeSesion(sesionId);
+    const datos = await Medicion.obtenerMedicionesDeSesion(req.idSesion);
     res.json({ ok: true, data: datos });
   } catch (err) {
     console.error('[medicion] Error al exportar:', err.message);

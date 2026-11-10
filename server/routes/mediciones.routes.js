@@ -3,8 +3,8 @@
  * ─────────────────────────────────────────────────────────────
  * CAPA DE RUTAS (MVC)
  *
- * Solo declara qué URL llama a qué función del controlador.
- * Sin lógica aquí.
+ * Solo declara qué URL llama a qué función del controlador,
+ * con su middleware de validación. Sin lógica aquí.
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -19,6 +19,7 @@ import {
   createMedicion,
   getMedicionesDeSesion,
 } from '../controllers/mediciones.controller.js';
+import { validarIdSesion, validarModo, validarMedicion } from '../middleware/validar.js';
 
 const router = Router();
 
@@ -29,13 +30,13 @@ router.get('/status', getStatus);
 router.get('/stream', sseHandler);
 
 // Sesiones
-router.post  ('/sesiones',     iniciarSesion);    // crear
-router.put   ('/sesiones/:id', finalizarSesion);  // cerrar
-router.get   ('/sesiones',     getSesiones);       // listar
-router.delete('/sesiones/:id', deleteSesion);     // eliminar
+router.post  ('/sesiones',     validarModo,     iniciarSesion);    // crear
+router.put   ('/sesiones/:id', validarIdSesion, finalizarSesion);  // cerrar
+router.get   ('/sesiones',                      getSesiones);      // listar
+router.delete('/sesiones/:id', validarIdSesion, deleteSesion);     // eliminar
 
 // Mediciones
-router.post('/mediciones',                createMedicion);         // insertar
-router.get ('/sesiones/:id/mediciones',   getMedicionesDeSesion);  // exportar
+router.post('/mediciones',              validarMedicion, createMedicion);         // insertar
+router.get ('/sesiones/:id/mediciones', validarIdSesion, getMedicionesDeSesion);  // exportar
 
 export default router;

@@ -1,10 +1,11 @@
 /**
  * components/modals/StopModal.jsx
  * Modal Bootstrap de confirmación antes de detener la adquisición.
- * Usa el API JS de Bootstrap (window.bootstrap) que se carga
- * desde el CDN en index.html, por lo que no requiere instalación extra.
+ * Usa el componente Modal de Bootstrap, instalado con npm.
  */
 import React, { useEffect, useRef } from 'react';
+// Solo el componente Modal de Bootstrap, empaquetado con Vite
+import Modal from 'bootstrap/js/dist/modal';
 import { TOTAL_POINTS, Z_LEVELS } from '../../constants/system.js';
 
 export function StopModal({ totalScanned, currentZIdx, elapsedSec, onConfirm }) {
@@ -12,9 +13,10 @@ export function StopModal({ totalScanned, currentZIdx, elapsedSec, onConfirm }) 
   const bsModal  = useRef(null);
 
   useEffect(() => {
-    if (modalRef.current && window.bootstrap) {
-      bsModal.current = new window.bootstrap.Modal(modalRef.current);
+    if (modalRef.current) {
+      bsModal.current = new Modal(modalRef.current);
     }
+    return () => bsModal.current?.dispose();
   }, []);
 
   // Exponer método show() al padre mediante el ref pattern

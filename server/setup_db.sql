@@ -7,7 +7,7 @@
 --
 -- Crea:
 --   • Base de datos: tms_db
---   • Usuario:       tms_user (con contraseña tms_password)
+--   • Usuario:       tms_user (la contraseña la eliges tú; ver abajo)
 --   • Tabla:         sesiones   — un registro por proceso de medición
 --   • Tabla:         mediciones — lecturas del sensor Hall
 -- ═══════════════════════════════════════════════════════════════
@@ -19,11 +19,16 @@ CREATE DATABASE IF NOT EXISTS tms_db
 
 -- Crear usuario exclusivo para la aplicación
 -- (nunca usar root en la app)
+--
+-- ⚠ ANTES DE EJECUTAR: reemplaza CAMBIA_ESTA_CONTRASENA por una
+--   contraseña propia y pon la MISMA en DB_PASSWORD de server/.env.
+--   No subas la contraseña real a Git.
 CREATE USER IF NOT EXISTS 'tms_user'@'localhost'
-  IDENTIFIED BY 'tms_password';
+  IDENTIFIED BY 'CAMBIA_ESTA_CONTRASENA';
 
--- Dar permisos solo sobre tms_db
-GRANT ALL PRIVILEGES ON tms_db.* TO 'tms_user'@'localhost';
+-- Permisos mínimos sobre tms_db: la aplicación solo lee y escribe filas.
+-- Los cambios de esquema (migraciones) se ejecutan como root.
+GRANT SELECT, INSERT, UPDATE, DELETE ON tms_db.* TO 'tms_user'@'localhost';
 
 -- Aplicar los cambios de permisos
 FLUSH PRIVILEGES;
