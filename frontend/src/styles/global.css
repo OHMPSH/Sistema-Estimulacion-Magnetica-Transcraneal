@@ -234,3 +234,31 @@ table.tms-table tbody tr.new-row td { animation: row-in .4s ease-out; }
   .navbar-subtitle, .version-badge { display: none; }
   .kpi-value { font-size: 1.5rem; }
 }
+
+/* ── Login y cambio de contraseña (Fase 2, mínimo) ─────────── */
+/* Solo usa las variables existentes del tema oscuro. */
+.auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 400px; background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.auth-title { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; letter-spacing: .5px; line-height: 1.15; margin: 0; color: var(--text-primary); }
+.auth-subtitle { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
+.auth-campo { display: flex; flex-direction: column; gap: 6px; }
+.auth-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+.auth-ayuda { font-size: 12px; color: var(--text-secondary); }
+.auth-aviso { font-size: 13px; color: var(--text-secondary); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.auth-error { min-height: 1.4em; font-size: 13px; color: #ff7070; margin: 0; }
+.auth-boton { justify-content: center; width: 100%; }
+.auth-boton-secundario { display: inline-flex; align-items: center; gap: 8px; }
+.campo-tms { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-bright); border-radius: 6px; padding: 9px 12px; font-size: 14px; font-family: var(--font-body); }
+.campo-tms:focus-visible { outline: 2px solid var(--guinda-bright); outline-offset: 1px; border-color: var(--guinda-bright); }
+.auth-boton:focus-visible, .btn-logout:focus-visible { outline: 2px solid var(--guinda-bright); outline-offset: 2px; }
+
+/* Usuario y botón de salir en la Navbar */
+.navbar-usuario { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+.navbar-usuario-rol { border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; text-transform: uppercase; letter-spacing: 1px; }
+.btn-logout { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: 6px; padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; cursor: pointer; }
+.btn-logout:hover { border-color: var(--border-bright); color: var(--text-primary); }
+.app-cargando { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px; }
+@media (max-width: 576px) {
+  .navbar-usuario-nombre, .navbar-usuario-rol { display: none; }
+}

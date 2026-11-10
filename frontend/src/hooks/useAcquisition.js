@@ -25,6 +25,7 @@ import {
   MAX_CHART_POINTS, MAX_TABLE_ROWS, SIM_RATE_MS,
   BOBINA_RADIO_MM, CAMPO_MAXIMO_UT,
 } from '../constants/system.js';
+import { apiFetch, enviarJSON } from '../api/cliente.js';
 
 // ─────────────────────────────────────────────────────────────
 // SIMULACIÓN FÍSICA DEL CAMPO DE LA BOBINA TMS
@@ -139,7 +140,7 @@ export function useAcquisition() {
   /** Llama GET /api/sesiones y actualiza el estado */
   const cargarSesiones = async () => {
     try {
-      const res  = await fetch('/api/sesiones');
+      const res  = await apiFetch('/api/sesiones');
       const json = await res.json();
       if (json.ok) setSessions(json.data);
     } catch {
@@ -152,7 +153,7 @@ export function useAcquisition() {
   // Se conecta al stream del backend para recibir mediciones
   // del Pico 2W en tiempo real (cuando no estamos simulando)
   useEffect(() => {
-    const evt = new EventSource('/api/stream');
+    const evt = new EventSource('/api/stream', { withCredentials: true });
 
     evt.addEventListener('medicion', (e) => {
       try {
@@ -222,11 +223,7 @@ export function useAcquisition() {
     // 1. Crear sesión en MariaDB
     let sesionId = null;
     try {
-      const res  = await fetch('/api/sesiones', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ modo }),
-      });
+      const res  = await enviarJSON('/api/sesiones', { modo });
       const json = await res.json();
       if (json.ok) {
         sesionId = json.sesionId;
@@ -274,11 +271,8 @@ export function useAcquisition() {
 
       // Enviar al backend (que guarda en MariaDB y reenvía por SSE)
       if (sesionId) {
-        fetch('/api/mediciones', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ sesionId, ...muestra }),
-        }).catch(() => {}); // ignorar errores de red silenciosamente
+        enviarJSON('/api/mediciones', { sesionId, ...muestra })
+          .catch(() => {}); // ignorar errores de red silenciosamente (se corrige en las Fases 3 a 6)
       }
 
       // Avanzar al siguiente punto del barrido
@@ -318,7 +312,7 @@ export function useAcquisition() {
     const idToClose = sesionId ?? sesionIdRef.current;
     if (idToClose) {
       try {
-        await fetch(`/api/sesiones/${idToClose}`, { method: 'PUT' });
+        await apiFetch(`/api/sesiones/${idToClose}`, { method: 'PUT' });
       } catch (_) {}
       sesionIdRef.current = null;
     }
@@ -335,7 +329,7 @@ export function useAcquisition() {
   // ── Acciones del historial ─────────────────────────────────
   const deleteSession = useCallback(async (id) => {
     try {
-      await fetch(`/api/sesiones/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/sesiones/${id}`, { method: 'DELETE' });
       // Recargar la lista para reflejar el borrado
       await cargarSesiones();
     } catch (_) {}

@@ -1,6 +1,11 @@
 /**
  * App.jsx — Componente raíz
- * Orquesta el estado global y ensambla todas las vistas.
+ * Decide qué pantalla mostrar según la sesión del usuario:
+ *   sin usuario                → LoginPage
+ *   debe_cambiar_password      → CambiarPasswordPage
+ *   con sesión                 → Dashboard (el de siempre)
+ * El Dashboard solo se monta con sesión, así el SSE y las peticiones
+ * a la API nunca salen sin la cookie.
  */
 import React, { useState, useCallback } from 'react';
 import { useServerStatus }    from './hooks/useServerStatus.js';
@@ -15,8 +20,27 @@ import { Canvas3D }           from './components/charts/Canvas3D.jsx';
 import Superficie3D           from './components/charts/Superficie3D.jsx'; 
 import { StopModal }          from './components/modals/StopModal.jsx';
 import { StartModal }         from './components/modals/StartModal.jsx';
+import { useAuth }            from './context/AuthContext.jsx';
+import { LoginPage }          from './pages/LoginPage.jsx';
+import { CambiarPasswordPage } from './pages/CambiarPasswordPage.jsx';
 
 export default function App() {
+  const { usuario, cargando } = useAuth();
+
+  if (cargando) {
+    return <div className="app-cargando" role="status">Verificando sesión…</div>;
+  }
+  if (!usuario) return <LoginPage />;
+  if (usuario.debe_cambiar_password) return <CambiarPasswordPage />;
+  return <Dashboard />;
+}
+
+function Dashboard() {
+  const { usuario, cerrarSesion } = useAuth();
+  // Permisos por rol (el servidor los aplica de todos modos; aquí solo se ocultan botones)
+  const puedeControlar = usuario.rol === 'operador' || usuario.rol === 'admin';
+  const puedeEliminar  = usuario.rol === 'admin';
+
   // Página activa: 'dashboard' o 'historial'
   const [activePage,   setActivePage]   = useState('dashboard');
   const [selectedMode, setSelectedMode] = useState(null);
@@ -44,7 +68,8 @@ export default function App() {
 
   return (
     <>
-      <Navbar online={online} activePage={activePage} onPageChange={setActivePage} />
+      <Navbar online={online} activePage={activePage} onPageChange={setActivePage}
+        usuario={usuario} onLogout={cerrarSesion} />
 
       <div className="main-container">
 
@@ -58,6 +83,7 @@ export default function App() {
               onSelectMode={handleSelectMode}
               onStart={handleStartClick}
               onRequestStop={handleStopRequest}
+              puedeControlar={puedeControlar}
             />
 
             <p className="section-label"><span>//</span> INDICADORES EN TIEMPO REAL</p>
@@ -101,6 +127,7 @@ export default function App() {
             sessions={sessions}
             onDelete={deleteSession}
             onRecargar={recargarHistorial}
+            puedeEliminar={puedeEliminar}
           />
         )}
 
@@ -111,9 +138,13 @@ export default function App() {
         Tesis de Ingeniería · {new Date().getFullYear()}
       </footer>
 
-      <StartModal onConfirm={handleStartConfirm} />
-      <StopModal totalScanned={totalScanned} currentZIdx={currentZIdx}
-        elapsedSec={elapsedSec} onConfirm={handleStopConfirm} />
+      {puedeControlar && (
+        <>
+          <StartModal onConfirm={handleStartConfirm} />
+          <StopModal totalScanned={totalScanned} currentZIdx={currentZIdx}
+            elapsedSec={elapsedSec} onConfirm={handleStopConfirm} />
+        </>
+      )}
     </>
   );
 }

@@ -6,6 +6,7 @@
  */
 import React, { useState, useMemo } from 'react';
 import { TOTAL_POINTS, Z_LEVELS } from '../../constants/system.js';
+import { apiFetch } from '../../api/cliente.js';
 
 function formatDuracion(inicio, fin) {
   if (!fin) return '—';
@@ -16,7 +17,7 @@ function formatDuracion(inicio, fin) {
 /** Descarga las mediciones de una sesión como CSV */
 async function exportarCSV(sesionId) {
   try {
-    const res  = await fetch(`/api/sesiones/${sesionId}/mediciones`);
+    const res  = await apiFetch(`/api/sesiones/${sesionId}/mediciones`);
     const json = await res.json();
     if (!json.ok || !json.data.length) {
       alert('Sin datos para exportar.'); return;
@@ -37,7 +38,7 @@ async function exportarCSV(sesionId) {
   }
 }
 
-function SesionCard({ sesion, numero, onDelete }) {
+function SesionCard({ sesion, numero, onDelete, puedeEliminar }) {
   const [abierta, setAbierta] = useState(false);
   const pct      = Math.round(((sesion.total_puntos ?? 0) / TOTAL_POINTS) * 100);
   const fechaStr = new Date(sesion.iniciada_en).toLocaleString('es-MX', {
@@ -101,11 +102,13 @@ function SesionCard({ sesion, numero, onDelete }) {
                 onClick={() => exportarCSV(sesion.id)}>
                 <i className="bi bi-download" /> Exportar CSV
               </button>
-              <button className="mode-btn"
-                style={{ fontSize: 10, padding: '5px 12px', color: '#ff7070', borderColor: 'rgba(255,68,68,.3)' }}
-                onClick={() => onDelete(sesion.id)}>
-                <i className="bi bi-trash3" /> Eliminar
-              </button>
+              {puedeEliminar && (
+                <button className="mode-btn"
+                  style={{ fontSize: 10, padding: '5px 12px', color: '#ff7070', borderColor: 'rgba(255,68,68,.3)' }}
+                  onClick={() => onDelete(sesion.id)}>
+                  <i className="bi bi-trash3" /> Eliminar
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -114,7 +117,7 @@ function SesionCard({ sesion, numero, onDelete }) {
   );
 }
 
-export function HistorialPage({ sessions, onDelete, onRecargar }) {
+export function HistorialPage({ sessions, onDelete, onRecargar, puedeEliminar = false }) {
   const [filterMode, setFilterMode] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
@@ -176,7 +179,7 @@ export function HistorialPage({ sessions, onDelete, onRecargar }) {
         </div>
       ) : (
         filtradas.map((s, i) => (
-          <SesionCard key={s.id} sesion={s} numero={filtradas.length - i} onDelete={onDelete} />
+          <SesionCard key={s.id} sesion={s} numero={filtradas.length - i} onDelete={onDelete} puedeEliminar={puedeEliminar} />
         ))
       )}
     </>

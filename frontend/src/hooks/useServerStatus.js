@@ -6,6 +6,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../api/cliente.js';
 
 export function useServerStatus() {
   // true = servidor respondió OK, false = no hay conexión
@@ -14,7 +15,7 @@ export function useServerStatus() {
   const checkStatus = async () => {
     try {
       // fetch hace una petición GET al backend
-      const res  = await fetch('/api/status');
+      const res  = await apiFetch('/api/status');
       const json = await res.json();
       setOnline(json.ok === true);
     } catch {

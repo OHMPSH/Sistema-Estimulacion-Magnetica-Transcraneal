@@ -10,6 +10,11 @@
 --   • Usuario:       tms_user (la contraseña la eliges tú; ver abajo)
 --   • Tabla:         sesiones   — un registro por proceso de medición
 --   • Tabla:         mediciones — lecturas del sensor Hall
+--   • Tabla:         usuarios       — personas que entran al dashboard
+--   • Tabla:         sesiones_login — sesiones de usuario (cookie tms_sesion)
+--
+-- Después de ejecutarlo, crea el primer administrador:
+--   cd server && npm run crear-admin
 -- ═══════════════════════════════════════════════════════════════
 
 -- Crear la base de datos si no existe
@@ -73,5 +78,53 @@ CREATE TABLE IF NOT EXISTS mediciones (
 -- Índice para acelerar búsquedas por sesión
 CREATE INDEX IF NOT EXISTS idx_mediciones_sesion
   ON mediciones(sesion_id);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLA: usuarios
+-- Personas que entran al dashboard.
+--   admin      — todo, incluidos los usuarios y la configuración
+--   operador   — inicia y detiene barridos, exporta
+--   observador — solo mira y exporta
+-- (Igual que migrations/002_usuarios.sql)
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS usuarios (
+  id                    INT           AUTO_INCREMENT PRIMARY KEY,
+  usuario               VARCHAR(32)   NOT NULL,              -- nombre para entrar (en minúsculas)
+  nombre                VARCHAR(100)  NOT NULL,              -- nombre para mostrar
+  rol                   ENUM('admin','operador','observador') NOT NULL,
+  hash_password         VARCHAR(255)  NOT NULL,              -- scrypt$N$r$p$salHex$hashHex (nunca la contraseña)
+  activo                BOOLEAN       NOT NULL DEFAULT 1,    -- 0 = no puede entrar
+  debe_cambiar_password BOOLEAN       NOT NULL DEFAULT 1,    -- 1 = debe cambiarla al entrar
+  preferencias          JSON          NULL,                  -- por ejemplo {"tema":"oscuro"}
+  creado_en             DATETIME      NOT NULL,              -- UTC
+  ultimo_acceso         DATETIME      NULL,                  -- UTC, último login correcto
+
+  CONSTRAINT uq_usuarios_usuario UNIQUE (usuario)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLA: sesiones_login
+-- Una fila por cada sesión de usuario abierta en un navegador.
+-- El id es el SHA-256 (en hexadecimal) del token de la cookie: si
+-- alguien lee esta tabla, no obtiene tokens que pueda usar.
+-- No confundir con `sesiones`, que son las sesiones de MEDICIÓN.
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS sesiones_login (
+  id          CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,  -- SHA-256 del token
+  usuario_id  INT           NOT NULL,
+  creada_en   DATETIME      NOT NULL,                        -- UTC
+  expira_en   DATETIME      NOT NULL,                        -- UTC; se renueva con el uso
+  ultimo_uso  DATETIME      NOT NULL,                        -- UTC
+  ip          VARCHAR(45)   NULL,                            -- IPv4 o IPv6
+  user_agent  VARCHAR(255)  NULL,
+
+  -- Si se borra el usuario, se borran sus sesiones de login
+  CONSTRAINT fk_sesion_login_usuario
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_sesiones_login_usuario ON sesiones_login(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_sesiones_login_expira  ON sesiones_login(expira_en);
 
 SELECT 'Base de datos TMS creada correctamente.' AS resultado;

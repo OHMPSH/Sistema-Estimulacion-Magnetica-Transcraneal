@@ -8,6 +8,7 @@ import { TOTAL_POINTS, Z_LEVELS } from '../../constants/system.js';
 export function ControlPanel({
   isActive, selectedMode, totalScanned, currentZIdx,
   progressPct, scanLabel, onSelectMode, onStart, onRequestStop,
+  puedeControlar = false,
 }) {
   const currentZMM = Z_LEVELS[currentZIdx] ?? 0;
 
@@ -39,7 +40,8 @@ export function ControlPanel({
           </div>
         </div>
 
-        {/* Botones */}
+        {/* Botones (solo operador y admin) */}
+        {puedeControlar && (
         <div className="col-12 col-md-auto">
           <div className="kpi-label mb-2"><i className="bi bi-play-circle" /> Acciones</div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -52,6 +54,7 @@ export function ControlPanel({
             </button>
           </div>
         </div>
+        )}
 
         {/* Barra de progreso */}
         <div className="col-12 col-md" style={{ opacity: totalScanned > 0 ? 1 : 0.4 }}>

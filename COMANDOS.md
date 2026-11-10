@@ -9,14 +9,12 @@
 PT/
 ├── .gitignore
 ├── server/
-│   ├── config/
-│   │   └── database.js          ← pool de conexiones MariaDB
-│   ├── controllers/
-│   │   └── mediciones.controller.js  ← lógica de negocio
-│   ├── models/
-│   │   └── Medicion.js          ← consultas SQL
-│   ├── routes/
-│   │   └── mediciones.routes.js ← declaración de endpoints
+│   ├── config/                  ← pool de MariaDB, barrido, roles
+│   ├── controllers/             ← auth, usuarios, mediciones
+│   ├── models/                  ← Medicion, Usuario, SesionLogin (todo el SQL)
+│   ├── routes/                  ← auth, usuarios, mediciones
+│   ├── services/                ← contraseñas, cookie de sesión, límite de intentos
+│   ├── scripts/crear-admin.js   ← crea o restablece el usuario admin
 │   ├── .env                     ← credenciales (no subir a Git)
 │   ├── .env.example             ← plantilla del .env
 │   ├── middleware/              ← CORS, validación y errores
@@ -48,6 +46,9 @@ PT/
 │   │   │   └── useServerStatus.js
 │   │   ├── styles/
 │   │   │   └── global.css
+│   │   ├── api/cliente.js           ← fetch con cookie; 401 → login
+│   │   ├── context/AuthContext.jsx
+│   │   ├── pages/                   ← LoginPage, CambiarPasswordPage
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── index.html
@@ -115,7 +116,7 @@ mysql -u tms_user -p tms_db
 
 # Dentro de MariaDB, verificar las tablas:
 SHOW TABLES;
-# Debe mostrar: sesiones | mediciones
+# Debe mostrar: mediciones | sesiones | sesiones_login | usuarios
 
 # Ver la estructura de la tabla mediciones:
 DESCRIBE mediciones;
@@ -146,6 +147,52 @@ primero los comentarios del archivo para ajustar el desfase):
 ```bash
 sudo mysql tms_db < PT/server/migrations/001_sesiones_hora_local_a_utc.sql
 ```
+
+Para agregar el login (Fase 2) a una base que ya existía, crea las tablas
+`usuarios` y `sesiones_login`. No toca tus sesiones ni tus mediciones y
+se puede repetir sin problema. En una instalación nueva no hace falta,
+porque `setup_db.sql` ya las crea:
+
+```bash
+sudo mysql tms_db < PT/server/migrations/002_usuarios.sql
+```
+
+---
+
+## PASO 2b — Crear el usuario administrador
+
+Desde la Fase 2 el dashboard pide usuario y contraseña. Crea el primer
+administrador (o restablece su contraseña si la olvidaste):
+
+```bash
+cd PT/server
+npm install            # si todavía no instalaste las dependencias
+npm run crear-admin
+# Pide la contraseña dos veces sin mostrarla (mínimo 8 caracteres).
+```
+
+Si no tienes una terminal interactiva (por ejemplo, por SSH sin TTY), pásala
+por variable de entorno. Es temporal: el dashboard te obliga a cambiarla al
+entrar por primera vez.
+
+```bash
+ADMIN_PASSWORD='una-clave-temporal' npm run crear-admin
+```
+
+Después, desde el dashboard o con la API (`POST /api/usuarios`), el admin
+crea a los demás con su rol:
+
+| Rol | Puede |
+|---|---|
+| `admin` | Todo: usuarios, iniciar y detener barridos, eliminar sesiones |
+| `operador` | Iniciar y detener barridos, exportar |
+| `observador` | Solo mirar y exportar |
+
+Cada usuario nuevo entra con una contraseña temporal y debe cambiarla.
+
+> **En producción** (`NODE_ENV=production`) la cookie de sesión lleva
+> `Secure`: el login solo funciona entrando por **https://**. Si entras por
+> http:// verás que el login "no se queda" (cada petición responde 401).
 
 ---
 
@@ -220,7 +267,10 @@ npm run dev
 http://localhost:5173
 ```
 
-El badge superior derecho debe mostrar **"SERVIDOR EN LÍNEA"** en verde.
+Aparece la pantalla de login. Entra con `admin` y la contraseña de
+`npm run crear-admin`; la primera vez te pide elegir una nueva. Después, el
+badge superior derecho debe mostrar **"SERVIDOR EN LÍNEA"** en verde, junto a
+tu nombre, tu rol y el botón **Salir**.
 
 ---
 
@@ -234,9 +284,23 @@ curl http://localhost:4000/api/status
 { "ok": true, "version": "3.0.0", "uptime": 5.2, "clientes": 1 }
 ```
 
-### 8.2 Crear una sesión manualmente
+### 8.1b Iniciar sesión con curl
+Todas las rutas salvo `/api/status` exigen la cookie de sesión (sin ella
+responden 401). Con curl se guarda en un archivo con `-c` y se envía con `-b`:
 ```bash
-curl -X POST http://localhost:4000/api/sesiones \
+read -rs PW   # escribe la contraseña (no se muestra) y pulsa Enter
+curl -c cookies.txt -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"usuario\": \"admin\", \"password\": \"$PW\"}"
+```
+En los ejemplos siguientes agrega `-b cookies.txt` a cada `curl`. Para
+cerrar la sesión: `curl -b cookies.txt -X POST http://localhost:4000/api/auth/logout`.
+Tras 5 intentos fallidos con el mismo usuario desde la misma IP, el login
+responde 429 durante 15 minutos.
+
+### 8.2 Crear una sesión manualmente (operador o admin)
+```bash
+curl -b cookies.txt -X POST http://localhost:4000/api/sesiones \
   -H "Content-Type: application/json" \
   -d '{"modo": "DC"}'
 ```
@@ -246,7 +310,7 @@ curl -X POST http://localhost:4000/api/sesiones \
 
 ### 8.3 Enviar una medición del sensor Hall
 ```bash
-curl -X POST http://localhost:4000/api/mediciones \
+curl -b cookies.txt -X POST http://localhost:4000/api/mediciones \
   -H "Content-Type: application/json" \
   -d '{
     "sesionId": 1,
@@ -273,7 +337,7 @@ la fila en la tabla, en tiempo real, sin recargar el navegador.
 
 ### 8.4 Listar sesiones guardadas en MariaDB
 ```bash
-curl http://localhost:4000/api/sesiones
+curl -b cookies.txt http://localhost:4000/api/sesiones
 ```
 ```json
 {
@@ -293,7 +357,7 @@ curl http://localhost:4000/api/sesiones
 
 ### 8.5 Cerrar una sesión
 ```bash
-curl -X PUT http://localhost:4000/api/sesiones/1
+curl -b cookies.txt -X PUT http://localhost:4000/api/sesiones/1
 ```
 ```json
 { "ok": true }
@@ -328,7 +392,7 @@ GROUP BY s.id;
 
 ### 8.7 Exportar CSV de una sesión
 ```bash
-curl http://localhost:4000/api/sesiones/1/mediciones
+curl -b cookies.txt http://localhost:4000/api/sesiones/1/mediciones
 # Devuelve JSON con todos los puntos de la sesión
 ```
 También funciona desde el botón **"Exportar CSV"** en la pestaña
@@ -338,7 +402,7 @@ Mediciones Pasadas del Dashboard.
 
 ## PASO 9 — Prueba completa del Dashboard
 
-1. Abre `http://localhost:5173`
+1. Abre `http://localhost:5173` e inicia sesión como admin u operador
 2. Elige **DC — Rápida** o **AC — Normal**
 3. Clic en **Iniciar Medición** → confirma en el modal
 4. Observa:
@@ -357,6 +421,17 @@ Mediciones Pasadas del Dashboard.
 ---
 
 ## PROBLEMAS COMUNES
+
+### Olvidé la contraseña del admin
+```bash
+cd PT/server && npm run crear-admin   # la restablece y cierra sus sesiones
+```
+
+### "No existe la tabla de usuarios" al correr crear-admin
+Falta la migración 002 (ver el PASO 2):
+```bash
+sudo mysql tms_db < PT/server/migrations/002_usuarios.sql
+```
 
 ### "Access denied for user 'tms_user'"
 ```bash

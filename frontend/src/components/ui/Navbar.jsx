@@ -3,7 +3,7 @@
  */
 import React from 'react';
 
-export function Navbar({ online, activePage, onPageChange }) {
+export function Navbar({ online, activePage, onPageChange, usuario, onLogout }) {
   return (
     <>
       <nav className="tms-navbar">
@@ -22,6 +22,16 @@ export function Navbar({ online, activePage, onPageChange }) {
               {online ? 'SERVIDOR EN LÍNEA' : 'SIN CONEXIÓN'}
             </span>
           </div>
+          {usuario && (
+            <div className="navbar-usuario">
+              <i className="bi bi-person-circle" aria-hidden="true" />
+              <span className="navbar-usuario-nombre">{usuario.nombre}</span>
+              <span className="navbar-usuario-rol">{usuario.rol}</span>
+              <button type="button" className="btn-logout" onClick={onLogout}>
+                <i className="bi bi-box-arrow-right" aria-hidden="true" /> Salir
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
