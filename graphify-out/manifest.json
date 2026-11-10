@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794334163.226747,
-    "seen": 1794334164.6725864,
-    "ast_hash": "043f9b2ce76748bc21b1c7674a6885c3",
+    "mtime": 1794335329.7910779,
+    "seen": 1794335662.8935013,
+    "ast_hash": "2c5844c22e7bfd9008a0f681e954e4ca",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -762,9 +762,21 @@
     "semantic_hash": ""
   },
   "firmware/README.md": {
-    "mtime": 1794334158.4186773,
-    "seen": 1794334164.6725934,
-    "ast_hash": "e8a420f8dc517fc9bf1d5e2fccc1ca47",
+    "mtime": 1794335329.7910779,
+    "seen": 1794335662.8935108,
+    "ast_hash": "b3abcf4ba591cb84fa02c1fb37438889",
+    "semantic_hash": ""
+  },
+  "firmware/prueba_calibracion.py": {
+    "mtime": 1794335235.9897587,
+    "seen": 1794335662.8933535,
+    "ast_hash": "43377e49fd43e372541a05857a58d95e",
+    "semantic_hash": ""
+  },
+  "docs/instructivo-calibracion-y-conexiones.md": {
+    "mtime": 1794335319.6469352,
+    "seen": 1794335662.8935072,
+    "ast_hash": "7ff3596f63af938f584d5059f033c1b3",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {

@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "frontend/src/App.jsx": {
-    "mtime": 1794296408.2003949,
-    "seen": 1794297891.0416265,
-    "ast_hash": "a88316a01c1ff0a2b3a59e304bed75cd",
+    "mtime": 1794333666.5634584,
+    "seen": 1794334164.6724706,
+    "ast_hash": "02bd7c8ee2bdbc00735a87707d916005",
     "semantic_hash": ""
   },
   "frontend/src/api/cliente.js": {
@@ -168,9 +168,9 @@
     "semantic_hash": "1e9f759e106fef7e3ee996f0b674902f"
   },
   "server/middleware/validar.js": {
-    "mtime": 1794330964.6171663,
-    "seen": 1794331768.5352511,
-    "ast_hash": "fa0bf1aeff9cbd6d653eab50e04319ab",
+    "mtime": 1794333639.599057,
+    "seen": 1794334164.6725266,
+    "ast_hash": "3132704a5dbfc89d0ce92f27baf9a5b3",
     "semantic_hash": ""
   },
   "server/migrations/001_sesiones_hora_local_a_utc.sql": {
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794333082.0424814,
-    "seen": 1794333083.3793306,
-    "ast_hash": "67126c607a047bee76de0bad80f34853",
+    "mtime": 1794334163.226747,
+    "seen": 1794334164.6725864,
+    "ast_hash": "043f9b2ce76748bc21b1c7674a6885c3",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -384,9 +384,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/config/SeccionDispositivo.jsx": {
-    "mtime": 1794297179.809558,
-    "seen": 1794297891.0416353,
-    "ast_hash": "a25d989c7e8e82e7867f7c136b66347d",
+    "mtime": 1794333666.5634584,
+    "seen": 1794334164.672477,
+    "ast_hash": "ae6162c630f171e2216783f442ad649d",
     "semantic_hash": ""
   },
   "frontend/src/components/config/SeccionFormulario.jsx": {
@@ -414,9 +414,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/layout/Navbar.jsx": {
-    "mtime": 1794297179.809558,
-    "seen": 1794297891.0416408,
-    "ast_hash": "6703699d6c9fe198b60879ddf5df3bc0",
+    "mtime": 1794333666.5594585,
+    "seen": 1794334164.6724823,
+    "ast_hash": "482dacfc39c5fa55235d96c76ae30ee0",
     "semantic_hash": ""
   },
   "frontend/src/components/modals/ModalConfirmacion.jsx": {
@@ -444,9 +444,9 @@
     "semantic_hash": ""
   },
   "frontend/src/hooks/useDispositivo.js": {
-    "mtime": 1794295044.6359203,
-    "seen": 1794297891.0416524,
-    "ast_hash": "297bd72e7f045d95e863000a3ffdac63",
+    "mtime": 1794333901.4629269,
+    "seen": 1794334164.6724954,
+    "ast_hash": "9ac175025ccd9715b4f5b4f471bf2bda",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useNavegacion.js": {
@@ -534,9 +534,9 @@
     "semantic_hash": ""
   },
   "server/scripts/emular-pico.js": {
-    "mtime": 1794330987.3337257,
-    "seen": 1794331768.535276,
-    "ast_hash": "f5797704d0117bf642710a04c8beedb6",
+    "mtime": 1794333702.4519918,
+    "seen": 1794334164.672552,
+    "ast_hash": "a8369fe67fae39bca577e2fbd26abff3",
     "semantic_hash": ""
   },
   "server/services/bufferEventos.js": {
@@ -552,9 +552,9 @@
     "semantic_hash": ""
   },
   "server/services/dispositivo.js": {
-    "mtime": 1794294710.6441622,
-    "seen": 1794297891.0417132,
-    "ast_hash": "e6bd32a39435c5a13a950e9fb07924b4",
+    "mtime": 1794333896.2908509,
+    "seen": 1794334164.6725588,
+    "ast_hash": "6b56a29f63d43e99e9cba9f989e4c558",
     "semantic_hash": ""
   },
   "server/services/trazabilidad.js": {
@@ -612,9 +612,9 @@
     "semantic_hash": ""
   },
   "server/tests/validadores.test.js": {
-    "mtime": 1794331043.299058,
-    "seen": 1794331768.53531,
-    "ast_hash": "8976709da1bef1570014d2b5c4e4fca9",
+    "mtime": 1794333639.599057,
+    "seen": 1794334164.6725855,
+    "ast_hash": "937f630105e11fdcc13eedb3e4436faa",
     "semantic_hash": ""
   },
   "docs/fase7-revision-diseno.md": {
@@ -624,9 +624,9 @@
     "semantic_hash": ""
   },
   "docs/firmware-pico-w.md": {
-    "mtime": 1794333082.0424814,
-    "seen": 1794333083.3793356,
-    "ast_hash": "d93fb691eeaad7ceaf93b1a314b8b010",
+    "mtime": 1794334158.4186773,
+    "seen": 1794334164.6725914,
+    "ast_hash": "19759e9d94ca2b14fa81f21da07a381a",
     "semantic_hash": ""
   },
   "server/migrations/006_paso_libre.sql": {
@@ -654,51 +654,51 @@
     "semantic_hash": ""
   },
   "firmware/barrido.py": {
-    "mtime": 1794332266.0560377,
-    "seen": 1794333083.3791904,
-    "ast_hash": "5eb773b39ee4f19f16fa19a7a533570a",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724436,
+    "ast_hash": "0c649719947162e6546f5f987f10f14c",
     "semantic_hash": ""
   },
   "firmware/cliente.py": {
-    "mtime": 1794332513.6885262,
-    "seen": 1794333083.3791924,
-    "ast_hash": "336cdd9944039fced12e542c6c991fbe",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724458,
+    "ast_hash": "9c48ab50e803aa1f8b78df570a6ebf1f",
     "semantic_hash": ""
   },
   "firmware/config.py": {
-    "mtime": 1794332473.2557244,
-    "seen": 1794333083.3791935,
-    "ast_hash": "2bc3c0df442c5cbb6fa887154306e075",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724472,
+    "ast_hash": "b7c9bdbebcb85a528325881d66ad6126",
     "semantic_hash": ""
   },
   "firmware/led.py": {
-    "mtime": 1794332274.9521651,
-    "seen": 1794333083.3791947,
-    "ast_hash": "b72775f1104907d6030d267a5c14461f",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724482,
+    "ast_hash": "ec89bde971a55ade7575e257594fe0f1",
     "semantic_hash": ""
   },
   "firmware/main.py": {
-    "mtime": 1794332940.904177,
-    "seen": 1794333083.379196,
-    "ast_hash": "c018f1b408d9149775616fac457633fd",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724496,
+    "ast_hash": "d11691322f8c556018066dfa651151bf",
     "semantic_hash": ""
   },
   "firmware/motores.py": {
-    "mtime": 1794332242.1196942,
-    "seen": 1794333083.3791966,
-    "ast_hash": "2a2c6839ec4afaf88d5e042a87093e90",
+    "mtime": 1794333735.8124862,
+    "seen": 1794334164.6724505,
+    "ast_hash": "9172a666f8dc220bf91b9176a39645db",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/ejecutar_pc.py": {
-    "mtime": 1794332828.3702765,
-    "seen": 1794333083.379201,
-    "ast_hash": "39fb7bafecedbbf424b3e19794421217",
+    "mtime": 1794333754.260759,
+    "seen": 1794334164.6724536,
+    "ast_hash": "ecd53488f72e30421b5d198825955e3d",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/prueba_logica.py": {
-    "mtime": 1794332473.2557244,
-    "seen": 1794333083.3792021,
-    "ast_hash": "82d019db532d8f813698f9ccd75cfa53",
+    "mtime": 1794333745.0486228,
+    "seen": 1794334164.6724548,
+    "ast_hash": "328e596e31b0ba97a79c53f19e9e8a9e",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/_compat.py": {
@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "firmware/README.md": {
-    "mtime": 1794333082.0384812,
-    "seen": 1794333083.3793383,
-    "ast_hash": "5f08f57e2cbb3061f636e87bd5560d72",
+    "mtime": 1794334158.4186773,
+    "seen": 1794334164.6725934,
+    "ast_hash": "e8a420f8dc517fc9bf1d5e2fccc1ca47",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {
