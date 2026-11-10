@@ -61,3 +61,5 @@ app.listen(PORT, HOST, async () => {
   // Verificar conexión a MariaDB al iniciar
   await testConnection();
 });
+
+
