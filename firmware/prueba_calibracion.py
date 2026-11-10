@@ -71,11 +71,11 @@ USAR_Z = True             # False si todavía no hay motor en Z
 # │ Con 1/8 de micropaso (200 pulsos/mm) usa unos 250 µs para      │
 # │ la misma velocidad.                                            │
 # └─────────────────────────────────────────────────────────────┘
-MEDIO_PERIODO_US = 1000
+MEDIO_PERIODO_US = 100
 # Rampa opcional: arranca con este medio periodo (más lento) y acelera
 # hasta MEDIO_PERIODO_US en RAMPA_PASOS pulsos (y frena igual). 0 = sin rampa.
-MEDIO_PERIODO_INICIO_US = 2000
-RAMPA_PASOS = 0
+MEDIO_PERIODO_INICIO_US = 1500
+RAMPA_PASOS = 300
 
 
 class Eje:

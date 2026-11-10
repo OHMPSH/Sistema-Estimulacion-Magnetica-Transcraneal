@@ -684,9 +684,9 @@
     "semantic_hash": ""
   },
   "firmware/motores.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796693,
-    "ast_hash": "9172a666f8dc220bf91b9176a39645db",
+    "mtime": 1794349161.9372964,
+    "seen": 1794349218.9533677,
+    "ast_hash": "769a9935e6129cf804de60abda504a8e",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/ejecutar_pc.py": {
@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/prueba_logica.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796752,
-    "ast_hash": "328e596e31b0ba97a79c53f19e9e8a9e",
+    "mtime": 1794349172.149452,
+    "seen": 1794349218.9533753,
+    "ast_hash": "c314ca046691b7aacfd0684a1a538c7d",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/_compat.py": {
@@ -768,15 +768,15 @@
     "semantic_hash": ""
   },
   "firmware/prueba_calibracion.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796726,
-    "ast_hash": "43377e49fd43e372541a05857a58d95e",
+    "mtime": 1794349145.9210522,
+    "seen": 1794349218.9533722,
+    "ast_hash": "21c0d36391e817efc10f4906d4105731",
     "semantic_hash": ""
   },
   "docs/instructivo-calibracion-y-conexiones.md": {
-    "mtime": 1794336416.166442,
-    "seen": 1794336467.2798185,
-    "ast_hash": "7ff3596f63af938f584d5059f033c1b3",
+    "mtime": 1794349182.633612,
+    "seen": 1794349218.9535513,
+    "ast_hash": "ddbd718631643c345a0e544260ca205c",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {
