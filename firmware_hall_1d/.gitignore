@@ -1,0 +1,3 @@
+# Credenciales locales: nunca se suben a git
+secretos.py
+__pycache__/

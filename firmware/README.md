@@ -21,6 +21,9 @@ Firmware de la Pico W para el sistema TMS. Mueve la mesa (NEMA 17 con drivers TB
 | `led.py` | Patrones del LED de la placa. |
 | `registro.py` | Log por la consola USB con la hora UTC. |
 | `banco.py` | Prueba de banco y calibración **sin servidor**. |
+| `prueba_sensor.py` | Programa independiente para Thonny: comprueba que el HMC5883L responde (escaneo I2C, identificación «H43», aviso si es un QMC5883L) y muestra cuentas crudas, µT y \|B\| cada medio segundo. No necesita `config.py`. |
+| `prueba_sensor_adafruit.py` | Diagnóstico del HMC5883L para Thonny: revisa los niveles de SDA y SCL, escanea el bus de tres maneras (hardware, software lento y con SDA/SCL intercambiados) y luego repite el ejemplo de Arduino de la biblioteca de Adafruit (en `AR3832-Modulo-HMC5883L-librerias/`). |
+| `prueba_hall_49e.py` | Prueba de un sensor Hall lineal **49E** de un eje (salida analógica) para Thonny: calibra el cero, muestra la tensión y Bz en mT y µT (Bx = By = 0). Conexión: VCC → 3V3(OUT) pin 36, GND → AGND pin 33, OUT → GP26/ADC0 pin 31. **Con 3,3 V, no con 5 V.** |
 | `prueba_calibracion.py` | Programa independiente para Thonny: pide X, Y, Z en mm, mueve la mesa y regresa al origen con «1». Sirve para calibrar los pasos por mm de cada eje. Instructivo completo (con las conexiones de los TB6600) en [docs/instructivo-calibracion-y-conexiones.md](../docs/instructivo-calibracion-y-conexiones.md). |
 | `pruebas_pc/` | Pruebas en el PC (no se copian a la Pico). |
 | `pico_w_cliente_ejemplo.py` | El ejemplo anterior, solo de referencia (no se copia a la Pico). |
@@ -98,6 +101,8 @@ Para que el firmware no arranque al encender, pulsa **BOOTSEL** durante los 3 pr
 Todo se hace desde la consola (Thonny o `mpremote repl`) con el firmware detenido (ver arriba) y `import banco`.
 
 ### 5.1 Sensor
+
+Primero, la prueba más simple: copia solo `prueba_sensor.py` a la Pico (o ábrelo en Thonny) y pulsa F5. Debe decir `OK: HMC5883L en 0x1E` y mostrar un |B| de unos 25 a 65 µT que casi no cambia al girar el módulo. Con eso el cableado y el chip quedan comprobados. Después, con el firmware completo cargado:
 
 ```python
 >>> import banco
