@@ -785,6 +785,54 @@
     "ast_hash": "90c596e8b239771fd4843004226da896",
     "semantic_hash": ""
   },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/Adafruit_HMC5883_U.cpp": {
+    "mtime": 1701792304.0,
+    "seen": 1794425687.1942797,
+    "ast_hash": "d12e70be1a43888a49462200e03549e0",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/Adafruit_HMC5883_U.h": {
+    "mtime": 1701792304.0,
+    "seen": 1794425687.1942835,
+    "ast_hash": "ef0dab8ffd5eb714beb75327c98caecd",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/Adafruit_Sensor.cpp": {
+    "mtime": 1701189500.0,
+    "seen": 1794425687.1942859,
+    "ast_hash": "efaf077c8ba7d3e25d1dceec4485627f",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/Adafruit_Sensor.h": {
+    "mtime": 1701189500.0,
+    "seen": 1794425687.1942875,
+    "ast_hash": "c7f29eb0e99851910d0ee30d6e7d3c90",
+    "semantic_hash": ""
+  },
+  "firmware/prueba_sensor_adafruit.py": {
+    "mtime": 1794425684.0572646,
+    "seen": 1794425687.1943088,
+    "ast_hash": "e07f57ab2c8f48d63749f7e960d946d3",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/README.md": {
+    "mtime": 1701792304.0,
+    "seen": 1794425687.1945052,
+    "ast_hash": "245b5d69007664819ed80c5849170f34",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/LICENSE.txt": {
+    "mtime": 1701189500.0,
+    "seen": 1794425687.1945071,
+    "ast_hash": "3b83ef96387f14655fc854ddc3c6bd57",
+    "semantic_hash": ""
+  },
+  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/README.md": {
+    "mtime": 1701189500.0,
+    "seen": 1794425687.1945086,
+    "ast_hash": "9a132989d695da559b1167a6e370f913",
+    "semantic_hash": ""
+  },
   "frontend/package-lock.json": {
     "mtime": 1794297130.8084831,
     "seen": 1794297891.0417466,

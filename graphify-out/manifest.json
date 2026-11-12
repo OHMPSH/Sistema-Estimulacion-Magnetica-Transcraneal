@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "firmware/README.md": {
-    "mtime": 1794421665.5035162,
-    "seen": 1794421670.5019083,
-    "ast_hash": "d66e9aa862de4229b585974e57964bd7",
+    "mtime": 1794438803.3336103,
+    "seen": 1794446652.0601108,
+    "ast_hash": "6c18a404968bdff78aa9e9d00f83cc41",
     "semantic_hash": ""
   },
   "firmware/prueba_calibracion.py": {
@@ -831,6 +831,96 @@
     "mtime": 1701189500.0,
     "seen": 1794425687.1945086,
     "ast_hash": "9a132989d695da559b1167a6e370f913",
+    "semantic_hash": ""
+  },
+  "firmware/prueba_hall_49e.py": {
+    "mtime": 1794438779.261879,
+    "seen": 1794446652.0598779,
+    "ast_hash": "456d01d212693166265060fc14b6d790",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/banco.py": {
+    "mtime": 1794440459.6670356,
+    "seen": 1794446652.0599039,
+    "ast_hash": "9dec8dd0b2bd1d7f270b40c10a718d41",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/barrido.py": {
+    "mtime": 1794440396.3499177,
+    "seen": 1794446652.0599058,
+    "ast_hash": "08c9b390b3fbd9971b79259c86617706",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/cliente.py": {
+    "mtime": 1794440323.5164723,
+    "seen": 1794446652.059907,
+    "ast_hash": "9c48ab50e803aa1f8b78df570a6ebf1f",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/config.py": {
+    "mtime": 1794440351.0410402,
+    "seen": 1794446652.0599086,
+    "ast_hash": "9b8eac28ff593cf84d52afe81cc4333e",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/led.py": {
+    "mtime": 1794440323.5164723,
+    "seen": 1794446652.0599098,
+    "ast_hash": "ec89bde971a55ade7575e257594fe0f1",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/main.py": {
+    "mtime": 1794440439.9627004,
+    "seen": 1794446652.0599115,
+    "ast_hash": "0a5732ceaa586af6042702e590c5639d",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/motores.py": {
+    "mtime": 1794440323.5164723,
+    "seen": 1794446652.0599132,
+    "ast_hash": "769a9935e6129cf804de60abda504a8e",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/pruebas_pc/ejecutar_pc.py": {
+    "mtime": 1794440473.003256,
+    "seen": 1794446652.0599148,
+    "ast_hash": "69ac20c2742e1fc2467bf9edea02603a",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/pruebas_pc/prueba_logica.py": {
+    "mtime": 1794440522.1720276,
+    "seen": 1794446652.0599163,
+    "ast_hash": "7db4590fc5636fff9167a21ccc74863b",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/red.py": {
+    "mtime": 1794440323.5164723,
+    "seen": 1794446652.0599174,
+    "ast_hash": "ea431886da3b279478a3fe4e38568b0b",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/registro.py": {
+    "mtime": 1794440323.5164723,
+    "seen": 1794446652.0599189,
+    "ast_hash": "cd05977e3bfb3263e72460133de8fbc0",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/secretos_ejemplo.py": {
+    "mtime": 1794440459.7430367,
+    "seen": 1794446652.05992,
+    "ast_hash": "dda192947c71d397541be87521894516",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/sensor_hall.py": {
+    "mtime": 1794440377.0095515,
+    "seen": 1794446652.0599215,
+    "ast_hash": "b5f24a63634b735adf8263dd7d47d461",
+    "semantic_hash": ""
+  },
+  "firmware_hall_1d/README.md": {
+    "mtime": 1794440695.3422995,
+    "seen": 1794446652.0601125,
+    "ast_hash": "e79d1e3b2dfebab4325008e092c29a7c",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {
