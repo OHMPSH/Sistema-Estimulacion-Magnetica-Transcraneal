@@ -28,17 +28,38 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 |---|---|
 | Servidor | Raspberry Pi 5 con Node.js, MariaDB y Nginx. **Esta carpeta NO es la Raspberry**: el usuario descargará el proyecto ahí y lo levantará después. |
 | Microcontrolador | **Raspberry Pi Pico W** (RP2040). No es la Pico 2W, aunque algunos textos viejos digan "Pico 2W". |
-| Sensor | Módulo **HMC5883L**: magnetómetro AMR triaxial por I2C. Rango de ±1,3 a ±8,1 Ga (130 a 810 µT); 1090 LSB/Ga con la ganancia más alta. Salida de datos de 75 Hz en modo continuo y 160 Hz en medición única. El ADC de la Pico **no** se usa con este sensor. |
+| Sensor magnético (3 ejes) | Módulo **QMC5883P** por I2C, dirección **0x2C** (confirmado y funcionando, 2026-11-12). La tienda lo vendía como HMC5883L, pero **no lo es**: ni HMC5883L (0x1E) ni QMC5883L (0x0D). Rangos de 2, 8, 12 y 30 G; 200 Hz. Ficha completa en [docs/sensor-qmc5883p.md](docs/sensor-qmc5883p.md). |
+| Sensor Hall (1 eje) | **49E** (SS49E) lineal, analógico, en GP26/ADC0 con 3,3 V: unos 9,24 mV/mT y unos 0,09 mT por cuenta del ADC. Lo usa el firmware de prueba [firmware_hall_1d/](firmware_hall_1d/README.md). |
 | Posicionamiento | Mesa cartesiana XY con motores NEMA 17 y husillos T8 (0,04 mm por paso teórico). Requisito: error posicional menor que ±1 mm. |
 | Red | Hotspot de un iPhone, con salida a internet. Varias personas (el director, un ingeniero, el tesista y un compañero) miran el dashboard a la vez desde laptops y teléfonos. |
 
-**El sensor es solo de prueba.** El usuario sabe que el HMC5883L no mide el pulso real de la bobina TMS. **No vuelvas a señalarlo** ni lo uses como argumento en contra de nada.
+**Los sensores son solo de prueba.** El usuario sabe que ni el QMC5883P ni el Hall 49E miden el pulso real de la bobina TMS. **No vuelvas a señalarlo** ni lo uses como argumento en contra de nada.
 
-Datos útiles del HMC5883L para el firmware y la conversión de unidades:
-- Si un eje se desborda, el registro devuelve **−4096**: hay que marcar la lectura como saturada.
-- Los registros de datos vienen en el orden **X, Z, Y**, no X, Y, Z.
-- Conversión: µT = cuentas / (LSB/Ga) × 100.
-- Muchos módulos GY-271 traen en realidad un **QMC5883L**, que tiene otra dirección I2C (0x0D en lugar de 0x1E) y otros registros. Hay que verificar el chip con un escaneo del bus.
+**Cómo funciona el QMC5883P** (resumen; lo demás está en `docs/sensor-qmc5883p.md`):
+- **Conexión probada:** SDA → GP0 (pin 1), SCL → GP1 (pin 2), VCC → 3V3(OUT) (pin 36), GND → pin 38; I2C0 a 100 kHz. El firmware cliente todavía dice GP4/GP5.
+- **Inicialización:**
+  1. Chip ID `0x00` = `0x80`.
+  2. `0x29 ← 0x06` (signo de los ejes).
+  3. `0x0B ← bits_rango << 2` (Set/Reset y rango).
+  4. `0x0A ← 0xCD` (modo normal, 200 Hz). **Sin este paso, todo vale 0.**
+  5. Esperar 20 ms.
+- **Lectura:**
+  - Esperar `DRDY` (`0x09` bit 0, con un límite de 100 ms).
+  - Leer 6 bytes desde `0x01` con `struct.unpack('<hhh')`: orden **X, Y, Z**, **byte bajo primero**, de −32768 a 32767.
+  - La saturación es el bit **OVFL** (`0x09` bit 1), **no** −4096.
+- **Rangos** (`0x0B`, bits 3–2):
+
+  | Rango | Bits | Cuentas/G | Máximo |
+  |---|---|---|---|
+  | 30 G | 0 | 1000 | ±3000 µT |
+  | 12 G | 1 | 2500 | ±1200 µT |
+  | 8 G | 2 | 3750 | ±800 µT |
+  | 2 G | 3 | 15000 | ±200 µT |
+
+  Conversión: µT = cuentas / (cuentas/G) × 100.
+- **Medición:** se promedian N lecturas, y el fondo (Tierra + entorno, con la bobina apagada) se mide y se resta. Ante un `OSError`, se vuelve a inicializar.
+- Los programas que funcionan son `firmware/prueba_qmc5883p.py` y `firmware/medicion_campo_qmc5883p.py`.
+- La biblioteca de Arduino que trajo el módulo (Adafruit HMC5883) no servía para este chip y se borró el 2026-11-12 a pedido del usuario (recuperable desde git).
 
 El "+5 mm" que aparece en la simulación es el **standoff**: la separación física entre la bobina y el elemento sensor. El **origen de coordenadas** es el hotspot, debajo del centro de la bobina, aunque el código actual usa x, y de 0 a 60 mm con el centro en 30.
 
@@ -75,13 +96,20 @@ PT/
 ├── docs/fase7-revision-diseno.md ← revisión de interfaz, plan de diseño y contrastes
 ├── docs/prompts-sesiones.md      ← prompts de cada fase pendiente
 ├── docs/instructivo-calibracion-y-conexiones.md ← cableado de los 3 TB6600 con pines físicos y calibración de pasos/mm
-├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, HMC5883L (X, Z, Y; −4096), hotspot
+├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, hotspot (su sección del sensor todavía describe el HMC5883L)
+├── docs/sensor-qmc5883p.md       ← el magnetómetro real: conexión, registros, rangos, medición y QUÉ FALTA en el firmware cliente
+├── docs/prompts-qmc5883p-y-serpentina.md ← prompts (2026-11-12): firmware cliente con QMC5883P y serpentina; servidor y página para el QMC5883P
 ├── firmware/                     ← firmware MicroPython de la Pico W (2026-11-10; guía en firmware/README.md):
-│                                    config.py, main.py, red.py, cliente.py, sensor.py, motores.py (PIO + DMA, TB6600),
+│                                    config.py, main.py, red.py, cliente.py, sensor.py (⚠ todavía HMC5883L), motores.py (PIO + DMA, TB6600),
 │                                    barrido.py, led.py, registro.py, banco.py (prueba de banco y calibración),
 │                                    prueba_calibracion.py (independiente, para Thonny: X/Y/Z en mm y regreso al origen),
+│                                    prueba_qmc5883p.py y medicion_campo_qmc5883p.py (QMC5883P, independientes, funcionan),
+│                                    prueba_hall_49e.py (Hall 49E en el ADC, independiente),
 │                                    secretos_ejemplo.py (secretos.py está en .gitignore), pruebas_pc/ (stubs y tests en CPython)
 │                                    y pico_w_cliente_ejemplo.py (el ejemplo anterior, solo referencia)
+├── firmware_hall_1d/             ← copia del firmware para el Hall 49E de un eje (2026-11-11; guía en su README.md):
+│                                    sensor_hall.py (nuevo), barrido.py y main.py adaptados, el resto copiado sin cambios;
+│                                    secretos.py local (en su propio .gitignore) y pruebas_pc/ (usa los stubs de firmware/)
 ├── nginx/tms.conf                ← NO TOCAR
 ├── server/                       ← Node.js + Express (ESM, "type":"module")
 │   ├── server.js                 ← entrada: dotenv, testConnection, iniciarServicios y listen
@@ -370,18 +398,48 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Login obligatorio al entrar:** cada pestaña nueva y cada navegador recién abierto piden usuario y contraseña. La marca `tms_login_pestana` vive en `sessionStorage` (por pestaña; sobrevive a la recarga, así que recargar a mitad de un barrido no saca al usuario). La cookie ya no lleva `Max-Age`, y al iniciar sesión el servidor borra la sesión de login anterior de ese navegador.
 
 **Firmware de la Pico W (2026-11-10, pedido por el usuario):**
-- Hardware confirmado: NEMA 17 con drivers **TB6600** y sensor **HMC5883L**. Los pines, micropasos, recorridos, finales de carrera, modo de Z y la posición de la bobina siguen como `PENDIENTE` en `firmware/config.py`.
+- Hardware confirmado: NEMA 17 con drivers **TB6600** y sensor **HMC5883L** (después se supo que el módulo es un **QMC5883P**, ver abajo). Los pines, micropasos, recorridos, finales de carrera, modo de Z y la posición de la bobina siguen como `PENDIENTE` en `firmware/config.py`.
 - Diseño: bucle cooperativo en `main.py`; homing y barrido son generadores. Los pulsos los genera el PIO (1 MHz) y un canal DMA le pasa los segmentos de la rampa, así que un lote sale mientras la mesa se mueve (necesita MicroPython ≥ 1.22). Coordenadas: `x_máquina = X_BOBINA_MM − zona.x/2 + xMM` y `z_máquina = Z_CERO_MM + zMM` (Z_CERO_MM es una constante de calibración agregada; vale 0 por defecto).
 - Reanudación con `lecturas_por_punto = N`: el seq s es la lectura (s − 1) % N del punto (s − 1) // N.
 - Verificado solo en el PC (`firmware/pruebas_pc/`): 9 pruebas de lógica (la malla coincide punto por punto con `services/geometria.js`) y el firmware completo contra el servidor con una MariaDB temporal: 2 × 2 × 1, 2 lecturas por punto con reinicio a mitad (60 seq sin huecos ni duplicados), caída de Wi-Fi, parada del operador, zona fuera del recorrido y 401. **Sin probar en la Pico ni con la mesa.**
 - Segunda vuelta (aprobada por el usuario el mismo día): el latido acepta `estado` (`espera`/`homing`/`midiendo`/`error`) y `error` (≤ 300), guardados solo en memoria y expuestos como `estadoPico`/`errorPico`; la Navbar muestra la Pico **en los dos modos** («en línea · midiendo», punto amarillo con error) y la página un aviso con el error. **Corregido un fallo previo:** el servidor solo difundía `event: dispositivo` en los cambios en línea ↔ sin señal, y el navegador marcaba «sin señal» 15 s después aunque llegaran latidos; ahora se difunde en cada latido.
 - Firmware: watchdog **apagado por defecto** (`USAR_WATCHDOG = False`, decisión del usuario: no quiere que la Pico se reinicie al detener el programa). El homing deja la mesa en **0, 0, 0** (el origen está `HOMING_SEPARACION_MM` delante del disparo del final; `Z_CERO_MM` y `MARGEN_ORIGEN_MM` pasan a 0). Al completar, detener o fallar una sesión, la mesa vuelve a 0, 0, 0. LED: parpadeo desde que se alimenta, **fijo** con el servidor conectado, tres destellos con error, parpadeo lento con 401. Verificado en el navegador con el firmware corriendo en el PC (en línea en simulación, aviso de zona fuera del recorrido, «midiendo», Detener → origen).
 
+**Sensor real y firmware del Hall de un eje (2026-11-11 y 2026-11-12):**
+- El HMC5883L nunca respondió porque el módulo es un **QMC5883P** (0x2C). Se borraron las pruebas del HMC5883L (`prueba_sensor.py` y `prueba_sensor_adafruit.py`, recuperables desde git) y se agregaron las del QMC5883P que hizo funcionar el usuario. Se probaron en el PC con un bus simulado.
+- **Pendiente (lo hará el usuario en otra sesión): adaptar el firmware cliente de `firmware/` al QMC5883P.** La lista completa está en `docs/sensor-qmc5883p.md`, sección 6. En resumen:
+  - `sensor.py` → clase `QMC5883P` con la misma interfaz (`verificar`, `configurar`, generador `medir`), DRDY, OVFL, promedio y reinicio tras `OSError`;
+  - `config.py`: GP0/GP1, 0x2C, 100 kHz;
+  - `banco.sensor()`;
+  - el fondo, en la Pico o en `offset_ut`.
+- **Decisión pendiente del usuario sobre el servidor.** Hoy está hecho para el HMC5883L:
+  - `raw` de −4096 a 2047 (`conversionSensor.js`);
+  - −4096 = saturado;
+  - ganancias del HMC (0,88 a 8,1 Ga) en `validacionConfiguracion.js`;
+  - `sensor.modelo = 'HMC5883L'`.
+
+  Las cuentas del QMC5883P (±32767) no caben. Hay dos opciones:
+  - **(a)** La Pico convierte a «cuentas HMC» con el `lsb_por_ga` de la sesión, como `firmware_hall_1d/sensor_hall.py` (`a_cuentas`). Llega como mucho a ±890 µT.
+  - **(b)** Adaptar el servidor al QMC5883P (modelo, rangos 2/8/12/30 G, `raw` de 16 bits, saturación explícita), que toca archivos del servidor y de la página.
+
+  No cambies el servidor sin su aprobación.
+- **`firmware_hall_1d/`:** firmware completo para el Hall 49E de un eje, copiado de `firmware/`.
+  - **Sensor:** `sensor_hall.py` calibra el cero al arrancar (BOOTSEL en espera lo recalibra).
+  - **Unidades:** como el servidor solo acepta cuentas HMC, con `UNIDAD_ENVIO = "mT"` **el número que muestra el dashboard (rotulado µT) son mT** (±249,6 con 1,9 Ga). Bx = By = 0.
+  - **Sin finales de carrera:** la posición al arrancar es el origen 0, 0, 0, y los límites de software son X 0–410, Y 0–562, Z 0–88 mm (los midió el usuario con `prueba_calibracion.py`).
+  - **Zona:** empieza en `ORIGEN_ZONA_*_MM` (por defecto, el origen).
+  - **Drivers y origen:** los drivers quedan habilitados todo el tiempo. La mesa vuelve al origen al terminar, al detener, ante un error y con Ctrl+C; nunca se reinicia sola.
+  - **Motores:** 50 pulsos/mm y velocidad máxima de 60 mm/s.
+  - **Verificación:** en el PC, contra una MariaDB temporal (50 puntos sin huecos; Ctrl+C a mitad del barrido → origen). **Sin probar en la Pico con la mesa.**
+- **Para que la Pico alcance el backend de la laptop**, arráncalo con `cd server && HOST=0.0.0.0 npm run dev`. El `.env` tiene `HOST=127.0.0.1`, y dotenv no pisa una variable que ya existe. La Pico usa `SERVIDOR = "http://<IP de la laptop>:4000"`.
+  - Red del laboratorio: `TP-LINK_5D41`; la laptop tenía la IP 192.168.0.186 (puede cambiar).
+  - Las credenciales y el token están en `firmware_hall_1d/secretos.py` (ignorado por git). **No los copies a otros archivos.**
+
 **Notas que deja la Fase 8 (pendientes y mejoras futuras):**
 - ⚠ **Contraseña publicada:** el `.env` local usa `DB_PASSWORD=tms_password`, que aparece en el historial de git (commit `22d3e7f`, quitada en `010cb13`). No se reescribió el historial. En la Raspberry usa otra contraseña (COMANDOS.md 3.1); si el repositorio es público, cámbiala también en local.
 - **Acceso desde el hotspot (comprobado con Nginx y una copia de `tms.conf`):** por HTTPS funciona con la IP o cualquier nombre, porque `tms.conf` es el único servidor en el 443. Por HTTP, el sitio `default` de Raspberry Pi OS captura `http://<IP>`; la guía lo deshabilita y recomienda el nombre de host `tms` → `https://tms.local` por mDNS. `tms.ipn.local` no se resuelve por mDNS (dos etiquetas).
 - La versión en `/status` es `3.0.0+desconocido` si `/opt/tms` no es un repositorio git (por ejemplo, copiado con rsync); el unit de systemd agrega `safe.directory` para el caso con git.
-- Pendiente con hardware: probar el firmware de ejemplo con la Pico W y el HMC5883L reales (escaneo I2C, orden X, Z, Y, signos con un imán).
+- Pendiente con hardware: probar el firmware con la Pico W, la mesa y el sensor real (el QMC5883P; ver «Sensor real» abajo).
 - Pendiente de decidir: «Medir cero» del sensor (necesita un endpoint), qué hacer con `lecturas_por_punto > 1` (promediar en la Pico o en el servidor), si las sesiones `hw` deben cerrarse solas al completar la malla, y las cuestiones abiertas de abajo.
 - Mejoras posibles: pasar Lighthouse o axe cuando se puedan instalar; mostrar en el historial la superficie de una sesión pasada; paginar `GET /sesiones` si el historial crece mucho; traducir a lenguaje llano los mensajes 422 del servidor.
 

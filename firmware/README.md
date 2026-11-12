@@ -2,6 +2,8 @@
 
 Firmware de la Pico W para el sistema TMS. Mueve la mesa (NEMA 17 con drivers TB6600), lee el HMC5883L y habla con el servidor con el protocolo de [docs/firmware-pico-w.md](../docs/firmware-pico-w.md): latido, sesión activa y lotes de lecturas crudas.
 
+> **⚠ Sensor:** el módulo real es un **QMC5883P** (0x2C), no el HMC5883L para el que están escritos `sensor.py`, `banco.sensor()` y la sección 2.1. Hasta adaptarlo (lista en [docs/sensor-qmc5883p.md](../docs/sensor-qmc5883p.md), sección 6), usa `prueba_qmc5883p.py` y `medicion_campo_qmc5883p.py` para medir. La versión del firmware para un Hall 49E de un eje está en [`../firmware_hall_1d/`](../firmware_hall_1d/README.md).
+
 > **Estado:** probado en el PC contra el servidor real (con motores, sensor y Wi-Fi simulados, ver la sección 9). **Todavía no se ha probado en la Pico ni con la mesa.** Haz la prueba de banco (sección 6) antes de conectarlo al servidor.
 
 ---
@@ -15,14 +17,14 @@ Firmware de la Pico W para el sistema TMS. Mueve la mesa (NEMA 17 con drivers TB
 | `main.py` | Bucle principal: watchdog, latido, sesiones, envío de lotes y LED. Arranca solo al encender. |
 | `red.py` | Wi-Fi (reconecta sin detener el barrido) y hora por NTP. |
 | `cliente.py` | Latido, búfer circular de lecturas en RAM y envío por lotes con reintentos. |
-| `sensor.py` | HMC5883L: escaneo I2C, identificación, ganancia y lectura (orden X, Z, Y). |
+| `sensor.py` | HMC5883L: escaneo I2C, identificación, ganancia y lectura (orden X, Z, Y). **Pendiente de cambiar al QMC5883P.** |
 | `motores.py` | Ejes con PIO + DMA (los pulsos los genera el hardware), rampa trapezoidal, finales de carrera y homing. |
 | `barrido.py` | Malla de la sesión, coordenadas de zona → máquina, verificación del recorrido y reanudación. |
 | `led.py` | Patrones del LED de la placa. |
 | `registro.py` | Log por la consola USB con la hora UTC. |
 | `banco.py` | Prueba de banco y calibración **sin servidor**. |
-| `prueba_sensor.py` | Programa independiente para Thonny: comprueba que el HMC5883L responde (escaneo I2C, identificación «H43», aviso si es un QMC5883L) y muestra cuentas crudas, µT y \|B\| cada medio segundo. No necesita `config.py`. |
-| `prueba_sensor_adafruit.py` | Diagnóstico del HMC5883L para Thonny: revisa los niveles de SDA y SCL, escanea el bus de tres maneras (hardware, software lento y con SDA/SCL intercambiados) y luego repite el ejemplo de Arduino de la biblioteca de Adafruit (en `AR3832-Modulo-HMC5883L-librerias/`). |
+| `prueba_qmc5883p.py` | Prueba mínima del magnetómetro **QMC5883P** para Thonny: escaneo I2C (debe salir `0x2c`) y cuentas crudas X, Y, Z. Conexión: SDA → GP0 pin 1, SCL → GP1 pin 2, VCC → 3V3(OUT) pin 36, GND → pin 38. |
+| `medicion_campo_qmc5883p.py` | Medición con el QMC5883P para Thonny: rango (2/8/12/30 G), promedio, resta del fondo, Bx/By/Bz/\|B\| en µT, SATURADO (bit OVFL) y reconexión. Salida para el Plotter de Thonny. Ver [docs/sensor-qmc5883p.md](../docs/sensor-qmc5883p.md). |
 | `prueba_hall_49e.py` | Prueba de un sensor Hall lineal **49E** de un eje (salida analógica) para Thonny: calibra el cero, muestra la tensión y Bz en mT y µT (Bx = By = 0). Conexión: VCC → 3V3(OUT) pin 36, GND → AGND pin 33, OUT → GP26/ADC0 pin 31. **Con 3,3 V, no con 5 V.** |
 | `prueba_calibracion.py` | Programa independiente para Thonny: pide X, Y, Z en mm, mueve la mesa y regresa al origen con «1». Sirve para calibrar los pasos por mm de cada eje. Instructivo completo (con las conexiones de los TB6600) en [docs/instructivo-calibracion-y-conexiones.md](../docs/instructivo-calibracion-y-conexiones.md). |
 | `pruebas_pc/` | Pruebas en el PC (no se copian a la Pico). |
@@ -36,7 +38,7 @@ Firmware de la Pico W para el sistema TMS. Mueve la mesa (NEMA 17 con drivers TB
 
 | Señal | GPIO | Notas |
 |---|---|---|
-| HMC5883L SDA / SCL | GP4 / GP5 (I2C0) | VCC a 3V3 (pin 36), GND común. El GY-271 ya trae resistencias de pull-up. |
+| Sensor SDA / SCL | GP4 / GP5 (I2C0) | Valores del HMC5883L. El módulo real (QMC5883P) se probó en **GP0 / GP1** (pines 1 y 2); cámbialo al adaptar `sensor.py`. |
 | X PUL+ / DIR+ | GP10 / GP11 | |
 | Y PUL+ / DIR+ | GP12 / GP13 | |
 | Z PUL+ / DIR+ | GP14 / GP15 | Solo con `MODO_Z = "motor"` |
@@ -102,7 +104,7 @@ Todo se hace desde la consola (Thonny o `mpremote repl`) con el firmware detenid
 
 ### 5.1 Sensor
 
-Primero, la prueba más simple: copia solo `prueba_sensor.py` a la Pico (o ábrelo en Thonny) y pulsa F5. Debe decir `OK: HMC5883L en 0x1E` y mostrar un |B| de unos 25 a 65 µT que casi no cambia al girar el módulo. Con eso el cableado y el chip quedan comprobados. Después, con el firmware completo cargado:
+Primero, la prueba más simple: abre `prueba_qmc5883p.py` en Thonny y pulsa F5. Debe decir `I2C: ['0x2c']` y mostrar cuentas que cambian al girar el módulo; después, `medicion_campo_qmc5883p.py` da el campo en µT sin el fondo. `banco.sensor()` sigue siendo del HMC5883L hasta adaptar `sensor.py`:
 
 ```python
 >>> import banco
