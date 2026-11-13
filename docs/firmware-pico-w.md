@@ -1,6 +1,6 @@
 # Firmware de la Raspberry Pi Pico W — protocolo con el servidor TMS
 
-Este documento describe cómo la **Raspberry Pi Pico W** (RP2040) envía las lecturas del magnetómetro **HMC5883L** al servidor de la Raspberry Pi 5. El firmware completo (motores TB6600, homing, barrido y calibración) está en [`firmware/`](../firmware/README.md); el ejemplo anterior, en [`firmware/pico_w_cliente_ejemplo.py`](../firmware/pico_w_cliente_ejemplo.py), y el emulador que habla el mismo protocolo, en [`server/scripts/emular-pico.js`](../server/scripts/emular-pico.js).
+Este documento describe cómo la **Raspberry Pi Pico W** (RP2040) envía las lecturas del magnetómetro **QMC5883P** (el módulo real; el protocolo nació para un HMC5883L) al servidor de la Raspberry Pi 5. El firmware completo (motores TB6600, homing, barrido y calibración) está en [`firmware/`](../firmware/README.md); el ejemplo anterior, en [`firmware/pico_w_cliente_ejemplo.py`](../firmware/pico_w_cliente_ejemplo.py), y el emulador que habla el mismo protocolo, en [`server/scripts/emular-pico.js`](../server/scripts/emular-pico.js).
 
 Supuesto vigente (pendiente de confirmar): **la Pico W conoce la posición** del sensor y manda `xMM`, `yMM` y `zMM` con cada lectura.
 
@@ -62,11 +62,11 @@ Respuesta:
 ```
 
 - `sesion_activa` es `null` si no hay ninguna sesión abierta, si el sistema está en **modo simulación**, o si la sesión abierta es simulada. Mientras sea `null`, la Pico no debe enviar lecturas.
-- Cuando aparece una sesión con un `id` nuevo, la Pico empieza a recorrer la malla de esa sesión: `grid_nx × grid_ny` puntos en X–Y con paso `paso_mm`, en cada plano de `z_levels_mm`, en orden x → y → z.
-- **Zona de muestreo** (`zona_mm`, desde la migración 007): el operador elige en cada sesión el tamaño X × Y × Z, sin pasar de los límites de la base (`barrido.limite_*_mm`). Las coordenadas que manda la Pico son **de la zona**: `xMM` de 0 a `zona_mm.x`, `yMM` de 0 a `zona_mm.y`, `zMM` uno de `z_levels_mm` (0 = el standoff). La zona va **centrada bajo la bobina**: el eje de la bobina está en (`zona_mm.x / 2`, `zona_mm.y / 2`). Para mover la mesa, el firmware convierte a coordenadas de máquina: `x_máquina = x_bobina − zona_mm.x / 2 + xMM` (igual en Y), donde `x_bobina` es la posición de máquina del centro de la bobina (constante de calibración del firmware).
+- Cuando aparece una sesión con un `id` nuevo, la Pico empieza a recorrer la malla de esa sesión: `grid_nx × grid_ny` puntos en X–Y con paso `paso_mm`, en cada plano de `z_levels_mm`, **en serpentina** (sección 7).
+- **Zona de muestreo** (`zona_mm`, desde la migración 007): el operador elige en cada sesión el tamaño X × Y × Z, sin pasar de los límites de la base (`barrido.limite_*_mm`). Las coordenadas que manda la Pico son **de la zona**: `xMM` de 0 a `zona_mm.x`, `yMM` de 0 a `zona_mm.y`, `zMM` uno de `z_levels_mm` (0 = el standoff). En el simulador la zona va centrada bajo la bobina (el eje en `zona_mm.x / 2`, `zona_mm.y / 2`). En la mesa real, el firmware de `firmware/` pone la zona a partir de `ORIGEN_ZONA_*_MM` (por defecto, el origen de la mesa): `x_máquina = ORIGEN_ZONA_X_MM + xMM` (igual en Y y Z), y rechaza la sesión si no cabe en los límites de la mesa.
 - `paso_mm` es **libre** (desde la migración 006): cualquier valor de 1 mm en adelante con un decimal, por ejemplo `7.5`. Las posiciones son `i × paso_mm` redondeadas a décimas (`0, 7.5, 15 … 60`); si el paso no divide la placa, el último punto queda antes del borde. Manda `zMM` exactamente como aparece en `z_levels_mm`.
 - `ultimo_seq` es el mayor `seq` que el servidor ya tiene de esa sesión. Si la Pico se reinicia a mitad de una sesión, **continúa en `ultimo_seq + 1`** (no vuelve a 1).
-- `sensor.rango_ga` indica la ganancia que el firmware debe programar en el registro B del HMC5883L (ver 4.2).
+- `sensor` es la configuración del sensor. Si `sensor.modelo` es `"QMC5883P"` (servidor adaptado), el firmware programa `sensor.rango_g` y manda cuentas crudas del QMC; si no, mide en 30 G y manda «cuentas HMC» con `sensor.lsb_por_ga` (sección 4.4).
 - `servidor_ts_ms` sirve para estimar el desfase de reloj. El servidor también lo calcula y lo registra en su log (`[dispositivo] Desfase de reloj…`).
 
 ### 1.2 Lote de mediciones
@@ -92,11 +92,12 @@ Reglas de cada lectura:
 | `seq` | entero positivo, **único dentro de la sesión**, consecutivo desde 1 (o desde `ultimo_seq + 1`) |
 | `xMM`, `yMM` | número entre 0 y `zona_mm.x` / `zona_mm.y` de la sesión |
 | `zMM` | uno de los `z_levels_mm` de la sesión (dependen del paso: 0, 5, 10, 15, 20 con 5 mm; 0, 10, 20 con 10 mm; 0, 20 con 20 mm) |
-| `raw.x`, `raw.y`, `raw.z` | **cuentas crudas** del HMC5883L: enteros entre −4096 y 2047 (−4096 = desborde) |
+| `raw.x`, `raw.y`, `raw.z` | **cuentas**, según `sesion_activa.sensor.modelo`: con `QMC5883P`, cuentas crudas del QMC (enteros de −32768 a 32767; −4096 es una cuenta más); con `HMC5883L`, «cuentas HMC» de −4096 a 2047 (−4096 = desborde) |
+| `saturado` | opcional (`false` por defecto), booleano: `true` si la lectura trajo OVFL (sección 4.4). Lo manda el firmware con `QMC5883P`. Con `true` (en los dos modelos) el servidor guarda bx, by, bz y \|B\| en NULL, conserva los crudos y marca `saturado = 1`. Si no es booleano, se rechaza **esa** lectura (en `rechazadas`), no el lote |
 | `ts_ms` | opcional: epoch en ms (UTC) de cuando se leyó; `0` u omitido si la Pico no tiene hora |
 
 - Máximo **200 lecturas por lote** (422 si son más). Recomendado: **20 a 50**, unos 2 a 6 kB de JSON, que caben bien en la RAM de la Pico y en una sola petición.
-- La Pico manda **cuentas, no µT**: el servidor convierte con la ganancia y el offset vigentes: `µT = cuentas / lsb_por_ga × 100 − offset_ut`. Así el dato crudo queda guardado y la calibración puede cambiar sin tocar el firmware.
+- La Pico manda **cuentas, no µT**: el servidor convierte con la copia del sensor de la sesión: `µT = cuentas / cuentas_por_g × 100 − offset_ut` (QMC5883P) o `µT = cuentas / lsb_por_ga × 100 − offset_ut` (HMC5883L). Así el dato crudo queda guardado y la calibración puede cambiar sin tocar el firmware.
 
 Respuesta (200):
 
@@ -156,62 +157,61 @@ Con un búfer de 1000 lecturas (unos 40 kB) la Pico aguanta varios segundos sin 
 
 ---
 
-## 4. El sensor HMC5883L
+## 4. El sensor: QMC5883P
 
-### 4.1 Verificar el chip con un escaneo I2C
+El módulo real es un **QMC5883P** (I2C 0x2C), no el HMC5883L con el que se escribió este protocolo. La ficha completa (conexión, registros, rangos, medición y problemas comunes) está en [docs/sensor-qmc5883p.md](sensor-qmc5883p.md); el firmware que lo usa, en [`firmware/sensor.py`](../firmware/sensor.py).
 
-Muchos módulos **GY-271** traen un **QMC5883L** en lugar del HMC5883L. Tienen otra dirección y otros registros, así que el código de este documento **no** sirve para el QMC5883L.
+### 4.1 Verificar el chip
+
+Conexión: SDA → GP0 (pin 1), SCL → GP1 (pin 2), VCC → 3V3(OUT) (pin 36), GND → pin 38; I2C0 a 100 kHz.
 
 ```python
 from machine import I2C, Pin
-i2c = I2C(0, sda=Pin(4), scl=Pin(5), freq=400_000)
-print([hex(d) for d in i2c.scan()])
-# ['0x1e']  → HMC5883L  (registros de identificación 10–12 = b'H43')
-# ['0xd']   → QMC5883L  (otro chip: hay que cambiar el driver)
-print(i2c.readfrom_mem(0x1E, 10, 3))   # debe imprimir b'H43'
+i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=100_000)
+print([hex(d) for d in i2c.scan()])          # ['0x2c'] → QMC5883P
+print(hex(i2c.readfrom_mem(0x2C, 0x00, 1)[0]))   # Chip ID: 0x80
+# 0x1e sería un HMC5883L y 0xd un QMC5883L: otros chips y otros registros
 ```
 
-### 4.2 Configuración
+### 4.2 Configuración y rangos
 
-| Registro | Valor | Significado |
-|---|---|---|
-| A (0x00) | `0x78` | 8 muestras promediadas, 75 Hz, medición normal |
-| B (0x01) | ganancia según `rango_ga` (tabla) | bits 7–5 |
-| Modo (0x02) | `0x00` continuo, o `0x01` medición única | en medición única cada lectura tarda unos 6 ms (160 Hz máx.) |
+`0x29 ← 0x06` (signo de los ejes), `0x0B ← bits << 2` (rango), `0x0A ← 0xCD` (modo normal, 200 Hz) y 20 ms. Sin escribir `0x0A`, todo vale 0.
 
-| `rango_ga` | Registro B | LSB/Ga |
-|---|---|---|
-| 0,88 | `0x00` | 1370 |
-| 1,3 | `0x20` | 1090 |
-| 1,9 | `0x40` | 820 (valor por defecto del sistema) |
-| 2,5 | `0x60` | 660 |
-| 4,0 | `0x80` | 440 |
-| 4,7 | `0xA0` | 390 |
-| 5,6 | `0xC0` | 330 |
-| 8,1 | `0xE0` | 230 |
+| Rango | Bits (0x0B, 3–2) | Cuentas por gauss | Máximo |
+|---|---|---|---|
+| 30 G | 0 | 1000 | ±3000 µT |
+| 12 G | 1 | 2500 | ±1200 µT |
+| 8 G | 2 | 3750 | ±800 µT |
+| 2 G | 3 | 15000 | ±200 µT |
 
-La ganancia la elige el admin en la configuración del sensor; la Pico la recibe en cada latido (`sesion_activa.sensor.rango_ga`) y debe programar el registro B **antes** de la primera lectura de la sesión. El servidor convierte con esa misma ganancia.
-
-### 4.3 Lectura: el orden es X, Z, Y
-
-Los 6 bytes de datos empiezan en el registro **0x03** y vienen en el orden **X, Z, Y** (no X, Y, Z), cada uno como entero de 16 bits con signo, *big-endian*:
+### 4.3 Lectura: X, Y, Z, byte bajo primero
 
 ```python
 import struct
-datos = i2c.readfrom_mem(0x1E, 0x03, 6)
-x, z, y = struct.unpack('>hhh', datos)     # ¡X, Z, Y!
-raw = {"x": x, "y": y, "z": z}
+while not i2c.readfrom_mem(0x2C, 0x09, 1)[0] & 0x01:     # DRDY (límite de 100 ms)
+    pass
+estado = i2c.readfrom_mem(0x2C, 0x09, 1)[0]
+x, y, z = struct.unpack('<hhh', i2c.readfrom_mem(0x2C, 0x01, 6))
+saturado = bool(estado & 0x02)                            # OVFL
 ```
 
-- Si un eje se sale de rango, ese registro vale **−4096**. **No lo descartes ni lo conviertas**: mándalo tal cual. El servidor marca la lectura como `saturado`, guarda el crudo y deja ese eje en NULL.
-- Un valor fijo de −4096 en todas las lecturas suele indicar que la ganancia es demasiado baja para el campo: sube `rango_ga`.
+El firmware promedia `PROMEDIO_QMC` lecturas (10); si alguna trae OVFL, la medición entera es saturada. Ante un `OSError` reinicia el chip una vez.
 
-### 4.4 Validar los ejes con un imán
+### 4.4 Cómo llegan las lecturas al servidor
 
-1. Con el sensor quieto y sin imanes cerca, toma 50 lecturas: es el campo de fondo (el de la Tierra, unos 25 a 65 µT en total). Anótalo como `offset_ut` si se quiere restar.
-2. Acerca un imán **por el lado +X del módulo** (la flecha serigrafiada): `raw.x` debe crecer mucho en valor absoluto mientras Y y Z cambian poco. Repite con Y y con Z (Z es perpendicular a la placa).
-3. Si un eje responde al imán puesto en otro eje, el orden de lectura está mal (lo típico es haber leído X, Y, Z en lugar de X, Z, Y).
-4. Invierte el imán: el signo del eje correspondiente debe invertirse.
+El firmware elige el formato con `sesion_activa.sensor.modelo`:
+
+- **`"QMC5883P"`** (el modelo por defecto desde la migración 008): rango `sensor.rango_g`; `raw` = cuentas crudas del QMC (−32768..32767) y `"saturado": true|false` en cada lectura. El servidor convierte con `µT = cuentas / cuentas_por_g × 100 − offset_ut`.
+- **Otro valor** (`"HMC5883L"`, el que espera el firmware del Hall 49E): rango 30 G; la Pico pasa a µT y de ahí a «cuentas HMC» = `round(µT × lsb_por_ga / 100)`. Si hubo OVFL o no cabe en −2048..2047, manda −4096 en los tres ejes y el servidor la guarda como saturada. El rango queda limitado a ±(2047 / `lsb_por_ga` × 100) µT: ±249,6 µT con 1,9 Ga.
+
+En los dos casos el servidor resta `offset_ut`. El fondo (Tierra + entorno) lo mide la Pico al arrancar, con la bobina apagada, y lo imprime para copiarlo en Configuración › Sensor › offset; la Pico solo lo resta ella misma si `RESTAR_FONDO_EN_PICO = True`.
+
+### 4.5 Validar los ejes con un imán
+
+1. Con el sensor quieto y sin imanes cerca, el fondo debe dar unos 25 a 65 µT de |B|.
+2. Acerca un imán por el lado +X del módulo (serigrafiado): Bx debe crecer mucho mientras By y Bz cambian poco. Repite con Y y con Z (Z es perpendicular a la placa).
+3. Invierte el imán: el signo del eje correspondiente debe invertirse.
+4. **El imán no debe tocar el módulo** (su níquel provoca cortos en el bus).
 
 ---
 
@@ -236,11 +236,30 @@ Con HTTPS y el certificado autofirmado de Nginx, `urequests` no verifica el cert
 
 ---
 
-## 7. Orden del barrido
+## 7. Orden del barrido: serpentina
 
-El servidor y el emulador recorren la malla en el orden **x → y → z**: primero toda una fila en X, luego la siguiente Y, y al terminar el plano, el siguiente Z. Con una lectura por punto, `seq − 1` es el índice del punto en la malla. Si la mesa recorre la malla en otro orden (por ejemplo en zigzag), no pasa nada: el servidor usa `xMM`, `yMM` y `zMM` de cada lectura, no el `seq`.
+El firmware de `firmware/` recorre la malla en **serpentina** continua: X avanza hasta el máximo, Y sube un paso y X regresa midiendo, y así hasta terminar el plano; Z sube un paso y el plano siguiente se recorre desde donde quedó la mesa (Y también va y viene). Entre dos puntos seguidos solo cambia un índice en ±1, y la mesa solo vuelve al origen al terminar la sesión.
 
-Si `lecturas_por_punto` es mayor que 1, la Pico puede mandar varias lecturas con la misma posición y `seq` distintos (pendiente de decidir si se promedian en la Pico o en el servidor).
+**Contrato del orden** (el mismo que usan el servidor, el simulador, el emulador y la gráfica de líneas desde el 2026-11-12). Con `nx = grid_nx`, `ny = grid_ny` y `k` = índice del punto (0..total − 1):
+
+```
+iz   = k // (nx·ny)
+r    = k %  (nx·ny)
+fila = r // nx
+iy   = fila            si iz es par;  ny − 1 − fila     si iz es impar
+g    = iz·ny + fila                   (número global de fila)
+ix   = r % nx          si g es par;   nx − 1 − (r % nx) si g es impar
+punto = (ix·paso, iy·paso, z_levels_mm[iz])   (redondeado a décimas)
+```
+
+Vector de prueba con `nx = 3`, `ny = 2` y dos planos (k = 0..11), en índices (ix, iy, iz):
+(0,0,0) (1,0,0) (2,0,0) (2,1,0) (1,1,0) (0,1,0) (0,1,1) (1,1,1) (2,1,1) (2,0,1) (1,0,1) (0,0,1).
+
+Con una lectura por punto, `seq − 1` es el índice del punto en la serpentina; con `lecturas_por_punto = N`, el `seq` s es la lectura `(s − 1) % N` del punto `(s − 1) // N`. Así, tras un reinicio, la Pico sigue en `ultimo_seq + 1` en el punto exacto.
+
+El servidor (`services/geometria.js`: `puntoDeMalla`, `indiceDeMalla`), el simulador, `emular-pico.js` y la gráfica de líneas del dashboard (`indiceEnMalla`) usan este mismo orden. La ingesta y los huecos no dependen del orden: el servidor valida cada lectura con su `xMM`, `yMM`, `zMM` y su `seq`, y calcula los huecos por posición (los lista en el orden de la serpentina).
+
+Si `lecturas_por_punto` es mayor que 1, la Pico manda varias lecturas con la misma posición y `seq` distintos (pendiente de decidir si se promedian en la Pico o en el servidor).
 
 ---
 

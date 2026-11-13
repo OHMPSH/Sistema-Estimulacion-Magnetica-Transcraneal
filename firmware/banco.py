@@ -1,48 +1,47 @@
 # ═══════════════════════════════════════════════════════════════
 # banco.py — prueba de banco y calibración, SIN servidor ni Wi-Fi
 #
-# Desde la consola de Thonny o `mpremote repl` (con el firmware detenido:
-# BOOTSEL al encender, o USAR_WATCHDOG = False):
+# Desde la consola de Thonny, con main.py detenido (botón rojo) y la mesa
+# en el origen (la posición al importar banco es el 0, 0, 0):
 #
 #   >>> import banco
-#   >>> banco.sensor()                 # escaneo I2C + 10 lecturas en µT
-#   >>> banco.homing()                 # referencia los ejes
-#   >>> banco.mover("x", 10)           # 10 mm relativos (negativo = hacia el origen)
-#   >>> banco.pasos("x", 1600)         # micropasos crudos (para calibrar pasos/mm)
-#   >>> banco.ir(50, 50)               # coordenadas de MÁQUINA (mm)
+#   >>> banco.sensor()                  # Chip ID, fondo y 10 lecturas (cuentas, µT, |B|)
+#   >>> banco.sensor(rango=2)           # lo mismo en el rango de 2 G (2, 8, 12 o 30)
+#   >>> banco.fondo()                   # vuelve a medir el fondo (bobina apagada)
+#   >>> banco.ir(100, 50, 10)           # coordenadas de máquina en mm (con límites)
+#   >>> banco.mover("x", 10)            # 10 mm relativos (negativo = hacia el origen)
+#   >>> banco.pasos("x", 2000)          # pulsos crudos (para calibrar los pulsos/mm)
 #   >>> banco.posicion()
-#   >>> banco.centro()                 # va a (X_BOBINA_MM, Y_BOBINA_MM)
-#   >>> banco.prueba(nx=3, ny=3, paso=5, planos=(0,))   # malla pequeña centrada bajo la bobina
-#   >>> banco.apagar()                 # deshabilita los drivers
-#
-# La prueba imprime cada lectura: posición de la zona, cuentas crudas y µT.
+#   >>> banco.prueba(nx=3, ny=3, paso=10, planos=(0, 10))   # malla pequeña en serpentina
+#   >>> banco.origen()                  # vuelve a 0, 0, 0
+#   >>> banco.apagar()                  # vuelve al origen y deshabilita los drivers
 # ═══════════════════════════════════════════════════════════════
 import time
 
 import config
 import barrido
 from motores import Mesa
-from sensor import HMC5883L
+from sensor import QMC5883P, RANGOS
 
 _mesa = None
 _sensor = None
-RANGO_GA = 1.9
-LSB_POR_GA = {0.88: 1370, 1.3: 1090, 1.9: 820, 2.5: 660, 4.0: 440, 4.7: 390, 5.6: 330, 8.1: 230}
 
 
 def _m():
     global _mesa
     if _mesa is None:
         _mesa = Mesa()
+        _mesa.habilitar(True)
+        print("Origen (0, 0, 0) = posición actual. Límites X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
+              % (config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM))
     return _mesa
 
 
 def _s():
     global _sensor
     if _sensor is None:
-        _sensor = HMC5883L()
-        print("I2C:", _sensor.verificar())
-        _sensor.configurar(RANGO_GA)
+        _sensor = QMC5883P()
+        print(_sensor.verificar())          # escaneo, Chip ID y fondo
     return _sensor
 
 
@@ -55,88 +54,90 @@ def _correr(gen):
         return fin.value
 
 
-def _ut(cuentas):
-    return "  SAT  " if cuentas == -4096 else "%7.2f" % (cuentas / LSB_POR_GA[RANGO_GA] * 100)
+def _texto(s, crudos, saturado):
+    bx, by, bz = s.a_ut(crudos)
+    return "cuentas %6d %6d %6d | µT %+9.2f %+9.2f %+9.2f | |B| %8.2f%s" % (
+        crudos[0], crudos[1], crudos[2], bx, by, bz, (bx * bx + by * by + bz * bz) ** 0.5,
+        "  SATURADO" if saturado else "")
 
 
-def sensor(n=10):
+def sensor(n=10, rango=None, cada_ms=200):
+    """n mediciones (cada una promedia PROMEDIO_QMC lecturas) en el rango pedido."""
     s = _s()
+    if rango is not None:
+        if rango not in RANGOS:
+            print("Rangos del QMC5883P: 2, 8, 12 o 30 G")
+            return
+        s.iniciar(rango)
+    print("Rango %d G (%d cuentas/G). µT sin restar el fondo." % (s.rango_g, s.cuentas_por_g))
     for _ in range(n):
-        x, y, z = s.medir_bloqueando()
-        print("raw x=%6d y=%6d z=%6d   µT x=%s y=%s z=%s" % (x, y, z, _ut(x), _ut(y), _ut(z)))
-        time.sleep_ms(100)
+        crudos, saturado = s.medir_bloqueando()
+        print(_texto(s, crudos, saturado))
+        time.sleep_ms(cada_ms)
 
 
-def homing():
-    _correr(_m().homing())
-    posicion()
+def fondo():
+    """Vuelve a medir el fondo (mesa en el origen, bobina apagada)."""
+    return _s().medir_fondo()
 
 
-def posicion():
-    x, y, z = _m().posicion_mm()
-    print("Máquina: X=%.3f  Y=%.3f  Z=%.3f mm" % (x, y, z))
-
-
-def ir(x, y, z=None):
-    m = _m()
-    m.habilitar(True)
-    _correr(m.mover_a(x, y, z))
+def ir(x, y, z=0.0):
+    _correr(_m().mover_a(x, y, z if config.MODO_Z == "motor" else None))
     posicion()
 
 
 def mover(eje, mm):
-    m = _m()
-    e = {"x": m.x, "y": m.y, "z": m.z}[eje]
-    m.habilitar(True)
-    e.mover_pasos(int(round(mm * e.ppmm)))
-    _correr(e.esperar())
-    posicion()
+    """Movimiento relativo de un eje, con los mismos límites que ir()."""
+    x, y, z = _m().posicion_mm()
+    ir(*{"x": (x + mm, y, z), "y": (x, y + mm, z), "z": (x, y, z + mm)}[eje])
 
 
 def pasos(eje, n, vel_mm_s=5):
-    """Micropasos crudos, sin rampa larga: para medir cuánto avanza el eje."""
+    """Pulsos crudos sin rampa larga, para medir cuánto avanza el eje. Sin límites:
+    úsalo solo cerca del origen y vuelve con banco.origen()."""
     m = _m()
     e = {"x": m.x, "y": m.y, "z": m.z}[eje]
-    m.habilitar(True)
     e.mover_pasos(n, vel_mm_s)
     _correr(e.esperar())
-    print("%d micropasos (%.3f mm según la configuración actual)" % (n, n / e.ppmm))
+    print("%d pulsos (%.3f mm según la configuración actual)" % (n, n / e.ppmm))
 
 
-def centro():
-    ir(config.X_BOBINA_MM, config.Y_BOBINA_MM, config.Z_CERO_MM if _m().z else None)
+def posicion():
+    print("X=%.2f  Y=%.2f  Z=%.2f mm" % _m().posicion_mm())
 
 
-def apagar():
-    _m().habilitar(False)
-    print("Drivers deshabilitados")
+def origen():
+    _correr(_m().homing())
+    posicion()
 
 
-def prueba(nx=3, ny=3, paso=5.0, planos=(0,), lecturas=1):
-    """Recorre una malla pequeña centrada bajo la bobina e imprime las lecturas."""
+def prueba(nx=3, ny=3, paso=10.0, planos=(0,), lecturas=1):
+    """Recorre una malla pequeña en serpentina desde ORIGEN_ZONA_* e imprime cada lectura."""
     sesion = {
         "id": 0, "paso_mm": paso, "grid_nx": nx, "grid_ny": ny, "z_levels_mm": list(planos),
-        "zona_mm": {"x": (nx - 1) * paso, "y": (ny - 1) * paso, "z": max(planos)},
-        "sensor": {"rango_ga": RANGO_GA, "lecturas_por_punto": lecturas}, "ultimo_seq": 0,
+        "zona_mm": {"x": (nx - 1) * paso, "y": (ny - 1) * paso, "z": max(planos)}, "ultimo_seq": 0,
     }
-    sesion["puntos_esperados"] = barrido.total_puntos(sesion)
+    total = barrido.total_puntos(sesion)
     errores = barrido.errores_de_zona(sesion)
     if errores:
         print("La malla no cabe:", errores)
         return
     m, s = _m(), _s()
-    _correr(m.homing())
-    print("  seq   xMM   yMM   zMM |  raw x  raw y  raw z |   Bx µT   By µT   Bz µT")
     seq = 1
-    for i in range(sesion["puntos_esperados"]):
+    for i in range(total):
         x, y, z = barrido.punto(sesion, i)
-        xm, ym, zm = barrido.a_maquina(sesion, x, y, z)
-        _correr(m.mover_a(xm, ym, zm if m.z else None))
+        xm, ym, zm = barrido.a_maquina(x, y, z)
+        _correr(m.mover_a(xm, ym, zm if config.MODO_Z == "motor" else None))
         time.sleep_ms(config.ASENTAMIENTO_MS)
         for _ in range(lecturas):
-            rx, ry, rz = s.medir_bloqueando()
-            print("%5d %5.1f %5.1f %5.1f | %6d %6d %6d | %s %s %s" % (seq, x, y, z, rx, ry, rz, _ut(rx), _ut(ry), _ut(rz)))
+            crudos, saturado = s.medir_bloqueando()
+            print("%4d (%6.1f, %6.1f, %5.1f) mm  %s" % (seq, x, y, z, _texto(s, crudos, saturado)))
             seq += 1
-    _correr(m.homing())
-    m.habilitar(False)
+    origen()
     print("Prueba terminada: %d lecturas" % (seq - 1))
+
+
+def apagar():
+    origen()
+    _m().habilitar(False)
+    print("Drivers deshabilitados")

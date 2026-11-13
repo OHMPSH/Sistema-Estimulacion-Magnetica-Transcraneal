@@ -2,19 +2,32 @@
 # main.py — firmware de la Raspberry Pi Pico W para el sistema TMS
 #
 # Bucle cooperativo, sin hilos: en cada vuelta
-#   1. alimenta el watchdog y mantiene el Wi-Fi (red.py),
+#   1. mantiene el Wi-Fi (red.py),
 #   2. manda el latido cuando toca y reacciona a sesion_activa,
-#   3. avanza un poco la tarea en curso (homing o barrido, que son
-#      generadores: ceden el control mientras los motores se mueven),
+#   3. avanza un poco la tarea en curso (barrido o regreso al origen,
+#      que son generadores: ceden el control mientras los motores se mueven
+#      o el sensor convierte),
 #   4. manda un lote si hay suficientes lecturas.
 # Los motores se mueven por PIO + DMA, así que un lote puede salir
 # mientras la mesa va al siguiente punto.
 #
-# Al terminar o detener una sesión, la mesa vuelve al origen (0, 0, 0) y
-# se apagan los drivers. El estado ('espera', 'homing', 'midiendo' o
-# 'error') y el motivo de un error se mandan en cada latido y se ven en
-# el dashboard. LED: parpadea desde que se alimenta y queda fijo en
-# cuanto el servidor responde.
+# Comportamiento (el mismo que firmware_hall_1d/):
+#   - Sensor: magnetómetro QMC5883P de 3 ejes (sensor.py).
+#   - Sin finales de carrera: el ORIGEN (0, 0, 0) es la posición de la mesa
+#     al arrancar. Antes de ejecutar, deja la mesa ahí.
+#   - La malla se recorre en serpentina en X, Y y Z (barrido.py).
+#   - Los drivers quedan habilitados todo el tiempo (sostienen la posición).
+#   - Al terminar o detener una sesión, ante un error, ante un 401 y al
+#     detener el programa con Ctrl+C o el botón rojo de Thonny, la mesa
+#     vuelve al origen.
+#   - Nunca se reinicia sola: un reinicio tomaría como origen la posición
+#     en que haya quedado la mesa.
+#   - Al arrancar se mide el fondo del sensor (bobina apagada). En espera
+#     (sin sesión), el botón BOOTSEL lo vuelve a medir.
+#
+# El estado ('espera', 'homing', 'midiendo' o 'error') y el motivo de un
+# error se mandan en cada latido y se ven en el dashboard. LED: parpadea
+# desde que se alimenta y queda fijo en cuanto el servidor responde.
 #
 # Para no arrancar (por ejemplo, para editar archivos con Thonny), pulsa
 # el botón BOOTSEL durante los 3 primeros segundos después de encender.
@@ -23,8 +36,6 @@ import led      # primero: el LED empieza a parpadear en cuanto la Pico se alime
 import gc
 import sys
 import time
-import machine
-from machine import Pin
 
 import config
 import red
@@ -32,10 +43,15 @@ import cliente
 import barrido
 from registro import log
 from motores import Mesa, ErrorMovimiento
-from sensor import HMC5883L, ErrorSensor
+from sensor import QMC5883P, ErrorSensor
 from barrido import ErrorZona
 
 ERRORES_DE_TAREA = (ErrorZona, ErrorMovimiento, ErrorSensor)
+
+try:
+    from rp2 import bootsel_button
+except ImportError:
+    bootsel_button = None
 
 
 class Controlador:
@@ -44,9 +60,8 @@ class Controlador:
         self.bufer = cliente.Bufer()
         self.envio = cliente.Enviador(self.bufer)
         self.mesa = Mesa()
-        self.sensor = HMC5883L()
+        self.sensor = QMC5883P()
         self.sensor_ok = False
-        self.boton_z = Pin(config.PIN_BOTON_Z, Pin.IN, Pin.PULL_UP) if config.MODO_Z == "manual" else None
         self.progreso = barrido.Progreso()
         self.sesion = None          # sesión que se está midiendo
         self.fase = None            # None, "homing", "barrido", "vaciando" o "cierre"
@@ -67,9 +82,10 @@ class Controlador:
     # ── Arranque ───────────────────────────────────────────────
     def verificar_sensor(self):
         try:
-            bus = self.sensor.verificar()
+            log("Sensor:", self.sensor.verificar())
             self.sensor_ok = True
-            log("Sensor: HMC5883L en 0x%02X (bus: %s)" % (config.DIR_SENSOR, bus))
+            if self.error and self.error.startswith("sensor:"):
+                self.error = None
         except Exception as e:
             self.sensor_ok = False
             self.error = "sensor: %s" % e
@@ -77,6 +93,8 @@ class Controlador:
         return self.sensor_ok
 
     def homing_inicial(self):
+        """Sin finales de carrera: fija el origen en la posición actual."""
+        self.mesa.habilitar(True)
         self.fase = "homing"
         self.tarea = self.mesa.homing()
 
@@ -94,9 +112,19 @@ class Controlador:
             self.resultado_envio(self.envio.enviar(self.sesion["id"]))
         if self.fase == "vaciando" and not len(self.bufer):
             self.terminar_vaciado()
+        self.revisar_bootsel()
         self.actualizar_led()
         if self.tarea is None:
             time.sleep_ms(20)
+
+    def revisar_bootsel(self):
+        """En espera, BOOTSEL vuelve a verificar el sensor y a medir el fondo."""
+        if bootsel_button is None or self.tarea is not None or self.sesion or self.pendiente:
+            return
+        if bootsel_button():
+            while bootsel_button():
+                time.sleep_ms(20)
+            self.verificar_sensor()
 
     def latir(self):
         status, datos = cliente.latido(self.estado_pico(), self.error)
@@ -112,6 +140,9 @@ class Controlador:
             return
         if not self.servidor_ok:
             log("Latido: servidor en línea (modo %s)" % datos.get("modo_operacion"))
+            if datos.get("modo_operacion") != "real":
+                log("AVISO: el servidor está en modo simulación; para medir con la Pico, un admin "
+                    "debe cambiarlo a Real (menú lateral)")
         self.servidor_ok = True
         if self.sin_token:
             log("El token vuelve a ser válido")
@@ -155,8 +186,7 @@ class Controlador:
                 self.homing_al_vaciar = True
             elif self.fase in ("homing", "cierre"):
                 self.fase = None
-                if not self.pendiente:
-                    self.mesa.habilitar(False)     # sin sesión: drivers apagados
+                log("Mesa en el origen X=%.2f Y=%.2f Z=%.2f mm" % self.mesa.posicion_mm())
         except ERRORES_DE_TAREA as e:
             self.fallar(e)
 
@@ -170,15 +200,14 @@ class Controlador:
         self.envio.reiniciar()
         self.progreso = barrido.Progreso()
         self.fase = "barrido"
-        self.tarea = barrido.ejecutar(s, self.mesa, self.sensor, self.bufer, red.ahora_ms, self.progreso, self.boton_z)
+        self.tarea = barrido.ejecutar(s, self.mesa, self.sensor, self.bufer, red.ahora_ms, self.progreso)
 
     def terminar_vaciado(self):
         log("Sesión %d: todas las lecturas confirmadas. Falta que el operador la cierre en el dashboard." % self.sesion["id"])
         self.no_medir = self.sesion["id"]
         self.sesion = None
         if self.homing_al_vaciar:
-            self.fase = "cierre"
-            self.tarea = self.mesa.homing()
+            self.volver_al_origen()
         else:
             self.fase = None
 
@@ -189,6 +218,10 @@ class Controlador:
             self.no_autorizado()
 
     # ── Paradas ────────────────────────────────────────────────
+    def volver_al_origen(self):
+        self.fase = "cierre"
+        self.tarea = self.mesa.homing()
+
     def _cerrar_tarea(self):
         if self.tarea is not None:
             try:
@@ -199,37 +232,30 @@ class Controlador:
         self.mesa.detener()
 
     def abortar_sesion(self, motivo):
-        """Sesión cerrada desde el servidor: para los motores, vacía el búfer y hace homing."""
-        log("Parada: %s. Se descartan %d lecturas sin enviar; homing." % (motivo, len(self.bufer)))
+        """Sesión cerrada desde el servidor: para los motores, vacía el búfer y vuelve al origen."""
+        log("Parada: %s. Se descartan %d lecturas sin enviar; vuelve al origen." % (motivo, len(self.bufer)))
         self._cerrar_tarea()
         self.bufer.vaciar()
         self.no_medir = self.sesion["id"] if self.sesion else self.no_medir
         self.sesion = None
-        self.fase = "cierre"
-        self.tarea = self.mesa.homing()
+        self.volver_al_origen()
 
     def fallar(self, e):
-        """Error de hardware o de zona: para y no reintenta esta sesión. Si la mesa se
-        había movido, vuelve al origen (0, 0, 0); si falló el propio homing, apaga los drivers."""
+        """Error de zona, de movimiento o del sensor: para, manda lo ya medido y vuelve al origen."""
         self.error = str(e)
         log("ERROR:", e)
-        volver = self.fase == "barrido" and not isinstance(e, ErrorZona)
+        if isinstance(e, ErrorSensor):
+            self.sensor_ok = False      # la siguiente sesión vuelve a verificarlo
         self._cerrar_tarea()
-        if not volver:
-            self.mesa.habilitar(False)
         if self.sesion:
             self.no_medir = self.sesion["id"]
             if len(self.bufer):
                 log("Se envían las %d lecturas ya tomadas" % len(self.bufer))
                 self.fase = "vaciando"
-                self.homing_al_vaciar = volver
+                self.homing_al_vaciar = True
                 return
             self.sesion = None
-        if volver:
-            self.fase = "cierre"
-            self.tarea = self.mesa.homing()
-        else:
-            self.fase = None
+        self.volver_al_origen()
 
     def no_autorizado(self):
         if not self.sin_token:
@@ -237,11 +263,10 @@ class Controlador:
                 "genera un token nuevo (Configuración › Dispositivo) y cópialo en secretos.py.")
         self.sin_token = True
         self._cerrar_tarea()
-        self.mesa.habilitar(False)
         self.bufer.vaciar()
         self.sesion = None
         self.pendiente = None
-        self.fase = None
+        self.volver_al_origen()
 
     def estado_pico(self):
         """Lo que se informa al servidor en el latido."""
@@ -264,14 +289,36 @@ class Controlador:
             led.poner("conectado")             # fijo: hay conexión con el servidor
 
 
-def _bootsel_pulsado(segundos=3):
+def _correr(gen):
+    """Ejecuta un generador de movimiento hasta el final (bloqueando)."""
+    while True:
+        try:
+            next(gen)
+        except StopIteration:
+            return
+        time.sleep_ms(1)
+
+
+def apagar(c):
+    """Para todo, vuelve al origen (bloqueando) y deshabilita los drivers."""
     try:
-        import rp2
-    except ImportError:
+        c._cerrar_tarea()
+        if any(abs(v) > 1e-6 for v in c.mesa.posicion_mm()):
+            log("Volviendo al origen antes de salir (X=%.2f Y=%.2f Z=%.2f mm); "
+                "otro Ctrl+C lo interrumpe" % c.mesa.posicion_mm())
+            _correr(c.mesa.homing())
+        log("Mesa en X=%.2f Y=%.2f Z=%.2f mm" % c.mesa.posicion_mm())
+    finally:
+        c.mesa.habilitar(False)
+        log("Drivers deshabilitados")
+
+
+def _bootsel_pulsado(segundos=3):
+    if bootsel_button is None:
         return False
     fin = time.ticks_add(time.ticks_ms(), segundos * 1000)
     while time.ticks_diff(fin, time.ticks_ms()) > 0:
-        if rp2.bootsel_button():
+        if bootsel_button():
             return True
         time.sleep_ms(50)
     return False
@@ -284,25 +331,27 @@ def principal():
         led.poner("apagado")
         log("BOOTSEL pulsado: el firmware no arranca (modo de edición)")
         return
-    wdt = machine.WDT(timeout=config.WATCHDOG_MS) if config.USAR_WATCHDOG else None
-    c = Controlador(wdt)
-    c.verificar_sensor()
-    red.conectar_inicial(c.alimentar)
-    c.homing_inicial()
+    log("Origen (0, 0, 0) = posición actual de la mesa. Límites: X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
+        % (config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM))
+    c = Controlador()
     try:
+        c.verificar_sensor()
+        red.conectar_inicial(c.alimentar)
+        c.homing_inicial()
         while True:
             c.vuelta()
+    except KeyboardInterrupt:
+        log("Detenido por el usuario")
+        led.poner("apagado")
+        apagar(c)
     except Exception as e:
-        log("Fallo inesperado; se reinicia la Pico:")
+        log("Fallo inesperado; el programa se detiene (sin reiniciar, para no perder el origen):")
         sys.print_exception(e)
-        try:
-            c.mesa.detener()
-            c.mesa.habilitar(False)
-        except Exception:
-            pass
         led.poner("error")
-        time.sleep_ms(3000)
-        machine.reset()
+        try:
+            apagar(c)
+        except Exception as e2:
+            log("No se pudo volver al origen:", e2)
 
 
 if __name__ == "__main__":

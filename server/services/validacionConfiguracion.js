@@ -5,7 +5,7 @@
  *
  * validarClave(clave, valor) → { valor, errores }
  *   - `valor` es la versión limpia que se guarda (por ejemplo, en
- *     `sensor` el lsb_por_ga se fija según el rango elegido).
+ *     `sensor` las cuentas por gauss se fijan según el rango elegido).
  *   - `errores` es una lista de mensajes; si no está vacía, el
  *     controlador responde 422.
  *
@@ -29,16 +29,38 @@ export const GANANCIAS_HMC5883L = {
 };
 export const RANGOS_GA = Object.keys(GANANCIAS_HMC5883L).map(Number);
 
+/** Rangos del QMC5883P (el módulo real): rango en gauss → cuentas por gauss */
+export const RANGOS_QMC5883P = {
+  2:  15000,
+  8:  3750,
+  12: 2500,
+  30: 1000,
+};
+export const RANGOS_G = Object.keys(RANGOS_QMC5883P).map(Number);
+
+/** Modelos de sensor que entiende el servidor */
+export const MODELOS_SENSOR = ['QMC5883P', 'HMC5883L'];
+
+/** Valores de cada modelo al elegirlo (se conservan lecturas_por_punto y offset_ut) */
+export const SENSOR_POR_MODELO = {
+  QMC5883P: { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000 },
+  HMC5883L: { modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820 },
+};
+
 /** Máximo valor de un eje del ADC del HMC5883L (−2048..2047; −4096 = desborde) */
 export const CUENTAS_MAXIMAS = 2047;
+/** Máximo valor de un eje del QMC5883P (16 bits con signo) */
+export const CUENTAS_MAXIMAS_QMC = 32767;
 
 /**
- * Campo máximo que el sensor puede reportar por eje, en µT, con su
- * ganancia: 2047 cuentas / LSB por gauss × 100 µT por gauss.
- * Con 1,9 Ga (820 LSB/Ga, el valor por defecto) son 249,6 µT; con 1,3 Ga, 187,8 µT. Es algo más que el rango
- * nominal porque el ADC tiene margen; por encima, el registro desborda.
+ * Campo máximo que el sensor puede reportar por eje, en µT (fondo de escala):
+ *   QMC5883P: 32767 / cuentas_por_g × 100 (3276,7 µT con 30 G; 218,4 µT con 2 G).
+ *   HMC5883L: 2047 / lsb_por_ga × 100 (249,6 µT con 1,9 Ga; 187,8 µT con 1,3 Ga).
+ * Por encima, el sensor satura (OVFL en el QMC; −4096 en el HMC).
  */
-export const limiteSensorUT = sensor => (CUENTAS_MAXIMAS / sensor.lsb_por_ga) * 100;
+export const limiteSensorUT = sensor => (sensor?.modelo === 'QMC5883P'
+  ? (CUENTAS_MAXIMAS_QMC / sensor.cuentas_por_g) * 100
+  : (CUENTAS_MAXIMAS / sensor.lsb_por_ga) * 100);
 
 export const MODOS_OPERACION = ['simulacion', 'real'];
 export const ESCALAS_SUPERFICIE = ['Jet', 'Viridis'];
@@ -106,10 +128,20 @@ const VALIDADORES = {
   },
 
   sensor(v) {
-    const campos = ['modelo', 'rango_ga', 'lsb_por_ga', 'lecturas_por_punto', 'offset_ut'];
+    // Formato viejo sin modelo (anterior a la Fase 3 final): era un HMC5883L
+    if (v.modelo === undefined && v.rango_ga !== undefined) v = { modelo: 'HMC5883L', ...v };
+    if (!MODELOS_SENSOR.includes(v.modelo)) {
+      return { valor: v, errores: [`modelo debe ser ${MODELOS_SENSOR.join(' o ')}`] };
+    }
+    const qmc = v.modelo === 'QMC5883P';
+    const campos = qmc
+      ? ['modelo', 'rango_g', 'cuentas_por_g', 'lecturas_por_punto', 'offset_ut']
+      : ['modelo', 'rango_ga', 'lsb_por_ga', 'lecturas_por_punto', 'offset_ut'];
     const errores = clavesDesconocidas(v, campos);
-    if (v.modelo !== 'HMC5883L') errores.push('modelo debe ser HMC5883L');
-    if (!RANGOS_GA.includes(v.rango_ga)) {
+    if (qmc && !RANGOS_G.includes(v.rango_g)) {
+      errores.push(`rango_g debe ser uno de los rangos del QMC5883P: ${RANGOS_G.join(', ')} G`);
+    }
+    if (!qmc && !RANGOS_GA.includes(v.rango_ga)) {
       errores.push(`rango_ga debe ser una de las ganancias del HMC5883L: ${RANGOS_GA.join(', ')}`);
     }
     entero(errores, 'lecturas_por_punto', v.lecturas_por_punto, 1, 100);
@@ -118,6 +150,14 @@ const VALIDADORES = {
     } else {
       errores.push(...clavesDesconocidas(v.offset_ut, ['x', 'y', 'z'], 'offset_ut.'));
       for (const eje of ['x', 'y', 'z']) numero(errores, `offset_ut.${eje}`, v.offset_ut[eje], -1000, 1000);
+    }
+    if (qmc) {
+      // cuentas_por_g no se elige: sale de la tabla de rangos
+      const cpg = RANGOS_QMC5883P[v.rango_g];
+      if (v.cuentas_por_g !== undefined && cpg !== undefined && v.cuentas_por_g !== cpg) {
+        errores.push(`cuentas_por_g se calcula del rango: con ${v.rango_g} G es ${cpg}`);
+      }
+      return { valor: { ...v, cuentas_por_g: cpg }, errores };
     }
     // lsb_por_ga no se elige: sale de la tabla de ganancias
     const lsb = GANANCIAS_HMC5883L[v.rango_ga];

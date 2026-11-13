@@ -1,102 +1,126 @@
 # ═══════════════════════════════════════════════════════════════
-# config.py — pines, mecánica, calibración y tiempos del firmware TMS
+# config.py — pines, mecánica, sensor y tiempos del firmware TMS
 #
-# Todo lo que dice PENDIENTE depende del montaje real: revísalo antes de
-# conectar los motores. Las credenciales (Wi-Fi, token y URL del servidor)
-# NO van aquí: van en secretos.py, que no se sube a git (ver
-# secretos_ejemplo.py).
+# Firmware cliente final de la Pico W: magnetómetro QMC5883P de 3 ejes,
+# mesa XYZ con NEMA 17 y TB6600, recorrido de la malla en serpentina.
+# Se comporta igual que el firmware de prueba del Hall (firmware_hall_1d/):
+#   - No hay finales de carrera: la posición en que está la mesa al
+#     arrancar el programa es el origen (0, 0, 0), y los límites de
+#     software no dejan salir de 0–LIMITE en ningún eje.
+#   - La zona de la sesión empieza en ORIGEN_ZONA_*_MM (por defecto, el
+#     propio origen), no centrada bajo la bobina.
 #
-# Unidades: mm, mm/s, mm/s², ms. Las coordenadas de MÁQUINA cuentan desde
-# el origen que deja el homing: (0, 0, 0) queda HOMING_SEPARACION_MM por
-# delante del punto en que salta cada final de carrera, así la mesa puede
-# volver a 0, 0, 0 sin pisar los interruptores.
+# Las credenciales (Wi-Fi, token y URL del servidor) NO van aquí: van en
+# secretos.py (ver secretos_ejemplo.py), que no se sube a git.
+#
+# Unidades: mm, mm/s, mm/s², ms, µT.
 # ═══════════════════════════════════════════════════════════════
 
-FIRMWARE = "pico-tms-1.0"          # se manda en cada latido (máx. 40 caracteres)
+FIRMWARE = "pico-tms-2.0"          # se manda en cada latido (máx. 40 caracteres)
 
-# ── Sensor HMC5883L (I2C) ──────────────────────────────────────
+# ── Límites de la mesa (medidos con prueba_calibracion.py) ─────
+# Desde el origen (la posición al arrancar) hasta estos valores. La mesa
+# nunca va a menos de 0 ni a más del límite: un movimiento fuera se
+# rechaza ANTES de dar un solo pulso.
+LIMITE_X_MM = 410.0
+LIMITE_Y_MM = 562.0
+LIMITE_Z_MM = 88.0
+
+# ── Magnetómetro QMC5883P (I2C) ────────────────────────────────
+# SDA → GP0 (pin 1) · SCL → GP1 (pin 2) · VCC → 3V3(OUT) (pin 36) · GND → pin 38
+# Ficha completa: docs/sensor-qmc5883p.md
 I2C_ID = 0
-PIN_SDA = 4                        # PENDIENTE: GP del cableado real
-PIN_SCL = 5                        # PENDIENTE
-I2C_FRECUENCIA = 400_000
-DIR_SENSOR = 0x1E                  # HMC5883L (0x0D sería un QMC5883L: otro chip)
-ASENTAMIENTO_MS = 300              # PENDIENTE: espera tras cada movimiento antes de leer
-TIMEOUT_LECTURA_MS = 150           # máximo para que el sensor termine una medición (8 muestras promediadas)
+PIN_SDA = 0
+PIN_SCL = 1
+I2C_FRECUENCIA = 100_000
+DIR_SENSOR = 0x2C                  # QMC5883P (0x1E sería un HMC5883L y 0x0D un QMC5883L)
+PROMEDIO_QMC = 10                  # lecturas promediadas por medición (200 Hz: unos 50 ms)
+TIMEOUT_DRDY_MS = 100              # máximo de espera de cada dato nuevo (DRDY)
+# Rango con el que se mide el fondo y con el que se mide si el servidor
+# todavía espera un HMC5883L (ver «Formato de las lecturas» en README.md).
+# 30 G es el único que no satura nunca dentro de lo que caben las cuentas HMC.
+RANGO_G_PREDETERMINADO = 30
+# Fondo (Tierra + entorno) con la mesa en el origen y la bobina apagada:
+# se mide al arrancar y, en espera, con el botón BOOTSEL.
+LECTURAS_FONDO = 100
+# False (recomendado): las cuentas se mandan crudas y el fondo se resta en
+# el servidor si se copia en Configuración › Sensor › offset_ut. Así el
+# dato crudo queda guardado tal cual lo midió el chip.
+# True: la Pico resta su fondo antes de mandar (deja offset_ut en 0).
+RESTAR_FONDO_EN_PICO = False
+ASENTAMIENTO_MS = 300              # espera tras cada movimiento antes de leer
+MOSTRAR_LECTURAS = True            # imprime cada lectura en la consola de Thonny
 
-# ── Motores: NEMA 17 + TB6600 ──────────────────────────────────
-# TB6600: PUL (STEP), DIR y ENA. Cableado de cátodo común recomendado:
-# PUL−, DIR− y ENA− a GND; PUL+, DIR+ y ENA+ a los GPIO (ver README.md).
-# pasos_por_mm = 200 pasos/vuelta × micropasos / avance del husillo (mm/vuelta)
-#   T8 de 8 mm/vuelta con 1/8 → 200 × 8 / 8 = 200 micropasos por mm
-MICROPASOS = 8                     # PENDIENTE: el mismo que los interruptores SW1–SW3 del TB6600
-AVANCE_HUSILLO_MM = 8              # PENDIENTE: T8 de 4 hilos = 8 mm/vuelta; de 1 hilo = 2 mm
-PASOS_POR_VUELTA = 200             # NEMA 17 de 1,8°
-
-_PASOS_MM = PASOS_POR_VUELTA * MICROPASOS / AVANCE_HUSILLO_MM
-
-# Un diccionario por eje. Pon EJE_Z = None si no hay motor en Z (ver MODO_Z).
+# ── Motores: NEMA 17 + TB6600 (los de prueba_calibracion.py) ───
+# Factores de prueba_calibracion.py: si allí los corregiste, copia aquí
+# los valores finales (PASOS_POR_MM_X, _Y, _Z) y las inversiones.
 #   paso, dir      GPIO de PUL+ y DIR+
 #   invertir       True si el eje se mueve al revés de lo esperado
-#   pasos_por_mm   se ajusta con la calibración (README.md, sección 5)
-#   recorrido_mm   recorrido útil desde el origen del homing
-#   final          GPIO del final de carrera en el lado − (None si no hay)
-#   final_nc       True si el interruptor es normalmente cerrado (NC)
+#   pasos_por_mm   pulsos por milímetro
+#   recorrido_mm   límite de software (no tocar: sale de LIMITE_*)
+#   final          None: sin final de carrera (el origen es la posición al
+#                  arrancar). Con interruptores: GPIO del lado − y
+#                  "final_nc": True (motores.py ya sabe hacer el homing).
+#   holgura_mm     compensación del juego del husillo (ver HOLGURA_MM)
+#
+# Aproximación unidireccional contra el juego del husillo: si un movimiento
+# de ese eje va en sentido −, se pasa holgura_mm y vuelve en sentido +, así
+# cada punto se alcanza siempre desde el mismo lado. Con la serpentina, la
+# mitad de las filas van en X−: cada punto de esas filas hace ese vaivén
+# (unos 0,06 s más por punto; README.md, sección 6). 0 la desactiva en ese eje.
+HOLGURA_MM = 0.5
 EJE_X = {
-    "paso": 10, "dir": 11, "invertir": False,           # PENDIENTE: pines
-    "pasos_por_mm": _PASOS_MM,
-    "recorrido_mm": 100.0,                               # PENDIENTE: recorrido útil real
-    "final": 18, "final_nc": True,                       # PENDIENTE
+    "paso": 10, "dir": 11, "invertir": False,
+    "pasos_por_mm": 50.0,
+    "recorrido_mm": LIMITE_X_MM,
+    "final": None,
+    "holgura_mm": HOLGURA_MM,
 }
 EJE_Y = {
     "paso": 12, "dir": 13, "invertir": False,
-    "pasos_por_mm": _PASOS_MM,
-    "recorrido_mm": 100.0,
-    "final": 19, "final_nc": True,
+    "pasos_por_mm": 50.0,
+    "recorrido_mm": LIMITE_Y_MM,
+    "final": None,
+    "holgura_mm": HOLGURA_MM,
 }
 EJE_Z = {
     "paso": 14, "dir": 15, "invertir": False,
-    "pasos_por_mm": _PASOS_MM,
-    "recorrido_mm": 25.0,
-    "final": 20, "final_nc": True,
+    "pasos_por_mm": 50.0,
+    "recorrido_mm": LIMITE_Z_MM,
+    "final": None,
+    "holgura_mm": HOLGURA_MM,
 }
+MODO_Z = "motor"                   # "motor", o "ninguno" si solo se mide el plano z = 0
 
-# Cómo se mueve Z (PENDIENTE):
-#   "motor"   otro NEMA 17 con TB6600 (EJE_Z)
-#   "manual"  el operador sube el sensor a mano y pulsa PIN_BOTON_Z en cada plano
-#   "ninguno" solo se puede medir el plano z = 0
-MODO_Z = "motor"
-PIN_BOTON_Z = 21                   # botón a GND (pull-up interno); solo con MODO_Z = "manual"
-
-# Habilitación (ENA) común a los tres TB6600. Con cátodo común, ENA+ en alto
-# DESHABILITA el driver, así que habilitado = 0. None si ENA no está conectado.
-PIN_ENA = 16                       # PENDIENTE
+# Habilitación (ENA) común a los tres TB6600: ENA+ en 0 = habilitado.
+# Los drivers quedan habilitados TODO el tiempo que corre el programa:
+# así los motores sostienen la posición y el origen no se pierde.
+PIN_ENA = 16
 ENA_HABILITADO = 0
 
-# ── Calibración: centro de la bobina en coordenadas de máquina ─
-# x_máquina = X_BOBINA_MM − zona_mm.x / 2 + xMM   (igual en Y)
-X_BOBINA_MM = 50.0                 # PENDIENTE: medir después del homing (README.md, 5.3)
-Y_BOBINA_MM = 50.0                 # PENDIENTE
-# Posición de máquina de Z en la que el sensor queda en el plano z = 0 (el standoff).
-# z_máquina = Z_CERO_MM + zMM. Con 0, el plano z = 0 es el origen de Z tras el homing.
-Z_CERO_MM = 0.0                    # PENDIENTE: medir (README.md, 5.4)
-# Margen que la mesa no usa junto al origen (0 = puede llegar al mismo origen)
-MARGEN_ORIGEN_MM = 0.0
+# ── Dónde empieza la zona de la sesión (coordenadas de máquina) ─
+# x_máquina = ORIGEN_ZONA_X_MM + xMM   (igual en Y y en Z)
+# Con 0, 0, 0 el punto (0, 0, 0) de la sesión es la posición al arrancar.
+ORIGEN_ZONA_X_MM = 0.0
+ORIGEN_ZONA_Y_MM = 0.0
+ORIGEN_ZONA_Z_MM = 0.0
 
 # ── Movimiento ─────────────────────────────────────────────────
-VEL_MAX_MM_S = 20.0                # velocidad de crucero
-ACEL_MM_S2 = 100.0                 # rampa trapezoidal
-VEL_INICIO_MM_S = 2.0              # velocidad con la que arranca y termina cada rampa
+# prueba_calibracion.py usa un medio periodo de 100 µs (100 mm/s con 50
+# pulsos/mm) y arranca a unos 6 mm/s. Si un motor vibra o se salta pasos,
+# baja VEL_MAX_MM_S: sin finales de carrera, un paso perdido corre el origen.
+VEL_MAX_MM_S = 60.0                # velocidad de crucero
+ACEL_MM_S2 = 300.0                 # rampa trapezoidal
+VEL_INICIO_MM_S = 6.0              # velocidad con la que arranca y termina cada rampa
 FRECUENCIA_MAX_HZ = 15_000         # el TB6600 admite unos 20 kHz; se deja margen
-# Aproximación unidireccional contra el juego del husillo: si un movimiento va
-# en sentido −, se pasa este tanto y vuelve en sentido +. 0 la desactiva.
-HOLGURA_MM = 0.5
+MARGEN_ORIGEN_MM = 0.0
 
-# Homing: rápido hasta tocar el final, retrocede, se acerca lento y se separa.
+# Solo los usa motores.py con finales de carrera (hoy no hay)
 HOMING_VEL_RAPIDA_MM_S = 8.0
 HOMING_VEL_LENTA_MM_S = 1.0
 HOMING_RETROCESO_MM = 3.0
 HOMING_SEPARACION_MM = 1.0         # distancia entre el disparo del final y el origen (0, 0, 0)
-HOMING_MAX_MM = 150.0              # si no toca el final en este recorrido, es un error
+HOMING_MAX_MM = 600.0              # si no toca el final en este recorrido, es un error
 
 # ── Envío al servidor ──────────────────────────────────────────
 TAMANO_LOTE = 25                   # 20 a 50 (máximo del servidor: 200)
@@ -104,18 +128,18 @@ MAX_ESPERA_LOTE_MS = 3000          # manda un lote incompleto si la lectura más
 MAX_BUFER = 1000                   # lecturas en RAM (~32 kB); lleno = el barrido se pausa
 ESPERA_REINTENTO_MIN_MS = 250
 ESPERA_REINTENTO_MAX_MS = 8000
-TIMEOUT_HTTP_S = 5                 # debe ser menor que el watchdog
+TIMEOUT_HTTP_S = 5
 LATIDO_401_REINTENTO_S = 30        # tras un 401 se vuelve a probar cada tanto
 
 # ── Red ────────────────────────────────────────────────────────
+# Sin internet, el NTP falla (se reintenta cada minuto) y las lecturas se
+# mandan sin hora del dispositivo: el servidor les pone la suya.
 NTP_HOST = "pool.ntp.org"
 NTP_RESINCRONIZAR_S = 3600
 WIFI_REINTENTO_S = 10
 
 # ── Sistema ────────────────────────────────────────────────────
-# Watchdog del RP2040 (tope de 8,3 s). Una vez activo NO se puede apagar: si se
-# detiene el programa (Ctrl+C, botón Detener de Thonny), la Pico se reinicia a
-# los 8 s. Por eso viene apagado. Actívalo solo cuando el firmware ya esté
-# calibrado y desatendido: a cambio, la Pico se reinicia sola si se cuelga.
+# Sin watchdog ni machine.reset(): un reinicio tomaría como origen la
+# posición en que haya quedado la mesa.
 USAR_WATCHDOG = False
 WATCHDOG_MS = 8000

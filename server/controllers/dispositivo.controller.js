@@ -92,7 +92,8 @@ export const latido = async (req, res, next) => {
         puntos_esperados: abierta.puntos_esperados,
         ultimo_seq: await ultimoSeq(abierta.id),
         barrido: obtener('barrido'),
-        sensor: obtener('sensor'),
+        // La copia de la sesión: modelo, rango y cuentas por gauss con los que se mide
+        sensor: sesiones.sensorDeSesionAbierta() ?? obtener('sensor'),
       };
     }
     res.json({
@@ -123,7 +124,12 @@ export const lote = async (req, res, next) => {
     if (abierta.origen !== 'hw') {
       return res.status(409).json({ ok: false, error: `La sesión ${sesionId} es simulada: no acepta lecturas de la Pico W` });
     }
-    const r = await registrarLoteDispositivo(abierta, lecturas);
+    const { completa, ...r } = await registrarLoteDispositivo(abierta, lecturas, sesiones.sensorDeSesionAbierta() ?? obtener('sensor'));
+    if (completa) {
+      // Con la malla completa la sesión se cierra sola (como en simulación) y el dashboard desactiva «Detener»
+      await sesiones.finalizar(sesionId, 'completa').catch(err =>
+        console.error(`[dispositivo] No se pudo cerrar la sesión ${sesionId} al completarse:`, err.message));
+    }
     res.json({ ok: true, ...r });
   } catch (err) {
     if (err instanceof ErrorIngesta) {

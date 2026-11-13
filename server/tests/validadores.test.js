@@ -151,3 +151,36 @@ test('validarCambiosUsuario, validarIdUsuario y validarPasswordNueva', () => {
   espera(correr(v.validarPasswordNueva, { body: {} }), 400);
   espera(correr(v.validarPasswordNueva, { body: { password: 'corta' } }), 422);
 });
+
+test('Sensor: QMC5883P y HMC5883L; cuentas por gauss derivadas; al cambiar de modelo se normaliza', async () => {
+  const { validarClave } = await import('../services/validacionConfiguracion.js');
+  const { mezclarSensor } = await import('../services/configuracion.js');
+  const offset = { x: 1.5, y: -2, z: 0 };
+  const qmc = { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 3, offset_ut: offset };
+  const hmc = { modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 3, offset_ut: offset };
+
+  // Válidos, con las cuentas por gauss derivadas del rango
+  assert.deepEqual(validarClave('sensor', { ...qmc, rango_g: 2, cuentas_por_g: undefined }).valor.cuentas_por_g, 15000);
+  assert.equal(validarClave('sensor', { ...qmc, cuentas_por_g: undefined }).errores.length, 0);
+  assert.equal(validarClave('sensor', hmc).errores.length, 0);
+  // Formato viejo sin modelo = HMC5883L
+  assert.equal(validarClave('sensor', { rango_ga: 1.9, lecturas_por_punto: 1, offset_ut: offset }).valor.modelo, 'HMC5883L');
+  // Inválidos
+  assert.ok(validarClave('sensor', { ...qmc, rango_g: 4 }).errores.length > 0);
+  assert.ok(validarClave('sensor', { ...qmc, cuentas_por_g: 999 }).errores.length > 0);
+  assert.ok(validarClave('sensor', { ...qmc, rango_ga: 1.9 }).errores.some(e => /desconocido/.test(e)));
+  assert.ok(validarClave('sensor', { ...hmc, modelo: 'QMC5883L' }).errores.length > 0);
+
+  // {modelo: QMC5883P} sobre un HMC → QMC de 30 G, sin campos del HMC, con lecturas y offset
+  const aQMC = validarClave('sensor', mezclarSensor(hmc, { modelo: 'QMC5883P' }));
+  assert.deepEqual(aQMC.errores, []);
+  assert.deepEqual(aQMC.valor, { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 3, offset_ut: offset });
+  // Y al revés: HMC5883L de 1,9 Ga
+  const aHMC = validarClave('sensor', mezclarSensor(qmc, { modelo: 'HMC5883L' }));
+  assert.deepEqual(aHMC.errores, []);
+  assert.deepEqual(aHMC.valor, { modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 3, offset_ut: offset });
+  // Cambiar el modelo y el rango a la vez; o solo el rango (las cuentas se recalculan)
+  assert.equal(validarClave('sensor', mezclarSensor(hmc, { modelo: 'QMC5883P', rango_g: 8 })).valor.cuentas_por_g, 3750);
+  assert.equal(validarClave('sensor', mezclarSensor(qmc, { rango_g: 12 })).valor.cuentas_por_g, 2500);
+  assert.equal(validarClave('sensor', mezclarSensor(hmc, { rango_ga: 8.1 })).valor.lsb_por_ga, 230);
+});

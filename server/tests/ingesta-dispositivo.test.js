@@ -76,3 +76,16 @@ test('Con pérdidas y reintentos, al final están todos los seq una sola vez', (
   for (let s = 1; s <= 500; s++) assert.ok(guardados.has(s));
   assert.ok(duplicadas > 0);
 });
+
+test('QMC5883P: un "saturado" que no es booleano rechaza esa lectura, no el lote', () => {
+  const qmc = { ...CTX, sensor: { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 1, offset_ut: { x: 0, y: 0, z: 0 } } };
+  const lote = [
+    { ...lect(1), raw: { x: 20000, y: -4096, z: 0 }, saturado: false },
+    { ...lect(2), saturado: 'true' },
+    { ...lect(3), saturado: true },
+  ];
+  const r = clasificarLote(lote, new Set(), qmc);
+  assert.deepEqual(r.nuevas.map(l => [l.seq, l.saturado]), [[1, false], [3, true]]);
+  assert.equal(r.nuevas[0].bx, 2000);
+  assert.deepEqual(r.rechazadas.map(x => x.seq), [2]);
+});

@@ -46,15 +46,15 @@ test('Paso libre: 7 mm y 2,5 mm (el último punto queda antes del borde si no di
   assert.equal(m03.ejeX[3], 3.3);          // sin 3.3000000000000003
 });
 
-test('Zona rectangular: 40 × 20 × 10 con paso 10 → 5 × 3 × 2 = 30 puntos en orden x → y → z', () => {
+test('Zona rectangular: 40 × 20 × 10 con paso 10 → 5 × 3 × 2 = 30 puntos en serpentina', () => {
   const m = mallaDeZona({ x: 40, y: 20, z: 10 }, 10);
   assert.equal(m.gridNx, 5);
   assert.equal(m.gridNy, 3);
   assert.deepEqual(m.zLevels, [0, 10]);
   assert.equal(m.totalPuntos, 30);
   assert.deepEqual(puntoDeMalla(m, 4), { xMM: 40, yMM: 0, zMM: 0, zIdx: 0 });
-  assert.deepEqual(puntoDeMalla(m, 5), { xMM: 0, yMM: 10, zMM: 0, zIdx: 0 });
-  assert.deepEqual(puntoDeMalla(m, 29), { xMM: 40, yMM: 20, zMM: 10, zIdx: 1 });
+  assert.deepEqual(puntoDeMalla(m, 5), { xMM: 40, yMM: 10, zMM: 0, zIdx: 0 });
+  assert.deepEqual(puntoDeMalla(m, 29), { xMM: 0, yMM: 0, zMM: 10, zIdx: 1 });
   const todas = Array.from({ length: 30 }, (_, i) => puntoDeMalla(m, i)).map(p => ({ x_mm: p.xMM, y_mm: p.yMM, z_mm: p.zMM }));
   assert.equal(calcularHuecos(m, todas).total, 0);
   assert.deepEqual(calcularHuecos(m, todas.slice(1)).posiciones, [{ xMM: 0, yMM: 0, zMM: 0 }]);
@@ -67,24 +67,24 @@ test('Una malla completa no tiene huecos', () => {
   }
 });
 
-test('Los huecos son las posiciones sin lectura válida, en el orden del barrido', () => {
+test('Los huecos son las posiciones sin lectura válida, en el orden del barrido (serpentina)', () => {
   const m = mallaDeBarrido(BARRIDO, 10);
   const r = calcularHuecos(m, posiciones(m, new Set([0, 8, 146])));
   assert.equal(r.total, 3);
   assert.deepEqual(r.posiciones, [
     { xMM: 0, yMM: 0, zMM: 0 },
-    { xMM: 10, yMM: 10, zMM: 0 },
+    { xMM: 50, yMM: 10, zMM: 0 },    // la fila 1 va de regreso
     { xMM: 60, yMM: 60, zMM: 20 },
   ]);
 });
 
 test('Una lectura a menos de 1 mm del punto cuenta; a más, no', () => {
   const m = mallaDeBarrido(BARRIDO, 20);
-  const todas = posiciones(m, new Set([5]));   // falta (20, 20, 0)
-  assert.equal(calcularHuecos(m, [...todas, { x_mm: 20.8, y_mm: 19.4, z_mm: 0 }]).total, 0);
-  assert.equal(calcularHuecos(m, [...todas, { x_mm: 21.5, y_mm: 20, z_mm: 0 }]).total, 1);
+  const todas = posiciones(m, new Set([5]));   // falta (40, 20, 0): la fila 1 va de regreso
+  assert.equal(calcularHuecos(m, [...todas, { x_mm: 40.8, y_mm: 19.4, z_mm: 0 }]).total, 0);
+  assert.equal(calcularHuecos(m, [...todas, { x_mm: 41.5, y_mm: 20, z_mm: 0 }]).total, 1);
   // Lecturas fuera de la malla o en otro plano no tapan huecos
-  assert.equal(calcularHuecos(m, [...todas, { x_mm: 20, y_mm: 20, z_mm: 10 }]).total, 1);
+  assert.equal(calcularHuecos(m, [...todas, { x_mm: 40, y_mm: 20, z_mm: 10 }]).total, 1);
 });
 
 test('Sin lecturas, todo es hueco, pero la lista se corta en 1000', () => {

@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794336416.166442,
-    "seen": 1794336467.2798128,
-    "ast_hash": "2c5844c22e7bfd9008a0f681e954e4ca",
+    "mtime": 1794511608.3486445,
+    "seen": 1794511610.6453576,
+    "ast_hash": "1f2d4932f2fa86a919cade4def19caa9",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -624,9 +624,9 @@
     "semantic_hash": ""
   },
   "docs/firmware-pico-w.md": {
-    "mtime": 1794336416.166442,
-    "seen": 1794336467.2798176,
-    "ast_hash": "19759e9d94ca2b14fa81f21da07a381a",
+    "mtime": 1794511529.8436253,
+    "seen": 1794511610.6453636,
+    "ast_hash": "396af425fb190ddab957a074f6287f55",
     "semantic_hash": ""
   },
   "server/migrations/006_paso_libre.sql": {
@@ -648,27 +648,27 @@
     "semantic_hash": ""
   },
   "firmware/banco.py": {
-    "mtime": 1794336416.166442,
-    "seen": 1794336467.2796595,
-    "ast_hash": "5d39df34223b0f9a4bad2bf3fb4aa3c9",
+    "mtime": 1794510992.3981235,
+    "seen": 1794511610.6451151,
+    "ast_hash": "b22dd30a720d42e67dae8f25edb25452",
     "semantic_hash": ""
   },
   "firmware/barrido.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796624,
-    "ast_hash": "0c649719947162e6546f5f987f10f14c",
+    "mtime": 1794510955.4580274,
+    "seen": 1794511610.6451197,
+    "ast_hash": "a139513f7f37afc2058bcc4ff409221b",
     "semantic_hash": ""
   },
   "firmware/cliente.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.279664,
-    "ast_hash": "9c48ab50e803aa1f8b78df570a6ebf1f",
+    "mtime": 1794510969.6740518,
+    "seen": 1794511610.645122,
+    "ast_hash": "82b1e53f70bd2135729c9211efa6cbfb",
     "semantic_hash": ""
   },
   "firmware/config.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796657,
-    "ast_hash": "b7c9bdbebcb85a528325881d66ad6126",
+    "mtime": 1794511186.5639646,
+    "seen": 1794511610.645124,
+    "ast_hash": "ddf8664823ce80e9ff07aa7b9037b849",
     "semantic_hash": ""
   },
   "firmware/led.py": {
@@ -678,27 +678,27 @@
     "semantic_hash": ""
   },
   "firmware/main.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796679,
-    "ast_hash": "d11691322f8c556018066dfa651151bf",
+    "mtime": 1794510928.930027,
+    "seen": 1794511610.6451283,
+    "ast_hash": "bc81fe756b6f60824d689d36cc496e35",
     "semantic_hash": ""
   },
   "firmware/motores.py": {
-    "mtime": 1794349161.9372964,
-    "seen": 1794349218.9533677,
-    "ast_hash": "769a9935e6129cf804de60abda504a8e",
+    "mtime": 1794510858.2703614,
+    "seen": 1794511610.6451323,
+    "ast_hash": "c1f125bd1ccad8b52141f1fcaf213ce1",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/ejecutar_pc.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796738,
-    "ast_hash": "ecd53488f72e30421b5d198825955e3d",
+    "mtime": 1794511176.7038307,
+    "seen": 1794511610.645142,
+    "ast_hash": "e2052ec0eceb78f8e3e47fbc72ef0d10",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/prueba_logica.py": {
-    "mtime": 1794349172.149452,
-    "seen": 1794349218.9533753,
-    "ast_hash": "c314ca046691b7aacfd0684a1a538c7d",
+    "mtime": 1794511113.5390594,
+    "seen": 1794511610.6451437,
+    "ast_hash": "f4071567f03b4d83a103ea7d95bb4db6",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/_compat.py": {
@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/machine.py": {
-    "mtime": 1794336416.1704419,
-    "seen": 1794336467.2796774,
-    "ast_hash": "ae5254b9932eebc5459050bae01e9456",
+    "mtime": 1794511002.9541698,
+    "seen": 1794511610.6451504,
+    "ast_hash": "c4a931b3c189cf5b1fa228cc8922baef",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/network.py": {
@@ -756,15 +756,15 @@
     "semantic_hash": ""
   },
   "firmware/sensor.py": {
-    "mtime": 1794336416.174442,
-    "seen": 1794336467.2796876,
-    "ast_hash": "4fd3167850434738dea452c05095d0d0",
+    "mtime": 1794511113.5390594,
+    "seen": 1794511610.6451836,
+    "ast_hash": "a7edabba44c76001585f723713465331",
     "semantic_hash": ""
   },
   "firmware/README.md": {
-    "mtime": 1794438803.3336103,
-    "seen": 1794446652.0601108,
-    "ast_hash": "6c18a404968bdff78aa9e9d00f83cc41",
+    "mtime": 1794511485.7030947,
+    "seen": 1794511610.6453712,
+    "ast_hash": "fd5cacd87b6af05c1c355625e0582ab2",
     "semantic_hash": ""
   },
   "firmware/prueba_calibracion.py": {
@@ -774,63 +774,9 @@
     "semantic_hash": ""
   },
   "docs/instructivo-calibracion-y-conexiones.md": {
-    "mtime": 1794349182.633612,
-    "seen": 1794349218.9535513,
-    "ast_hash": "ddbd718631643c345a0e544260ca205c",
-    "semantic_hash": ""
-  },
-  "firmware/prueba_sensor.py": {
-    "mtime": 1794421641.80757,
-    "seen": 1794421670.5017645,
-    "ast_hash": "90c596e8b239771fd4843004226da896",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/Adafruit_HMC5883_U.cpp": {
-    "mtime": 1701792304.0,
-    "seen": 1794425687.1942797,
-    "ast_hash": "d12e70be1a43888a49462200e03549e0",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/Adafruit_HMC5883_U.h": {
-    "mtime": 1701792304.0,
-    "seen": 1794425687.1942835,
-    "ast_hash": "ef0dab8ffd5eb714beb75327c98caecd",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/Adafruit_Sensor.cpp": {
-    "mtime": 1701189500.0,
-    "seen": 1794425687.1942859,
-    "ast_hash": "efaf077c8ba7d3e25d1dceec4485627f",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/Adafruit_Sensor.h": {
-    "mtime": 1701189500.0,
-    "seen": 1794425687.1942875,
-    "ast_hash": "c7f29eb0e99851910d0ee30d6e7d3c90",
-    "semantic_hash": ""
-  },
-  "firmware/prueba_sensor_adafruit.py": {
-    "mtime": 1794425684.0572646,
-    "seen": 1794425687.1943088,
-    "ast_hash": "e07f57ab2c8f48d63749f7e960d946d3",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_HMC5883_Unified/README.md": {
-    "mtime": 1701792304.0,
-    "seen": 1794425687.1945052,
-    "ast_hash": "245b5d69007664819ed80c5849170f34",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/LICENSE.txt": {
-    "mtime": 1701189500.0,
-    "seen": 1794425687.1945071,
-    "ast_hash": "3b83ef96387f14655fc854ddc3c6bd57",
-    "semantic_hash": ""
-  },
-  "firmware/AR3832-Modulo-HMC5883L-librerias/Adafruit_Unified_Sensor/README.md": {
-    "mtime": 1701189500.0,
-    "seen": 1794425687.1945086,
-    "ast_hash": "9a132989d695da559b1167a6e370f913",
+    "mtime": 1794511568.3721142,
+    "seen": 1794511610.645365,
+    "ast_hash": "0a181f2eeaf1b1d3c8f9080c7412e6c3",
     "semantic_hash": ""
   },
   "firmware/prueba_hall_49e.py": {
@@ -921,6 +867,30 @@
     "mtime": 1794440695.3422995,
     "seen": 1794446652.0601125,
     "ast_hash": "e79d1e3b2dfebab4325008e092c29a7c",
+    "semantic_hash": ""
+  },
+  "firmware/medicion_campo_qmc5883p.py": {
+    "mtime": 1794508815.5139909,
+    "seen": 1794510557.3605883,
+    "ast_hash": "51679e15c3875b485e13de9298ed9de3",
+    "semantic_hash": ""
+  },
+  "firmware/prueba_qmc5883p.py": {
+    "mtime": 1794508815.4659877,
+    "seen": 1794510557.3606,
+    "ast_hash": "49c2e86b28314f991c22317f1bae41cd",
+    "semantic_hash": ""
+  },
+  "docs/prompts-qmc5883p-y-serpentina.md": {
+    "mtime": 1794509923.0932863,
+    "seen": 1794510557.3608341,
+    "ast_hash": "509b7f3564ef106e74162940e2e6c45a",
+    "semantic_hash": ""
+  },
+  "docs/sensor-qmc5883p.md": {
+    "mtime": 1794511568.3721142,
+    "seen": 1794511610.6453695,
+    "ast_hash": "db7b78c6a7805f6d63dd1db42a32853a",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {

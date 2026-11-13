@@ -292,7 +292,7 @@ class Mesa:
 
     # ── Movimientos (generadores) ──────────────────────────────
     def mover_a(self, x_mm, y_mm, z_mm=None):
-        """Mueve a coordenadas de MÁQUINA. Aproxima siempre en sentido + (HOLGURA_MM)."""
+        """Mueve a coordenadas de MÁQUINA. Aproxima siempre en sentido + (holgura_mm de cada eje)."""
         destinos = [(self.x, x_mm), (self.y, y_mm)]
         if self.z and z_mm is not None:
             destinos.append((self.z, z_mm))
@@ -301,8 +301,11 @@ class Mesa:
             if not (0 <= mm <= eje.cfg["recorrido_mm"] + 1e-6):
                 raise ErrorMovimiento("%s = %.2f mm está fuera del recorrido 0–%.1f mm" % (eje.nombre, mm, eje.cfg["recorrido_mm"]))
             objetivos.append((eje, int(round(mm * eje.ppmm))))
-        holgura = [(e, max(0, p - int(config.HOLGURA_MM * e.ppmm))) for e, p in objetivos
-                   if config.HOLGURA_MM > 0 and p < e.pos]
+        holgura = []
+        for e, p in objetivos:
+            h = e.cfg.get("holgura_mm", config.HOLGURA_MM)
+            if h > 0 and p < e.pos:
+                holgura.append((e, max(0, p - int(h * e.ppmm))))
         for fase in (holgura, objetivos):
             for eje, p in fase:
                 eje.mover_pasos(p - eje.pos)

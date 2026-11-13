@@ -6,10 +6,13 @@
  * Habla el mismo protocolo que el firmware (docs/firmware-pico-w.md):
  *
  *   1. Manda el latido (POST /dispositivo/latido) cada intervalo_latido_s.
- *   2. Cuando el latido trae una sesión activa, recorre su malla (según
- *      el paso) con lecturas crudas verosímiles del HMC5883L (la misma
- *      física de espira que el simulador del servidor) y las envía por
- *      lotes (POST /dispositivo/mediciones).
+ *   2. Cuando el latido trae una sesión activa, recorre su malla en
+ *      serpentina (puntoDeMalla, el mismo orden que firmware/barrido.py)
+ *      con lecturas crudas verosímiles (la misma física de espira que el
+ *      simulador del servidor) y las envía por lotes
+ *      (POST /dispositivo/mediciones). Según sesion_activa.sensor.modelo:
+ *        QMC5883P → cuentas de 16 bits y "saturado": true|false en cada lectura;
+ *        HMC5883L → cuentas HMC (−4096..2047; −4096 = desborde), sin "saturado".
  *   3. Si un lote falla, lo reenvía con los MISMOS seq hasta que el
  *      servidor lo confirme: el servidor descarta los duplicados.
  *
@@ -26,7 +29,8 @@
  *                          veces no se envía y la otra mitad se envía pero
  *                          se ignora la respuesta (fuerza reintentos y duplicados)
  *   --duplicar P           probabilidad de reenviar un lote ya confirmado
- *   --saturar P            probabilidad de que un eje lea −4096 (desborde)
+ *   --saturar P            probabilidad de una lectura saturada: con el QMC5883P,
+ *                          "saturado": true (bit OVFL); con el HMC5883L, un eje en −4096
  *   --sin-latido-a-los N   a los N segundos deja de mandar latidos y lecturas
  *                          (simula que la Pico se quedó sin red); sigue viva
  *                          hasta Ctrl+C
@@ -38,7 +42,8 @@
 import { campoEnPlaca } from '../services/fisicaEspira.js';
 import { mallaDeZona, puntoDeMalla } from '../services/geometria.js';
 import { mulberry32, generadorGaussiano } from '../services/aleatorio.js';
-import { utACrudo, DESBORDE, MAX_LECTURAS_LOTE } from '../services/conversionSensor.js';
+import { utACrudo, DESBORDE, MAX_LECTURAS_LOTE, esQMC } from '../services/conversionSensor.js';
+import { limiteSensorUT } from '../services/validacionConfiguracion.js';
 
 // ── Opciones ──────────────────────────────────────────────────
 function leerOpciones(argv) {
@@ -138,8 +143,16 @@ function leerSensor(s, indice) {
     y: utACrudo(campo.by + gauss(0.25), s.sensor, 'y'),
     z: utACrudo(campo.bz + gauss(0.25), s.sensor, 'z'),
   };
-  if (azar() < op.saturar) raw[['x', 'y', 'z'][Math.floor(azar() * 3)]] = DESBORDE;
-  return { xMM: punto.xMM, yMM: punto.yMM, zMM: punto.zMM, raw, ts_ms: Date.now() };
+  const saturar = azar() < op.saturar;
+  const lectura = { xMM: punto.xMM, yMM: punto.yMM, zMM: punto.zMM, raw, ts_ms: Date.now() };
+  if (esQMC(s.sensor)) {
+    // Como el firmware: el bit OVFL va aparte; las cuentas de 16 bits quedan como estén
+    const fondo = limiteSensorUT(s.sensor);
+    lectura.saturado = saturar || [campo.bx, campo.by, campo.bz].some(v => Math.abs(v) > fondo);
+  } else if (saturar) {
+    raw[['x', 'y', 'z'][Math.floor(azar() * 3)]] = DESBORDE;
+  }
+  return lectura;
 }
 
 /** Envía un lote hasta que el servidor lo confirme (mismos seq en cada reintento) */
@@ -188,7 +201,7 @@ async function bucleMedicion() {
     const total = s.puntos_esperados;
     const indice = s.siguienteSeq - 1;   // una lectura por punto: seq − 1 = índice en la malla
     if (indice >= total) {
-      log(`Malla completa (${total} puntos). Esperando a que el operador cierre la sesión ${s.id}.`);
+      log(`Malla completa (${total} puntos). El servidor cierra la sesión ${s.id}.`);
       s.terminada = true;
       continue;
     }

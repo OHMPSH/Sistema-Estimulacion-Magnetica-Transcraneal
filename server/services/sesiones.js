@@ -82,6 +82,9 @@ async function resumirCierre(sesion) {
 
 export const sesionAbierta = () => (abierta ? conGeometria(abierta) : null);
 
+/** Copia de la configuración del sensor guardada con la sesión abierta (o null) */
+export const sensorDeSesionAbierta = () => abierta?.config_sensor ?? null;
+
 /**
  * Si la sesión real se creó antes del primer latido de la Pico, su
  * version_firmware quedó vacía: se completa con el primer latido.

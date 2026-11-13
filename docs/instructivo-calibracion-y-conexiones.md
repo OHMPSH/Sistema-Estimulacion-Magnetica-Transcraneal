@@ -2,7 +2,7 @@
 
 Este instructivo explica, paso a paso:
 
-1. cómo conectar los tres drivers **TB6600**, los motores **NEMA 17**, el sensor **HMC5883L** y los finales de carrera a la **Raspberry Pi Pico W**;
+1. cómo conectar los tres drivers **TB6600**, los motores **NEMA 17**, el magnetómetro **QMC5883P** y los finales de carrera a la **Raspberry Pi Pico W**;
 2. cómo usar el programa [`firmware/prueba_calibracion.py`](../firmware/prueba_calibracion.py) en Thonny para medir cuánto se mueve cada eje y corregir su factor de conversión (pasos por milímetro);
 3. cómo pasar esos factores al firmware final (`firmware/config.py`).
 
@@ -20,8 +20,8 @@ Los pines son los mismos en el programa de calibración y en el firmware. Si cam
 | Driver TB6600 | 3 | Uno por eje (X, Y, Z). Sin motor en Z, bastan 2 |
 | Motor NEMA 17 (200 pasos/vuelta) | 3 | Con husillo T8 |
 | Fuente de 12–24 V de CC | 1 | Para los motores. Al menos 1,5 A por motor (por ejemplo, 24 V y 5 A para tres) |
-| Módulo HMC5883L (GY-271) | 1 | |
-| Finales de carrera | 3 | Opcionales para la calibración; el firmware final los usa |
+| Módulo magnetómetro QMC5883P (I2C 0x2C) | 1 | Se vendía como «HMC5883L», pero es un QMC5883P |
+| Finales de carrera | 3 | Opcionales; hoy no están instalados y el firmware final funciona sin ellos |
 | Cable USB de datos | 1 | Para Thonny y para alimentar la Pico |
 | Cables dupont o de calibre 22–24 | — | Señales |
 | Cable de calibre 18–20 | — | Fuente y motores |
@@ -35,8 +35,8 @@ La serigrafía de la placa numera los **pines físicos** del 1 al 40 (1 arriba a
 
 | Uso | GPIO | Pin físico |
 |---|---|---|
-| Sensor SDA | GP4 | 6 |
-| Sensor SCL | GP5 | 7 |
+| Sensor SDA | GP0 | 1 |
+| Sensor SCL | GP1 | 2 |
 | **X – PUL+** | GP10 | 14 |
 | **X – DIR+** | GP11 | 15 |
 | **Y – PUL+** | GP12 | 16 |
@@ -54,13 +54,13 @@ La serigrafía de la placa numera los **pines físicos** del 1 al 40 (1 arriba a
 ```
                          USB
                   ┌──────┴┴──────┐
-     GP0       1 ─┤●            ●├─ 40  VBUS
-     GP1       2 ─┤●            ●├─ 39  VSYS
+ SDA GP0       1 ─┤●            ●├─ 40  VBUS
+ SCL GP1       2 ─┤●            ●├─ 39  VSYS
      GND       3 ─┤■            ●├─ 38  GND
      GP2       4 ─┤●            ●├─ 37  3V3_EN
      GP3       5 ─┤●            ●├─ 36  3V3(OUT) ── VCC sensor
- SDA GP4       6 ─┤●            ●├─ 35  ADC_VREF
- SCL GP5       7 ─┤●            ●├─ 34  GP28
+     GP4       6 ─┤●            ●├─ 35  ADC_VREF
+     GP5       7 ─┤●            ●├─ 34  GP28
      GND       8 ─┤■            ■├─ 33  GND
      GP6       9 ─┤●            ●├─ 32  GP27
      GP7      10 ─┤●            ●├─ 31  GP26
@@ -208,19 +208,21 @@ Si el motor gira al revés, no hace falta recablear: se corrige en el programa (
 
 Lleva un cable de la fuente a cada driver (en estrella), de calibre 18–20. **Respeta la polaridad**: invertida, daña el driver.
 
-### 4.5 Sensor HMC5883L (GY-271) → Pico W
+### 4.5 Magnetómetro QMC5883P → Pico W
 
 | Módulo | Pico W | Pin físico |
 |---|---|---|
 | `VCC` | 3V3(OUT) | 36 |
 | `GND` | GND | 38 |
-| `SDA` | GP4 | 6 |
-| `SCL` | GP5 | 7 |
-| `DRDY` | sin conectar | — |
+| `SDA` | GP0 | 1 |
+| `SCL` | GP1 | 2 |
+| `DRDY` (si lo trae) | sin conectar | — |
 
-El programa de calibración no usa el sensor; se prueba después con `banco.sensor()` (ver [`firmware/README.md`](../firmware/README.md), sección 5.1).
+- Con **3,3 V**, nunca 5 V; cables cortos (menos de 20 cm); I2C0 a 100 kHz, dirección **0x2C**.
+- Es la conexión probada con `firmware/prueba_qmc5883p.py`, que debe decir `I2C: ['0x2c']`. Ficha completa en [docs/sensor-qmc5883p.md](sensor-qmc5883p.md).
+- El programa de calibración no usa el sensor; se prueba después con `banco.sensor()` (ver [`firmware/README.md`](../firmware/README.md), sección 7).
 
-### 4.6 Finales de carrera (para el firmware final)
+### 4.6 Finales de carrera (opcionales; hoy no están instalados)
 
 Con interruptores **normalmente cerrados (NC)**: un terminal al GPIO y el otro a GND.
 
@@ -438,8 +440,8 @@ EJE_Z = {
 
 Revisa también:
 
-- `MICROPASOS` y `AVANCE_HUSILLO_MM`: solo sirven para el valor teórico. Si escribes el factor calibrado directamente en `pasos_por_mm`, mandan los calibrados.
+- `config.py` ya trae los factores de `prueba_calibracion.py` (50 pulsos/mm, sin inversiones) y los límites medidos con ella (`LIMITE_X_MM` 410, `LIMITE_Y_MM` 562, `LIMITE_Z_MM` 88). Si los cambias aquí, cámbialos allá.
 - `PIN_ENA = None` si dejaste ENA sin conectar.
 - Si en la calibración usaste una velocidad más baja porque el motor perdía pasos, baja también `VEL_MAX_MM_S` en `config.py`.
 
-Después sigue con la calibración de la posición de la bobina, del plano z = 0 y del recorrido útil en [`firmware/README.md`](../firmware/README.md), secciones 5.4 y 5.5, y con la prueba de banco (sección 6).
+Después sigue con la calibración del juego del husillo y la prueba de banco en [`firmware/README.md`](../firmware/README.md), secciones 8.3 y 7. El firmware final no tiene finales de carrera: la posición al arrancar es el origen, igual que en `prueba_calibracion.py`.

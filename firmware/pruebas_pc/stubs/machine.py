@@ -43,27 +43,71 @@ class Pin:
 
 
 class I2C:
-    """Un HMC5883L falso: identificación H43, siempre listo, cuentas con ruido."""
+    """Un QMC5883P falso (0x2C, Chip ID 0x80): DRDY, OVFL, datos '<hhh' en X, Y, Z.
+
+    Atributos que las pruebas pueden cambiar:
+      direcciones   lo que devuelve scan()
+      chip_id       valor del registro 0x00
+      campo_ut      función () → (bx, by, bz) en µT; por defecto, la Tierra con ruido
+      saturar       probabilidad de OVFL en cada lectura
+      no_listo      cuántas lecturas del estado salen sin DRDY antes de estar listo
+      nunca_listo   True: DRDY no llega nunca
+      fallos_os     cuántas operaciones siguientes lanzan OSError(5)
+    """
     def __init__(self, *a, **k):
+        self.direcciones = [0x2C]
+        self.chip_id = 0x80
+        self.campo_ut = lambda: (20 + random.gauss(0, 0.3), -5 + random.gauss(0, 0.3), 40 + random.gauss(0, 0.3))
         self.saturar = 0.0
+        self.no_listo = 0
+        self.nunca_listo = False
+        self.fallos_os = 0
+        self.registros = {}
+        self.escrituras = []
+        self._ovfl = False
+
+    def _quizas_fallar(self):
+        if self.fallos_os > 0:
+            self.fallos_os -= 1
+            raise OSError(5)
+
+    def _cuentas_por_g(self):
+        if self.registros.get(0x0A) != 0xCD:
+            return None                        # en reposo: todo vale 0
+        return (1000, 2500, 3750, 15000)[(self.registros.get(0x0B, 0) >> 2) & 3]
 
     def scan(self):
-        return [0x1E]
+        return list(self.direcciones)
 
     def readfrom_mem(self, direccion, registro, n):
-        if registro == 0x0A:
-            return b"H43"
+        self._quizas_fallar()
+        if registro == 0x00:
+            return bytes([self.chip_id])
         if registro == 0x09:
-            return b"\x01"
-        if registro == 0x03:
-            x, y, z = (random.randint(-300, 300) for _ in range(3))
-            if random.random() < self.saturar:
-                y = -4096
-            return struct.pack(">hhh", x, z, y)
+            if self.nunca_listo:
+                return b"\x00"
+            if self.no_listo > 0:
+                self.no_listo -= 1
+                return b"\x00"
+            self._ovfl = random.random() < self.saturar
+            return bytes([0x01 | (0x02 if self._ovfl else 0)])
+        if registro == 0x01:
+            cpg = self._cuentas_por_g()
+            if cpg is None:
+                return bytes(6)
+            valores = []
+            for b in self.campo_ut():
+                c = int(round(b / 100 * cpg))
+                valores.append(max(-32768, min(32767, c)))
+            if self._ovfl:
+                valores[1] = 32767
+            return struct.pack("<hhh", *valores)
         return bytes(n)
 
     def writeto_mem(self, direccion, registro, datos):
-        pass
+        self._quizas_fallar()
+        self.registros[registro] = datos[0]
+        self.escrituras.append((registro, datos[0]))
 
 
 class Timer:

@@ -18,9 +18,10 @@
  * probabilidades configuradas, y la secuencia se repite exacta.
  *
  * Saturación inyectada: la componente bz se reemplaza por
- * 1,5 × el fondo de escala del sensor (2047 / lsb_por_ga × 100 µT,
- * con el signo del campo). Desde la Fase 4, la ingesta la guarda como el
- * sensor real: bz NULL, crudo −4096 y la lectura marcada `saturado`.
+ * 1,5 × el fondo de escala del sensor (limiteSensorUT: 3276,7 µT con el
+ * QMC5883P en 30 G; 249,6 µT con el HMC5883L en 1,9 Ga), con el signo del
+ * campo. La ingesta la guarda como el sensor real: saturado = 1 (con el
+ * HMC5883L, bz NULL y crudo −4096; con el QMC5883P, bx, by, bz NULL).
  * ─────────────────────────────────────────────────────────────
  */
 

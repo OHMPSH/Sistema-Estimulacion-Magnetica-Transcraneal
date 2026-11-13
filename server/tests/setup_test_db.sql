@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS configuracion (
 INSERT IGNORE INTO configuracion (clave, valor, actualizado_en) VALUES
   ('modo_operacion', '"simulacion"', UTC_TIMESTAMP()),
   ('barrido',        '{"limite_x_mm":60,"limite_y_mm":60,"limite_z_mm":20,"standoff_mm":5,"paso_predeterminado_mm":5}', UTC_TIMESTAMP()),
-  ('sensor',         '{"modelo":"HMC5883L","rango_ga":1.9,"lsb_por_ga":820,"lecturas_por_punto":1,"offset_ut":{"x":0,"y":0,"z":0}}', UTC_TIMESTAMP()),
+  ('sensor',         '{"modelo":"QMC5883P","rango_g":30,"cuentas_por_g":1000,"lecturas_por_punto":1,"offset_ut":{"x":0,"y":0,"z":0}}', UTC_TIMESTAMP()),   -- QMC5883P (migración 008)
   ('simulacion',     '{"ms_por_punto":{"DC":60,"AC":120},"semilla":12345,"ruido_sigma_ut":0.25,"radio_bobina_mm":25,"campo_centro_ut":120,"prob_hueco":0,"prob_saturacion":0}', UTC_TIMESTAMP()),
   ('dispositivo',    '{"intervalo_latido_s":5,"umbral_desconexion_s":15}', UTC_TIMESTAMP()),
   ('visualizacion',  '{"ventana_grafica":80,"filas_tabla":60,"decimales":3,"escala_superficie":"Jet","rotacion_auto":true,"reducir_animaciones":false}', UTC_TIMESTAMP()),

@@ -15,7 +15,7 @@
 import * as configuracion from '../services/configuracion.js';
 import { sesionAbierta } from '../services/sesiones.js';
 import { PASOS_SUGERIDOS_MM, PASO_MIN_MM, MAX_PUNTOS_SESION, MEDIOS } from '../services/geometria.js';
-import { RANGOS_GA, GANANCIAS_HMC5883L } from '../services/validacionConfiguracion.js';
+import { RANGOS_GA, GANANCIAS_HMC5883L, RANGOS_G, RANGOS_QMC5883P, MODELOS_SENSOR, limiteSensorUT } from '../services/validacionConfiguracion.js';
 
 const BLOQUEADAS_CON_SESION = ['modo_operacion', 'barrido', 'sensor'];
 
@@ -29,6 +29,11 @@ export const getConfiguracion = (_req, res) => {
       paso_min_mm: PASO_MIN_MM,
       max_puntos_sesion: MAX_PUNTOS_SESION,
       medios: MEDIOS,
+      modelos_sensor: MODELOS_SENSOR,
+      rangos_qmc5883p: RANGOS_G.map(rango => ({
+        rango_g: rango, cuentas_por_g: RANGOS_QMC5883P[rango],
+        fondo_ut: limiteSensorUT({ modelo: 'QMC5883P', cuentas_por_g: RANGOS_QMC5883P[rango] }),
+      })),
       ganancias_hmc5883l: RANGOS_GA.map(rango => ({ rango_ga: rango, lsb_por_ga: GANANCIAS_HMC5883L[rango] })),
     },
     sesion_activa: sesionAbierta(),

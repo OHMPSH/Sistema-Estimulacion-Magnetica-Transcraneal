@@ -11,6 +11,7 @@ import { useConfig } from '../context/ConfigContext.jsx';
 import { SeccionFormulario } from '../components/config/SeccionFormulario.jsx';
 import { SeccionUsuarios } from '../components/config/SeccionUsuarios.jsx';
 import { SeccionDispositivo } from '../components/config/SeccionDispositivo.jsx';
+import { SelectorModeloSensor } from '../components/config/SelectorModeloSensor.jsx';
 import { numero } from '../utils/formato.js';
 
 const SECCIONES = [
@@ -28,31 +29,44 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
   const { config, opciones } = useConfig();
   const esAdmin = usuario.rol === 'admin';
   const zona = config?.datos?.zona_horaria;
-  const lsb = config?.sensor?.lsb_por_ga;
+  const sensor = config?.sensor;
+  const esQMC = sensor?.modelo === 'QMC5883P';
 
   let contenido;
   switch (seccion) {
-    case 'sensor':
+    case 'sensor': {
+      const camposComunes = [
+        { ruta: ['lecturas_por_punto'], etiqueta: 'Lecturas por punto', tipo: 'entero', ayuda: 'De 1 a 100.' },
+        { ruta: ['offset_ut', 'x'], etiqueta: 'Offset X', tipo: 'numero', unidad: 'µT', ayuda: 'Se resta a cada lectura convertida. La Pico imprime el fondo (Tierra y entorno, con la bobina apagada) al arrancar: cópialo aquí.' },
+        { ruta: ['offset_ut', 'y'], etiqueta: 'Offset Y', tipo: 'numero', unidad: 'µT' },
+        { ruta: ['offset_ut', 'z'], etiqueta: 'Offset Z', tipo: 'numero', unidad: 'µT' },
+      ];
+      const rango = esQMC
+        ? { ruta: ['rango_g'], etiqueta: 'Rango', tipo: 'select',
+            opciones: (opciones?.rangos_qmc5883p ?? []).map(r => ({ valor: r.rango_g, etiqueta: `±${r.rango_g}\u00a0G (fondo ${numero(r.fondo_ut, 1)}\u00a0µT)` })),
+            ayuda: 'Las cuentas por gauss salen del rango: 15000 (2 G), 3750 (8 G), 2500 (12 G) y 1000 (30 G).' }
+        : { ruta: ['rango_ga'], etiqueta: 'Rango (ganancia)', tipo: 'select',
+            opciones: (opciones?.ganancias_hmc5883l ?? []).map(g => ({ valor: g.rango_ga, etiqueta: `±${numero(g.rango_ga, 2)}\u00a0Ga (fondo ${numero(2047 / g.lsb_por_ga * 100, 1)}\u00a0µT)` })) };
       contenido = (
-        <SeccionFormulario clave="sensor" titulo="Sensor (HMC5883L)" soloLectura={!esAdmin}
-          descripcion={`La ganancia fija el fondo de escala: por encima, el registro se desborda (−4096) y la lectura se guarda como saturada. ${sesionAbierta ? AVISO_SESION : ''}`}
-          campos={[
-            { ruta: ['rango_ga'], etiqueta: 'Rango (ganancia)', tipo: 'select',
-              opciones: (opciones?.ganancias_hmc5883l ?? []).map(g => ({ valor: g.rango_ga, etiqueta: `±${numero(g.rango_ga, 2)} Ga · ${g.lsb_por_ga} LSB/Ga · fondo ${numero(2047 / g.lsb_por_ga * 100, 1)} µT` })) },
-            { ruta: ['lecturas_por_punto'], etiqueta: 'Lecturas por punto', tipo: 'entero', ayuda: 'De 1 a 100.' },
-            { ruta: ['offset_ut', 'x'], etiqueta: 'Offset X', tipo: 'numero', unidad: 'µT', ayuda: 'Se resta a cada lectura convertida.' },
-            { ruta: ['offset_ut', 'y'], etiqueta: 'Offset Y', tipo: 'numero', unidad: 'µT' },
-            { ruta: ['offset_ut', 'z'], etiqueta: 'Offset Z', tipo: 'numero', unidad: 'µT' },
-          ]}
-          extra={(
-            <p className="texto-secundario">
-              LSB por gauss vigente (se calcula del rango): <strong className="cifra">{lsb ?? '—'}</strong>.
-              El botón «Medir cero» queda pendiente: el servidor todavía no lo soporta.
-            </p>
-          )}
-        />
+        <>
+          <SelectorModeloSensor soloLectura={!esAdmin} sesionAbierta={sesionAbierta} />
+          <SeccionFormulario key={sensor?.modelo ?? 'sin-modelo'} clave="sensor" titulo={`Rango y calibración (${sensor?.modelo ?? '—'})`} soloLectura={!esAdmin}
+            descripcion={esQMC
+              ? `El rango fija el fondo de escala: por encima, el QMC5883P avisa con su bit de saturación y la lectura se guarda como saturada (sin Bx, By ni Bz). µT = cuentas / cuentas por gauss × 100 − offset. ${sesionAbierta ? AVISO_SESION : ''}`
+              : `La ganancia fija el fondo de escala: por encima, el registro se desborda (−4096) y la lectura se guarda como saturada. µT = cuentas / LSB por gauss × 100 − offset. ${sesionAbierta ? AVISO_SESION : ''}`}
+            campos={[rango, ...camposComunes]}
+            extra={(
+              <p className="texto-secundario">
+                {esQMC ? 'Cuentas por gauss' : 'LSB por gauss'} vigentes (se calculan del rango):{' '}
+                <strong className="cifra">{(esQMC ? sensor?.cuentas_por_g : sensor?.lsb_por_ga) ?? '—'}</strong>.
+                El botón «Medir cero» queda pendiente: el servidor todavía no lo soporta.
+              </p>
+            )}
+          />
+        </>
       );
       break;
+    }
     case 'simulacion':
       contenido = (
         <SeccionFormulario clave="simulacion" titulo="Simulación" soloLectura={!esAdmin}

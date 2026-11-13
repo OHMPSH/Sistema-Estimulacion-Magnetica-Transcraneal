@@ -13,7 +13,8 @@
  * eje de la bobina está en (zona.x / 2, zona.y / 2).
  *
  * Los puntos van de 0 en adelante cada `paso` hasta el borde; si el paso
- * no divide la zona, el último punto queda antes del borde:
+ * no divide la zona, el último punto queda antes del borde. Se recorren en
+ * serpentina (ver puntoDeMalla):
  *
  *   zona 60 × 60 × 20, paso 5 mm  → 13 × 13 × 5 planos = 845 puntos
  *   zona 40 × 20 × 10, paso 10 mm →  5 ×  3 × 2 planos =  30 puntos
@@ -76,15 +77,44 @@ export function mallaDeZona(zona, pasoMM) {
 export const mallaDeBarrido = (barrido, pasoMM) => mallaDeZona(limitesDeBarrido(barrido), pasoMM);
 
 /**
- * Recorre la malla en el orden del barrido: x, luego y, luego z.
- * Devuelve el punto número `indice` (0..totalPuntos−1).
+ * Orden del barrido: SERPENTINA (el mismo que la Pico, firmware/barrido.py,
+ * contrato en docs/firmware-pico-w.md, sección 7). X avanza hasta el máximo,
+ * Y sube un paso y X regresa; al terminar un plano, Z sube y el plano
+ * siguiente se recorre desde donde quedó (Y también va y viene). Entre dos
+ * puntos seguidos solo cambia un índice en ±1.
+ *
+ *   iz = k ÷ (nx·ny);  r = k mod (nx·ny);  fila = r ÷ nx
+ *   iy = fila (iz par) o ny − 1 − fila (iz impar)
+ *   g  = iz·ny + fila
+ *   ix = r mod nx (g par) o nx − 1 − (r mod nx) (g impar)
+ *
+ * @returns {{ ix, iy, iz }} los índices del punto número k (0..totalPuntos−1)
+ */
+export function indicesDeSerpentina(nx, ny, k) {
+  const porPlano = nx * ny;
+  const iz = Math.floor(k / porPlano);
+  const r = k % porPlano;
+  const fila = Math.floor(r / nx);
+  const iy = iz % 2 === 0 ? fila : ny - 1 - fila;
+  const g = iz * ny + fila;
+  const ix = g % 2 === 0 ? r % nx : nx - 1 - (r % nx);
+  return { ix, iy, iz };
+}
+
+/** Lo inverso de indicesDeSerpentina: el número k del punto (ix, iy, iz) */
+export function serpentinaDeIndices(nx, ny, ix, iy, iz) {
+  const fila = iz % 2 === 0 ? iy : ny - 1 - iy;
+  const g = iz * ny + fila;
+  const c = g % 2 === 0 ? ix : nx - 1 - ix;
+  return g * nx + c;
+}
+
+/**
+ * Devuelve el punto número `indice` (0..totalPuntos−1) en el orden del
+ * barrido (serpentina).
  */
 export function puntoDeMalla(malla, indice) {
-  const porPlano = malla.gridNx * malla.gridNy;
-  const zIdx = Math.floor(indice / porPlano);
-  const resto = indice % porPlano;
-  const yIdx = Math.floor(resto / malla.gridNx);
-  const xIdx = resto % malla.gridNx;
+  const { ix: xIdx, iy: yIdx, iz: zIdx } = indicesDeSerpentina(malla.gridNx, malla.gridNy, indice);
   return {
     xMM: malla.ejeX[xIdx],
     yMM: malla.ejeY[yIdx],
@@ -93,10 +123,10 @@ export function puntoDeMalla(malla, indice) {
   };
 }
 
-/** Índice de (ix, iy, iz) en el orden del barrido, o −1 si cae fuera */
+/** Índice de (ix, iy, iz) en el orden del barrido (serpentina), o −1 si cae fuera */
 export function indiceDeMalla(malla, ix, iy, iz) {
   if (iz < 0 || iz >= malla.zLevels.length || ix < 0 || iy < 0 || ix >= malla.gridNx || iy >= malla.gridNy) return -1;
-  return (iz * malla.gridNy + iy) * malla.gridNx + ix;
+  return serpentinaDeIndices(malla.gridNx, malla.gridNy, ix, iy, iz);
 }
 
 /** Índice del plano Z que corresponde a `zMM` (con tolerancia), o −1 */

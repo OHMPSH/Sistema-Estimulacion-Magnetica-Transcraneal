@@ -202,6 +202,7 @@ export const getCsv = async (req, res, next) => {
       ['puntos_recibidos', s.puntos_recibidos ?? ''],
       ['huecos', s.huecos ? s.huecos.total : ''],
       ['config_barrido', s.config_barrido ?? ''],
+      ['sensor_modelo', s.config_sensor?.modelo ?? ''],
       ['config_sensor', s.config_sensor ?? ''],
       ...(s.origen === 'sim' ? [['config_simulacion', s.config_simulacion ?? '']] : []),
       ['unidades', 'posiciones en mm; campo en µT; tiempos en UTC (ISO 8601); raw en cuentas del HMC5883L (−4096 = desborde)'],

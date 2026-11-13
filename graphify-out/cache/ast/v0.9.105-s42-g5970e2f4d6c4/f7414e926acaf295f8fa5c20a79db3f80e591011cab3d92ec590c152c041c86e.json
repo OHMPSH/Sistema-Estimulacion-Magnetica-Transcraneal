@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_server_migrations_008_sensor_qmc5883p_sql", "label": "008_sensor_qmc5883p.sql", "file_type": "code", "source_file": "server/migrations/008_sensor_qmc5883p.sql", "source_location": null}], "edges": []}

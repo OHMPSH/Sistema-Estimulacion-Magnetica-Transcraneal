@@ -113,16 +113,43 @@ export function mallaDeZona(zona, pasoMM) {
 export const etiquetaZona = z => (z ? `${mm.format(z.x)}\u00a0×\u00a0${mm.format(z.y)}\u00a0×\u00a0${mm.format(z.z)}\u00a0mm` : '—');
 
 /**
- * Índice de una lectura en el orden del barrido (x → y → z), o null si
- * no cae en la malla. Es la "posición del barrido" del eje X de la
- * gráfica de líneas: un hueco deja un índice sin lectura.
+ * Índice de una lectura en el orden del barrido, o null si no cae en la
+ * malla. Es la "posición en el barrido" del eje X de la gráfica de líneas:
+ * un hueco deja un índice sin lectura.
+ *
+ * El barrido va en SERPENTINA, como la Pico y el simulador (contrato en
+ * docs/firmware-pico-w.md, sección 7; mismo cálculo que indiceDeMalla en
+ * server/services/geometria.js): X avanza y regresa en filas alternas, y
+ * cada plano Z se recorre desde donde quedó el anterior.
+ *   fila = iy (iz par) o ny − 1 − iy (iz impar);  g = iz·ny + fila
+ *   c    = ix (g par) o nx − 1 − ix (g impar);    k = g·nx + c
  */
 export function indiceEnMalla(malla, xMM, yMM, zMM) {
   const ix = Math.round(xMM / malla.pasoMM);
   const iy = Math.round(yMM / malla.pasoMM);
   const iz = indicePlano(malla.zLevels, zMM);
   if (iz === -1 || ix < 0 || iy < 0 || ix >= malla.gridNx || iy >= malla.gridNy) return null;
-  return (iz * malla.gridNy + iy) * malla.gridNx + ix;
+  return serpentinaDeIndices(malla.gridNx, malla.gridNy, ix, iy, iz);
+}
+
+/** Número k del punto (ix, iy, iz) en la serpentina */
+export function serpentinaDeIndices(nx, ny, ix, iy, iz) {
+  const fila = iz % 2 === 0 ? iy : ny - 1 - iy;
+  const g = iz * ny + fila;
+  const c = g % 2 === 0 ? ix : nx - 1 - ix;
+  return g * nx + c;
+}
+
+/** Índices (ix, iy, iz) del punto número k en la serpentina (lo inverso) */
+export function indicesDeSerpentina(nx, ny, k) {
+  const porPlano = nx * ny;
+  const iz = Math.floor(k / porPlano);
+  const r = k % porPlano;
+  const fila = Math.floor(r / nx);
+  const iy = iz % 2 === 0 ? fila : ny - 1 - fila;
+  const g = iz * ny + fila;
+  const ix = g % 2 === 0 ? r % nx : nx - 1 - (r % nx);
+  return { ix, iy, iz };
 }
 
 /** Índice del plano Z (con tolerancia de coma flotante), o −1 */

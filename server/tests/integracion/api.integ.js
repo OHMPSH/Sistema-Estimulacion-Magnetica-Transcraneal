@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { levantar, cliente, esperar, leerCSV } from './helper.js';
 import { crearGeneradorMuestras } from '../../services/simulacionPura.js';
-import { mallaDeBarrido } from '../../services/geometria.js';
+import { mallaDeBarrido, mallaDeZona, puntoDeMalla } from '../../services/geometria.js';
 
 const carpetaServidor = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 let entorno;
@@ -65,35 +65,79 @@ test('Sesión simulada con semilla fija: el CSV coincide con el simulador (toler
   }
 });
 
-test('Pico W emulada con pérdidas y duplicados: ningún seq duplicado ni faltante', async (t) => {
+for (const modelo of ['QMC5883P', 'HMC5883L']) {
+  test(`Pico W emulada (${modelo}) con pérdidas, duplicados y saturadas: seq sin huecos ni duplicados, en serpentina`, async (t) => {
+    if (omitir(t)) return;
+    assert.equal((await admin.put('/configuracion/sensor', { valor: { modelo } })).status, 200);
+    assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 200);
+    const token = (await admin.post('/dispositivo/token')).datos.token;
+    const sinToken = await cliente(entorno.base).post('/dispositivo/latido', {});
+    assert.equal(sinToken.status, 401);
+    const s = await admin.post('/sesiones', { modo: 'AC', paso_mm: 20 });
+    assert.equal(s.status, 201);
+    assert.equal(s.datos.sesion.origen, 'hw');
+    // Con una sesión abierta no se puede cambiar el sensor
+    assert.equal((await admin.put('/configuracion/sensor', { valor: { rango_g: 8 } })).status, 409);
+
+    const emulador = spawn(process.execPath, [join(carpetaServidor, 'scripts', 'emular-pico.js'),
+      '--url', entorno.base, '--token', token, '--lote', '4', '--ms-por-lectura', '1',
+      '--perdida', '0.3', '--duplicar', '0.3', '--saturar', '0.15', '--semilla', '11'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let salida = '';
+    emulador.stdout.on('data', d => { salida += d; });
+    try {
+      // Con todas las lecturas, el servidor cierra la sesión solo
+      await esperar(async () => (await admin.get('/sesiones/activa')).datos.sesion === null, 40000, 200);
+    } finally {
+      emulador.kill();
+    }
+    const med = (await admin.get(`/sesiones/${s.datos.sesion.id}/mediciones`)).datos.data;
+    const seqs = med.map(m => m.seq);
+    assert.equal(seqs.length, 32, `filas: ${seqs.length}`);
+    assert.deepEqual(seqs, Array.from({ length: 32 }, (_, i) => i + 1));
+    assert.ok(/duplicadas [1-9]/.test(salida), 'el emulador debió provocar duplicados');
+    // Posiciones en serpentina: el seq s es el punto s − 1
+    const malla = mallaDeZona({ x: 60, y: 60, z: 20 }, 20);
+    for (const m of med) {
+      const p = puntoDeMalla(malla, m.seq - 1);
+      assert.deepEqual([Number(m.x_mm), Number(m.y_mm), Number(m.z_mm)], [p.xMM, p.yMM, p.zMM], `seq ${m.seq}`);
+    }
+    const saturadas = med.filter(m => m.saturado);
+    assert.ok(saturadas.length > 0, 'debió haber lecturas saturadas');
+    for (const m of med) {
+      if (modelo === 'QMC5883P') {
+        if (m.saturado) assert.equal(m.bx, null);
+        else assert.ok(Math.abs(Number(m.bx) - m.raw_x / 1000 * 100) < 1e-9, `µT del seq ${m.seq}`);
+      } else if (m.saturado) {
+        assert.ok([m.raw_x, m.raw_y, m.raw_z].includes(-4096));
+      }
+    }
+
+    assert.equal((await admin.put(`/sesiones/${s.datos.sesion.id}`)).status, 409);   // ya cerrada al completarse
+    assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'simulacion' })).status, 200);
+    assert.equal((await admin.del('/dispositivo/token')).status, 200);
+    const csv = leerCSV((await admin.get(`/sesiones/${s.datos.sesion.id}/csv`)).datos);
+    assert.equal(csv.meta.sensor_modelo, modelo);
+  });
+}
+
+test('Simulador con QMC5883P: las saturadas quedan con saturado = 1, sin Bx/By/Bz y con crudos de 16 bits', async (t) => {
   if (omitir(t)) return;
-  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 200);
-  const token = (await admin.post('/dispositivo/token')).datos.token;
-  const sinToken = await cliente(entorno.base).post('/dispositivo/latido', {});
-  assert.equal(sinToken.status, 401);
-  const s = await admin.post('/sesiones', { modo: 'AC', paso_mm: 20 });
-  assert.equal(s.status, 201);
-  assert.equal(s.datos.sesion.origen, 'hw');
-
-  const emulador = spawn(process.execPath, [join(carpetaServidor, 'scripts', 'emular-pico.js'),
-    '--url', entorno.base, '--token', token, '--lote', '4', '--ms-por-lectura', '1',
-    '--perdida', '0.3', '--duplicar', '0.3', '--semilla', '11'], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let salida = '';
-  emulador.stdout.on('data', d => { salida += d; });
-  try {
-    await esperar(() => salida.includes('Malla completa'), 40000, 200);
-  } finally {
-    emulador.kill();
+  assert.equal((await admin.put('/configuracion/sensor', { valor: { modelo: 'QMC5883P' } })).status, 200);
+  await admin.put('/configuracion/simulacion', { valor: { ms_por_punto: { DC: 20, AC: 20 }, prob_hueco: 0, prob_saturacion: 0.3 } });
+  const id = await sesionSimulada(admin, { modo: 'DC', paso_mm: 20 });
+  const med = (await admin.get(`/sesiones/${id}/mediciones`)).datos.data;
+  assert.equal(med.length, 32);
+  const sat = med.filter(m => m.saturado);
+  assert.ok(sat.length > 0);
+  for (const m of sat) {
+    assert.equal(m.bx, null);
+    assert.equal(m.magnitud, null);
+    assert.ok([m.raw_x, m.raw_y, m.raw_z].some(v => Math.abs(v) >= 32767));
   }
-  const med = await admin.get(`/sesiones/${s.datos.sesion.id}/mediciones`);
-  const seqs = med.datos.data.map(m => m.seq);
-  assert.equal(seqs.length, 32, `filas: ${seqs.length}`);
-  assert.deepEqual(seqs, Array.from({ length: 32 }, (_, i) => i + 1));
-  assert.ok(/duplicadas [1-9]/.test(salida), 'el emulador debió provocar duplicados');
-
-  assert.equal((await admin.put(`/sesiones/${s.datos.sesion.id}`)).status, 200);
-  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'simulacion' })).status, 200);
-  assert.equal((await admin.del('/dispositivo/token')).status, 200);
+  for (const m of med.filter(x => !x.saturado)) assert.equal(m.raw_x, null);
+  const s = (await admin.get('/sesiones')).datos.data.find(x => x.id === id);
+  assert.equal(Number(s.saturadas), sat.length);
+  await admin.put('/configuracion/simulacion', { valor: { prob_saturacion: 0 } });
 });
 
 test('Roles: 401 sin sesión, 403 con un rol insuficiente', async (t) => {

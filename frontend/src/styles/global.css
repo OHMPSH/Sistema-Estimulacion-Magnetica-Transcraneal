@@ -32,19 +32,25 @@
   --font-mono:      'Share Tech Mono', monospace;
   --font-body:      'Inter', sans-serif;
 
-  --z0: #00e5ff;
-  --z1: #00ffa3;
-  --z2: #ffe600;
-  --z3: #ff8c00;
-  --z4: #ff00c8;
+  --z0: #56708F;
+  --z1: #6C87A8;
+  --z2: #86A1C0;
+  --z3: #A5BCD6;
+  --z4: #C6D5E6;
 }
 
-/* Tokens semánticos nuevos (mismos colores del tema oscuro) */
+/* Tokens semánticos. Los colores de los datos son sobrios (trabajo de tesis;
+   decisión del usuario, 2026-11-13): Bx, By y Bz con la paleta de Okabe e Ito
+   (apta para daltonismo y la de uso habitual en publicaciones), |B| en el
+   color del texto y los planos Z en una escala de azul pizarra (el plano más
+   bajo es el más oscuro). Los neón de arriba se quedan para los estados
+   (en línea, simulación, real). */
 :root {
-  --color-bx:    var(--cyan);
-  --color-by:    var(--magenta);
-  --color-bz:    var(--emerald);
-  --color-mag:   var(--yellow);
+  --color-bx:    #0072B2;   /* azul */
+  --color-by:    #D55E00;   /* bermellón */
+  --color-bz:    #009E73;   /* verde azulado */
+  --color-mag:   var(--text-primary);
+  --acento-dato: #6B7A90;   /* rayas de los indicadores (salvo el guinda) */
   --peligro:     #ff7070;
   --exito:       var(--emerald);
   --aviso:       var(--yellow);
@@ -83,11 +89,12 @@
   --text-secondary: #5C6273;
   --text-dim:       #8A8F9E;
 
-  --z0: #0062A8;
-  --z1: #00704D;
-  --z2: #7A6500;
-  --z3: #9A5B00;
-  --z4: #A3007F;
+  --z0: #1F3550;
+  --z1: #2E4A6E;
+  --z2: #3F618C;
+  --z3: #52749F;
+  --z4: #6A88B2;
+  --acento-dato: #5C6273;
 
   --peligro:     #B3261E;
   --lienzo-3d:   #F7F8FA;
@@ -338,10 +345,10 @@ button, a, label, select, summary, .opcion-boton, .segmento { touch-action: mani
   padding: 14px 16px; position: relative; overflow: hidden; margin: 0;
 }
 .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-.acento-estado::before { background: var(--emerald); }
+.acento-estado::before { background: var(--acento-dato); }
 .acento-guinda::before { background: var(--guinda-bright); }
-.acento-mag::before { background: var(--color-mag); }
-.acento-bx::before { background: var(--color-bx); }
+.acento-mag::before { background: var(--acento-dato); }
+.acento-bx::before { background: var(--acento-dato); }
 .kpi-label { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--text-secondary); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
 .kpi-value { font-family: var(--font-mono); font-size: 1.7rem; line-height: 1.1; margin: 0; }
 .kpi-value-chico { font-size: 1.25rem; }

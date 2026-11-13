@@ -3,7 +3,8 @@
  * Componentes Bx, By y Bz a lo largo del barrido (Chart.js).
  *
  * - El eje X es la POSICIÓN en el barrido (índice del punto en la malla,
- *   en orden x → y → z), no la hora: cada punto es otra posición.
+ *   en el orden en serpentina de la Pico y del simulador), no la hora:
+ *   cada punto es otra posición.
  * - Un punto de la malla sin lectura (hueco) o un eje saturado se dibuja
  *   como null, y con spanGaps: false la línea se corta ahí.
  * - Sin suavizado (tension 0) y con puntos pequeños visibles.

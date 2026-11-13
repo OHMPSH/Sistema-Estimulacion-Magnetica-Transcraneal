@@ -29,7 +29,7 @@ import * as Medicion from '../models/Medicion.js';
 import { limiteCampoUT, mallaDeSesion } from '../config/barrido.js';
 import { obtener } from './configuracion.js';
 import { difundir } from './tiempoReal.js';
-import { erroresDePosicion, clasificarLote, DESBORDE } from './conversionSensor.js';
+import { erroresDePosicion, clasificarLote, DESBORDE, esQMC, utACrudo, pareceLoteHMC } from './conversionSensor.js';
 import { indicePlano } from './geometria.js';
 
 export class ErrorIngesta extends Error {
@@ -83,17 +83,33 @@ export async function registrarMedicion(sesion, { xMM, yMM, zMM, bx, by, bz }) {
   }
   if (errores.length > 0) throw new ErrorIngesta(422, errores.join('; '), errores);
 
-  // Por encima del fondo de escala, el HMC5883L desborda ese eje (−4096)
+  // Por encima del fondo de escala el sensor satura, como el real:
+  //   HMC5883L: ese eje desborda (−4096) y queda NULL; los demás crudos, NULL.
+  //   QMC5883P: llega el bit OVFL sin decir qué eje: bx, by, bz y |B| NULL,
+  //             y se guardan los crudos de los tres ejes recortados a 16 bits
+  //             (el eje saturado queda en ±32767/−32768). Las lecturas sin
+  //             saturar del simulador no tienen crudos (NULL), como siempre.
+  // La configuración del sensor no cambia con una sesión abierta (409), así
+  // que la vigente es la copia de la sesión.
+  const sensor = obtener('sensor');
   const limite = limiteCampoUT();
   const ut = { x: bx, y: by, z: bz };
   let saturado = false;
   let raw = null;
-  for (const eje of ['x', 'y', 'z']) {
-    if (Math.abs(ut[eje]) > limite) {
+  if (esQMC(sensor)) {
+    if (['x', 'y', 'z'].some(eje => Math.abs(ut[eje]) > limite)) {
       saturado = true;
-      ut[eje] = null;
-      raw ??= { x: null, y: null, z: null };
-      raw[eje] = DESBORDE;
+      raw = { x: utACrudo(bx, sensor, 'x'), y: utACrudo(by, sensor, 'y'), z: utACrudo(bz, sensor, 'z') };
+      ut.x = ut.y = ut.z = null;
+    }
+  } else {
+    for (const eje of ['x', 'y', 'z']) {
+      if (Math.abs(ut[eje]) > limite) {
+        saturado = true;
+        ut[eje] = null;
+        raw ??= { x: null, y: null, z: null };
+        raw[eje] = DESBORDE;
+      }
     }
   }
 
@@ -123,17 +139,23 @@ export async function registrarMedicion(sesion, { xMM, yMM, zMM, bx, by, bz }) {
 /**
  * Guarda un lote de la Pico W (cuentas crudas) de forma idempotente.
  * @param {object} sesion    la sesión abierta, de origen 'hw'
- * @param {Array}  lecturas  [{seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms}]
+ * @param {Array}  lecturas  [{seq, xMM, yMM, zMM, raw:{x,y,z}, saturado?, ts_ms}]
+ * @param {object} [sensor]  la copia del sensor de la sesión (por defecto, el vigente)
  * @returns {Promise<{aceptadas: number, duplicadas: number, rechazadas: {seq, error}[]}>}
  * @throws {ErrorIngesta} 409 si la sesión se cerró
  */
-export async function registrarLoteDispositivo(sesion, lecturas) {
+export async function registrarLoteDispositivo(sesion, lecturas, sensor = obtener('sensor')) {
   const malla = mallaDeSesion(sesion);
   const ctx = {
     zona:    malla.zona,
     zLevels: malla.zLevels,
-    sensor:  obtener('sensor'),   // no cambia con la sesión abierta (409 en PUT /configuracion)
+    sensor,   // no cambia con la sesión abierta (409 en PUT /configuracion)
   };
+  if (pareceLoteHMC(lecturas, sensor)) {
+    console.warn(`[ingesta] Sesión ${sesion.id}: el lote parece de «cuentas HMC» (todas en −4096..2047 y alguna en −4096), `
+      + 'pero el sensor configurado es QMC5883P. Si es el firmware del Hall 49E, pon el modelo HMC5883L en Configuración › Sensor: '
+      + 'con QMC5883P sus lecturas se guardan mal escaladas.');
+  }
   const timestamp = new Date();
   const r = await Medicion.insertarLote(sesion.id, guardados => clasificarLote(lecturas, guardados, ctx), timestamp);
   if (!r.abierta) throw new ErrorIngesta(409, `La sesión ${sesion.id} ya no está abierta`);
@@ -145,5 +167,8 @@ export async function registrarLoteDispositivo(sesion, lecturas) {
   }
   ultimoSeqPorSesion.set(sesion.id, mayor);
 
-  return { aceptadas: r.nuevas.length, duplicadas: r.duplicadas.length, rechazadas: r.rechazadas };
+  // Completa: llegaron todas las lecturas de la malla (puntos × lecturas por punto)
+  const esperadas = sesion.puntos_esperados * (sensor?.lecturas_por_punto ?? 1);
+  const completa = esperadas > 0 && r.totalSeq >= esperadas;
+  return { aceptadas: r.nuevas.length, duplicadas: r.duplicadas.length, rechazadas: r.rechazadas, completa };
 }

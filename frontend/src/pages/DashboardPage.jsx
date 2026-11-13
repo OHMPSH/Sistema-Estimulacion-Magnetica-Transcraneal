@@ -1,7 +1,7 @@
 /**
  * pages/DashboardPage.jsx
  * Dashboard en vivo: configuración de la medición, indicadores y las
- * cinco vistas de datos (gráfica de líneas, mapa 3D de flechas,
+ * cinco vistas de datos (gráfica de líneas, mapa 3D de puntos medidos,
  * superficie de Plotly, tabla y tarjetas KPI).
  *
  * Los datos los da useSesionActiva (en App, para que no se pierdan al
@@ -113,7 +113,7 @@ export function DashboardPage({ usuario, medicion }) {
         <div className="celda-ancha">
           <LineChartComponent mediciones={mediciones} malla={malla} ventana={vis.ventana_grafica} decimales={vis.decimales} />
         </div>
-        <LimiteErrores nombre="Mapa 3D de flechas">
+        <LimiteErrores nombre="Mapa 3D de puntos medidos">
           <Canvas3D mediciones={mediciones} zLevels={malla.zLevels} zona={malla.zona}
             sesionId={sesion?.id ?? null} rotacionAuto={vis.rotacion_auto} reducirMovimiento={reducirMovimiento} />
         </LimiteErrores>

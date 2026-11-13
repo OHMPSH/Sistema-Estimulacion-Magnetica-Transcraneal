@@ -86,7 +86,13 @@ def latido(estado=None, error=None):
 # Cada lectura ocupa 8 enteros de 32 bits: seq, x×10, y×10, z×10 (décimas
 # de mm), raw x, raw y, raw z y ts relativo (ms desde base_ts). Así 1000
 # lecturas caben en 32 kB en lugar de ~70 kB como diccionarios.
+# El bit de saturado (bit OVFL del QMC5883P) va en los bits altos del campo
+# seq: bit 30 = la lectura lleva "saturado" (servidor con QMC5883P) y bit
+# 29 = su valor. Un seq real nunca llega a 2^29 (25 000 puntos por sesión).
 _CAMPOS = 8
+_LLEVA_SAT = 1 << 30
+_SAT = 1 << 29
+_MASCARA_SEQ = _SAT - 1
 
 
 class Bufer:
@@ -110,14 +116,17 @@ class Bufer:
         self.base_ts = 0
         self.ticks_mas_vieja = None
 
-    def agregar(self, seq, x_mm, y_mm, z_mm, raw, ts_ms):
+    def agregar(self, seq, x_mm, y_mm, z_mm, raw, ts_ms, saturado=None):
+        """saturado: None (no se manda; servidor de hoy), False o True."""
         if self.lleno():
             raise RuntimeError("búfer lleno")
+        if not 0 < seq <= _MASCARA_SEQ:
+            raise ValueError("seq fuera de rango: %d" % seq)
         if ts_ms and not self.base_ts:
             self.base_ts = ts_ms
         i = ((self.inicio + self.n) % self.capacidad) * _CAMPOS
         d = self.datos
-        d[i] = seq
+        d[i] = seq | (0 if saturado is None else (_LLEVA_SAT | (_SAT if saturado else 0)))
         d[i + 1] = int(round(x_mm * 10))
         d[i + 2] = int(round(y_mm * 10))
         d[i + 3] = int(round(z_mm * 10))
@@ -137,12 +146,15 @@ class Bufer:
         for k in range(min(maximo, self.n)):
             i = ((self.inicio + k) % self.capacidad) * _CAMPOS
             ts = d[i + 7]
-            lecturas.append({
-                "seq": d[i],
+            lectura = {
+                "seq": d[i] & _MASCARA_SEQ,
                 "xMM": d[i + 1] / 10, "yMM": d[i + 2] / 10, "zMM": d[i + 3] / 10,
                 "raw": {"x": d[i + 4], "y": d[i + 5], "z": d[i + 6]},
                 "ts_ms": (self.base_ts + ts) if ts >= 0 else 0,
-            })
+            }
+            if d[i] & _LLEVA_SAT:
+                lectura["saturado"] = bool(d[i] & _SAT)
+            lecturas.append(lectura)
         return lecturas
 
     def confirmar(self, cuantas):

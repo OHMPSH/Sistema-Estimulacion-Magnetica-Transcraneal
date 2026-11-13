@@ -9,7 +9,7 @@ Programas de prueba (independientes, para Thonny, sin bibliotecas extra):
 | [`firmware/prueba_qmc5883p.py`](../firmware/prueba_qmc5883p.py) | Prueba mínima: escaneo del bus y cuentas crudas X, Y, Z. |
 | [`firmware/medicion_campo_qmc5883p.py`](../firmware/medicion_campo_qmc5883p.py) | Medición para el proyecto: rango ajustable, promedio, resta del fondo, \|B\|, aviso de saturación y reconexión automática. Salida apta para el Plotter de Thonny. |
 
-El firmware cliente de `firmware/` (`sensor.py`, `config.py`, `banco.py`) **todavía es del HMC5883L** y hay que adaptarlo (sección 6).
+El firmware cliente de `firmware/` ya usa el QMC5883P (2026-11-12; sección 6). Falta adaptar el servidor.
 
 ---
 
@@ -114,46 +114,33 @@ El firmware cliente de `firmware/` (`sensor.py`, `config.py`, `banco.py`) **toda
 - Usa una fuente aparte, con un MOSFET de nivel lógico o un puente H (DRV8833, TB6612).
 - Pon un diodo de rueda libre en inversa sobre la bobina y trenza sus cables.
 
-## 6. Pendiente: llevarlo al firmware cliente (`firmware/`)
+## 6. En el firmware cliente (`firmware/`): hecho el 2026-11-12
 
-Lo hará el usuario en otra sesión. Lo que debe llevar:
+1. **`sensor.py` → clase `QMC5883P`**, con la interfaz que usan `main.py`, `barrido.py` y `banco.py`:
+   - **`verificar()`:** escanea el bus, comprueba el Chip ID `0x80` (mensajes claros si aparece 0x1E, 0x0D o nada), inicializa en 30 G y mide el **fondo** (100 lecturas).
+   - **`configurar(sesion_activa.sensor)`:** elige el formato de envío y el rango (ver el punto 4).
+   - **`medir()`:** generador que promedia `PROMEDIO_QMC` (10) lecturas, cede con `yield` mientras espera DRDY (límite de 100 ms → `ErrorSensor`), lee `'<hhh'` y acumula OVFL. Devuelve `((x, y, z), saturado)`.
+   - Ante un `OSError` reinicia el chip una vez; si vuelve a fallar, `ErrorSensor` (la sesión falla, se manda lo ya medido y la mesa vuelve al origen).
+2. **`config.py`:** `PIN_SDA = 0`, `PIN_SCL = 1`, `DIR_SENSOR = 0x2C`, `I2C_FRECUENCIA = 100_000`, `PROMEDIO_QMC`, `TIMEOUT_DRDY_MS`, `RANGO_G_PREDETERMINADO = 30`, `LECTURAS_FONDO` y `RESTAR_FONDO_EN_PICO`.
+3. **`banco.py`:** `sensor()` (cuentas, µT, |B| y SATURADO, en cualquier rango), `fondo()` y `prueba()` en serpentina. Se quitó la tabla `LSB_POR_GA`.
+4. **Fondo y formatos.** El fondo se mide al arrancar (y con BOOTSEL en espera) y se imprime para copiarlo en Configuración › Sensor › offset; por defecto la Pico **no** lo resta (`RESTAR_FONDO_EN_PICO = False`). El firmware funciona con los dos servidores, según `sesion_activa.sensor.modelo`:
+   - **`"QMC5883P"`:** rango `sensor.rango_g`, `raw` = cuentas crudas del QMC y `"saturado": true|false` por lectura.
+   - **Otro (servidor de hoy):** mide en 30 G y manda «cuentas HMC» (opción **a**): −4096 si hay OVFL o si no cabe. Límite: ±249,6 µT con 1,9 Ga, ±890 µT con 8,1 Ga.
+5. Documentos actualizados: `docs/firmware-pico-w.md` (secciones 4 y 7), `docs/instructivo-calibracion-y-conexiones.md` (4.5) y `firmware/README.md`. `firmware/pico_w_cliente_ejemplo.py` se dejó como estaba (es solo una referencia histórica).
 
-1. **`sensor.py` → clase `QMC5883P`** con la misma interfaz que usan `main.py`, `barrido.py` y `banco.py`:
-   - **`verificar()`:** escanea el bus. Si encuentra 0x2C, comprueba el Chip ID `0x80`. Si en su lugar responde 0x1E (HMC5883L) o 0x0D (QMC5883L), da un mensaje claro.
-   - **`configurar(rango)`:** escribe `0x29`, `0x0B` y `0x0A` y espera 20 ms.
-   - **`medir()`:** generador que espera DRDY (cediendo con `yield`), promedia N lecturas, lee `'<hhh'` en el orden X, Y, Z y devuelve las cuentas y si saturó (OVFL).
-   - Tras un `OSError`, debe volver a inicializar el chip.
-2. **`config.py`:**
-   - `PIN_SDA = 0` y `PIN_SCL = 1`, o los pines que el usuario elija;
-   - `DIR_SENSOR = 0x2C`;
-   - `I2C_FRECUENCIA = 100_000`;
-   - el rango y el promedio.
-3. **`banco.py`:** cambiar `sensor()` y la tabla `LSB_POR_GA`.
-4. **Fondo:** medirlo con la mesa en el origen y la bobina apagada. Hay dos caminos:
-   - restarlo en la Pico;
-   - guardarlo en `offset_ut` (Configuración › Sensor), que el servidor ya resta.
+### En el servidor y la página: hecho el 2026-11-12 (opción **b**)
 
-   «Medir cero» sigue pendiente en el servidor.
-5. **Compatibilidad con el servidor (decisión pendiente).** Hoy el servidor da por hecho un HMC5883L:
-   - `raw` debe estar entre −4096 y 2047 (`server/services/conversionSensor.js`);
-   - −4096 en un eje significa saturado;
-   - `lsb_por_ga` sale de las ganancias del HMC5883L (0,88 a 8,1 Ga; `validacionConfiguracion.js`);
-   - `sensor.modelo` vale `'HMC5883L'`.
+- **Dos modelos**, según `sensor.modelo` (la copia guardada con cada sesión):
+  - **`QMC5883P`** (por defecto; migración 008 y `setup_db.sql`): `rango_g` ∈ {2, 8, 12, 30} y `cuentas_por_g` derivado (15000, 3750, 2500, 1000). `raw` de −32768 a 32767; `µT = cuentas / cuentas_por_g × 100 − offset_ut`; fondo de escala `32767 / cuentas_por_g × 100` µT. −4096 es una cuenta válida, no una saturación.
+  - **`HMC5883L`** (como antes): `rango_ga`, `lsb_por_ga`, −4096 = saturado.
+- **`saturado`** por lectura (opcional, booleano, en los dos modelos): con `true`, bx, by, bz y |B| quedan NULL, se conservan los crudos y `saturado = 1`. Si no es booleano, se rechaza esa lectura, no el lote.
+- **Cambiar de modelo** en Configuración › Sensor (selector «Modelo» y botón «Cambiar modelo») deja los valores de ese modelo (QMC5883P en 30 G; HMC5883L en 1,9 Ga) y conserva `lecturas_por_punto` y `offset_ut`. Con una sesión abierta no se puede (409).
+- **Simulador con QMC5883P:** el fondo de escala es el del rango (±3276,7 µT en 30 G), así que el campo de 120 µT no satura; las saturaciones inyectadas se guardan con `saturado = 1`, sin bx/by/bz y con los crudos recortados a 16 bits.
+- **Serpentina:** el servidor, el simulador, el emulador y la gráfica de líneas usan el contrato de `docs/firmware-pico-w.md`, sección 7.
+- **El CSV** lleva `# sensor_modelo:` en el encabezado.
+- **Verificado** con el firmware real corriendo en el PC contra el servidor (QMC5883P y HMC5883L) y con `firmware_hall_1d/` (HMC5883L).
 
-   Las cuentas del QMC5883P (±32767; 1000–15000 por gauss) **no caben** tal cual. Hay dos opciones:
-   - **(a) Sin tocar el servidor:** la Pico convierte a µT y de ahí a «cuentas HMC» con `lsb_por_ga` y `offset_ut` de `sesion_activa.sensor`, como hace `firmware_hall_1d/sensor_hall.py` (`a_cuentas`), y manda −4096 si hay OVFL o si no cabe. Límite: ±249,6 µT con 1,9 Ga, o ±890 µT con 8,1 Ga, y se pierde resolución. Una bobina de unos 1500 µT saturaría.
-   - **(b) Adaptar el servidor al QMC5883P:**
-     - modelo y rangos 2/8/12/30 G con sus cuentas por gauss;
-     - `raw` de −32768 a 32767 (las columnas `raw_*` ya son SMALLINT);
-     - la saturación como un campo explícito de la lectura (por ejemplo `saturado: true`, por OVFL) en lugar de −4096;
-     - actualizar también `emular-pico.js`, los tests, `docs/firmware-pico-w.md` y la interfaz de Configuración › Sensor.
-
-     Es lo correcto para los datos de la tesis, pero toca archivos del servidor y de la página: necesita la aprobación del usuario.
-6. Actualizar las referencias al HMC5883L en estos documentos:
-   - `docs/firmware-pico-w.md` (sección 4);
-   - `docs/instructivo-calibracion-y-conexiones.md` (sección 4.5: GP4/GP5 → GP0/GP1);
-   - `firmware/README.md`;
-   - `firmware/pico_w_cliente_ejemplo.py` (es solo una referencia).
+> ⚠ **Para usar el firmware del Hall 49E (`firmware_hall_1d/`), pon antes el modelo HMC5883L** en Configuración › Sensor. Ese firmware no se cambió: con el modelo QMC5883P no encuentra `lsb_por_ga`, usa 820 y manda «cuentas HMC», que el servidor dividiría entre `cuentas_por_g` y guardaría **mal sin ningún error**. Como red de seguridad, si con QMC5883P todas las cuentas de un lote caben en −4096..2047 y alguna vale −4096, el servidor escribe un aviso en su log (`[ingesta] … pon el modelo HMC5883L`). Solo avisa (no rechaza nada) y no salta si el Hall nunca satura.
 
 ## 7. Problemas comunes
 

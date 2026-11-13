@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import { integralesElipticas, campoEspira, campoEnPlaca } from '../services/fisicaEspira.js';
 import { mulberry32, generadorGaussiano } from '../services/aleatorio.js';
-import { mallaDeBarrido, puntoDeMalla } from '../services/geometria.js';
+import { mallaDeBarrido, mallaDeZona, puntoDeMalla, indiceDeMalla, indicesDeSerpentina, serpentinaDeIndices } from '../services/geometria.js';
 import { crearGeneradorMuestras } from '../services/simulacionPura.js';
 import { limiteSensorUT } from '../services/validacionConfiguracion.js';
 
@@ -102,7 +102,7 @@ test('La σ empírica de 100 000 muestras está a menos del 2 % de la configurad
   assert.ok(Math.abs(media) < 0.01, `media ${media}`);
 });
 
-test('La malla depende del paso: 845, 147 y 32 puntos, en orden x → y → z', () => {
+test('La malla depende del paso: 845, 147 y 32 puntos, en serpentina', () => {
   assert.equal(mallaDeBarrido(BARRIDO, 5).totalPuntos, 845);
   assert.equal(mallaDeBarrido(BARRIDO, 10).totalPuntos, 147);
   assert.equal(mallaDeBarrido(BARRIDO, 20).totalPuntos, 32);
@@ -112,8 +112,49 @@ test('La malla depende del paso: 845, 147 y 32 puntos, en orden x → y → z', 
   const m = mallaDeBarrido(BARRIDO, 20);
   assert.deepEqual(puntoDeMalla(m, 0), { xMM: 0, yMM: 0, zMM: 0, zIdx: 0 });
   assert.deepEqual(puntoDeMalla(m, 1), { xMM: 20, yMM: 0, zMM: 0, zIdx: 0 });
-  assert.deepEqual(puntoDeMalla(m, 4), { xMM: 0, yMM: 20, zMM: 0, zIdx: 0 });
-  assert.deepEqual(puntoDeMalla(m, 31), { xMM: 60, yMM: 60, zMM: 20, zIdx: 1 });
+  assert.deepEqual(puntoDeMalla(m, 4), { xMM: 60, yMM: 20, zMM: 0, zIdx: 0 });   // la fila 1 regresa
+  assert.deepEqual(puntoDeMalla(m, 16), { xMM: 0, yMM: 60, zMM: 20, zIdx: 1 });  // el plano 1 sigue donde quedó
+  assert.deepEqual(puntoDeMalla(m, 31), { xMM: 0, yMM: 0, zMM: 20, zIdx: 1 });
+});
+
+test('Serpentina: el vector del contrato (3 × 2 × 2) y entre puntos seguidos solo cambia un índice en ±1', () => {
+  const esperado = [[0,0,0],[1,0,0],[2,0,0],[2,1,0],[1,1,0],[0,1,0],[0,1,1],[1,1,1],[2,1,1],[2,0,1],[1,0,1],[0,0,1]];
+  assert.deepEqual(Array.from({ length: 12 }, (_, k) => { const i = indicesDeSerpentina(3, 2, k); return [i.ix, i.iy, i.iz]; }), esperado);
+  for (const [nx, ny, nz] of [[3, 2, 2], [13, 13, 5], [5, 3, 1], [7, 1, 3], [1, 4, 3], [1, 1, 2], [4, 4, 4]]) {
+    const vistos = new Set();
+    let anterior = null;
+    for (let k = 0; k < nx * ny * nz; k++) {
+      const i = indicesDeSerpentina(nx, ny, k);
+      assert.equal(serpentinaDeIndices(nx, ny, i.ix, i.iy, i.iz), k, `ida y vuelta ${nx}×${ny}×${nz}, k=${k}`);
+      vistos.add(`${i.ix},${i.iy},${i.iz}`);
+      if (anterior) {
+        const d = Math.abs(i.ix - anterior.ix) + Math.abs(i.iy - anterior.iy) + Math.abs(i.iz - anterior.iz);
+        assert.equal(d, 1, `salto en ${nx}×${ny}×${nz}, k=${k}`);
+      }
+      anterior = i;
+    }
+    assert.equal(vistos.size, nx * ny * nz);
+  }
+  // indiceDeMalla es el inverso de puntoDeMalla
+  const m = mallaDeZona({ x: 40, y: 20, z: 10 }, 10);
+  for (let k = 0; k < m.totalPuntos; k++) {
+    const p = puntoDeMalla(m, k);
+    assert.equal(indiceDeMalla(m, p.xMM / 10, p.yMM / 10, p.zIdx), k);
+  }
+});
+
+test('QMC5883P: el fondo de escala es 32767 / cuentas por gauss × 100 y los 120 µT no saturan', () => {
+  const qmc = { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 1, offset_ut: { x: 0, y: 0, z: 0 } };
+  assert.ok(Math.abs(limiteSensorUT(qmc) - 3276.7) < 1e-9);
+  assert.ok(Math.abs(limiteSensorUT({ ...qmc, rango_g: 2, cuentas_por_g: 15000 }) - 218.44666666666666) < 1e-9);
+  const malla = mallaDeBarrido(BARRIDO, 5);
+  const g = crearGeneradorMuestras({ simulacion: { ...SIMULACION, prob_saturacion: 0 }, barrido: BARRIDO, sensor: qmc, malla });
+  for (let i = 0; i < malla.totalPuntos; i++) {
+    const s = g(i);
+    assert.ok(Math.max(Math.abs(s.bx), Math.abs(s.by), Math.abs(s.bz)) < limiteSensorUT(qmc));
+  }
+  const sat = crearGeneradorMuestras({ simulacion: { ...SIMULACION, prob_saturacion: 1 }, barrido: BARRIDO, sensor: qmc, malla });
+  assert.ok(Math.abs(sat(0).bz) > limiteSensorUT(qmc));
 });
 
 test('Las saturaciones inyectadas quedan fuera del rango del sensor', () => {

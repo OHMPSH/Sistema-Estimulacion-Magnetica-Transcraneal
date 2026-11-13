@@ -87,3 +87,68 @@ test('utACrudo es la inversa de la conversión y desborda fuera de rango', () =>
   const ida = convertirCrudo({ x: utACrudo(37.3, s), y: 0, z: 0 }, s).bx;
   assert.ok(Math.abs(ida - 37.3) <= 100 / 820 / 2 + 1e-12);   // error ≤ media cuenta
 });
+
+// ── QMC5883P (el módulo real, migración 008) ──────────────────
+const qmcCon = (rango_g = 30, offset = { x: 0, y: 0, z: 0 }) =>
+  ({ modelo: 'QMC5883P', rango_g, cuentas_por_g: { 2: 15000, 8: 3750, 12: 2500, 30: 1000 }[rango_g], lecturas_por_punto: 1, offset_ut: offset });
+const CTX_QMC = { ...CTX, sensor: qmcCon(30) };
+
+test('QMC5883P: µT = cuentas / cuentas por gauss × 100 − offset, en los cuatro rangos', () => {
+  for (const [rango, cpg] of [[2, 15000], [8, 3750], [12, 2500], [30, 1000]]) {
+    const r = convertirCrudo({ x: 1500, y: -30000, z: 0 }, qmcCon(rango));
+    assert.ok(Math.abs(r.bx - (1500 / cpg) * 100) < 1e-12, `rango ${rango}`);
+    assert.ok(Math.abs(r.by + (30000 / cpg) * 100) < 1e-12);
+    assert.equal(r.saturado, false);
+  }
+  const conOffset = convertirCrudo({ x: 1000, y: 1000, z: 1000 }, qmcCon(30, { x: 10, y: -5, z: 0.5 }));
+  assert.equal(conOffset.bx, 90);
+  assert.equal(conOffset.by, 105);
+  assert.equal(conOffset.bz, 99.5);
+});
+
+test('QMC5883P: −4096 es una cuenta válida (no satura); raw de 16 bits con signo', () => {
+  const v = validarLecturaDispositivo(lectura({ raw: { x: DESBORDE, y: 32767, z: -32768 } }), CTX_QMC);
+  assert.deepEqual(v.errores, []);
+  assert.equal(v.lectura.saturado, false);
+  assert.equal(v.lectura.bx, -409.6);
+  assert.ok(Math.abs(v.lectura.by - 3276.7) < 1e-9);
+  for (const malo of [32768, -32769, 1.5]) {
+    assert.equal(validarLecturaDispositivo(lectura({ raw: { x: malo, y: 0, z: 0 } }), CTX_QMC).errores.length, 1, String(malo));
+  }
+  // Con el HMC5883L, 2048 sigue fuera de rango
+  assert.equal(validarLecturaDispositivo(lectura({ raw: { x: 2048, y: 0, z: 0 } }), CTX).errores.length, 1);
+});
+
+test('saturado: true (bit OVFL) deja Bx, By, Bz y |B| en NULL y conserva los crudos, en los dos modelos', () => {
+  for (const ctx of [CTX_QMC, CTX]) {
+    const v = validarLecturaDispositivo(lectura({ saturado: true }), ctx);
+    assert.deepEqual(v.errores, []);
+    assert.equal(v.lectura.saturado, true);
+    assert.equal(v.lectura.bx, null);
+    assert.equal(v.lectura.by, null);
+    assert.equal(v.lectura.bz, null);
+    assert.equal(v.lectura.magnitud, null);
+    assert.deepEqual(v.lectura.raw, { x: 100, y: -200, z: 984 });
+  }
+  assert.equal(validarLecturaDispositivo(lectura({ saturado: false }), CTX_QMC).lectura.saturado, false);
+  assert.match(validarLecturaDispositivo(lectura({ saturado: 'si' }), CTX_QMC).errores[0], /saturado debe ser true o false/);
+  assert.match(validarLecturaDispositivo(lectura({ saturado: 1 }), CTX).errores[0], /saturado/);
+});
+
+test('QMC5883P: utACrudo es la inversa y recorta a 16 bits', () => {
+  const s = qmcCon(30);
+  assert.equal(utACrudo(100, s), 1000);
+  assert.equal(utACrudo(5000, s), 32767);
+  assert.equal(utACrudo(-5000, s), -32768);
+  assert.ok(Math.abs(convertirCrudo({ x: utACrudo(37.3, s), y: 0, z: 0 }, s).bx - 37.3) < 0.1);
+});
+
+test('pareceLoteHMC: avisa con cuentas HMC y −4096 bajo QMC5883P; no con un QMC real ni con el HMC5883L', async () => {
+  const { pareceLoteHMC } = await import('../services/conversionSensor.js');
+  const l = raw => ({ seq: 1, raw });
+  const hall = [l({ x: 0, y: 0, z: 38 }), l({ x: -4096, y: -4096, z: -4096 })];
+  assert.equal(pareceLoteHMC(hall, qmcCon(30)), true);
+  assert.equal(pareceLoteHMC(hall, sensorCon(1.9)), false);                                   // con HMC5883L es lo esperado
+  assert.equal(pareceLoteHMC([l({ x: 0, y: 0, z: 38 })], qmcCon(30)), false);                 // sin −4096 no se puede saber
+  assert.equal(pareceLoteHMC([...hall, l({ x: 9000, y: 0, z: 0 })], qmcCon(30)), false);      // una cuenta de 16 bits: es un QMC
+});

@@ -36,7 +36,7 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 **Los sensores son solo de prueba.** El usuario sabe que ni el QMC5883P ni el Hall 49E miden el pulso real de la bobina TMS. **No vuelvas a señalarlo** ni lo uses como argumento en contra de nada.
 
 **Cómo funciona el QMC5883P** (resumen; lo demás está en `docs/sensor-qmc5883p.md`):
-- **Conexión probada:** SDA → GP0 (pin 1), SCL → GP1 (pin 2), VCC → 3V3(OUT) (pin 36), GND → pin 38; I2C0 a 100 kHz. El firmware cliente todavía dice GP4/GP5.
+- **Conexión probada:** SDA → GP0 (pin 1), SCL → GP1 (pin 2), VCC → 3V3(OUT) (pin 36), GND → pin 38; I2C0 a 100 kHz. El firmware cliente de `firmware/` ya usa esta conexión (2026-11-12).
 - **Inicialización:**
   1. Chip ID `0x00` = `0x80`.
   2. `0x29 ← 0x06` (signo de los ejes).
@@ -58,7 +58,7 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 
   Conversión: µT = cuentas / (cuentas/G) × 100.
 - **Medición:** se promedian N lecturas, y el fondo (Tierra + entorno, con la bobina apagada) se mide y se resta. Ante un `OSError`, se vuelve a inicializar.
-- Los programas que funcionan son `firmware/prueba_qmc5883p.py` y `firmware/medicion_campo_qmc5883p.py`.
+- Los programas independientes que funcionan son `firmware/prueba_qmc5883p.py` y `firmware/medicion_campo_qmc5883p.py`; el firmware cliente lo usa desde `firmware/sensor.py` (clase `QMC5883P`).
 - La biblioteca de Arduino que trajo el módulo (Adafruit HMC5883) no servía para este chip y se borró el 2026-11-12 a pedido del usuario (recuperable desde git).
 
 El "+5 mm" que aparece en la simulación es el **standoff**: la separación física entre la bobina y el elemento sensor. El **origen de coordenadas** es el hotspot, debajo del centro de la bobina, aunque el código actual usa x, y de 0 a 60 mm con el centro en 30.
@@ -77,7 +77,7 @@ El sistema trae un acceso **admin / admin**, sin cambio obligatorio de contrase�
 2. **No cambiar las tecnologías**: React 18 + Vite 5 en el frontend; Node.js 20 + Express 4 + mysql2 en el backend; MariaDB; Chart.js, Three.js y Plotly para las gráficas; Bootstrap 5 y Bootstrap Icons. Se mantiene el **MVC** en el backend (routes → middleware → controllers → models, más `services/` para la lógica compartida).
    - **No agregues frameworks ni librerías nuevas** (nada de react-router, zod, ajv, express-session, passport, bcrypt, cookie-parser ni Vitest) salvo que el usuario lo apruebe. Usa lo que trae Node: `node:crypto` (`scrypt`, `randomBytes`), `node:test` y `node:assert`.
    - Sí está permitido cambiar a una **variante del mismo paquete**, como `plotly.js-gl3d-dist-min` en lugar de `plotly.js`.
-3. **Los colores del modo oscuro no cambian**: son los de `:root` en `frontend/src/styles/global.css`. Se puede **agregar** un modo claro.
+3. **Los colores del modo oscuro no cambian**: son los de `:root` en `frontend/src/styles/global.css`. Se puede **agregar** un modo claro. **Excepción pedida por el usuario (2026-11-13, trabajo de tesis):** los colores de los *datos* son sobrios: Bx `#0072B2`, By `#D55E00`, Bz `#009E73` (Okabe–Ito) en la gráfica de líneas, la tabla y los ejes del mapa 3D; \|B\| en el color del texto; planos Z en azul pizarra (`--z0`…`--z4`, del más oscuro al más claro); rayas de los indicadores en `--acento-dato` salvo la guinda. Los neón base (`--cyan`, `--emerald`, `--yellow`…) se quedan para los estados (en línea, simulación, real) y la guinda no cambia. La superficie de Plotly no cambia.
 4. **No se quitan gráficas ni datos** del dashboard: la gráfica de líneas Bx/By/Bz, el mapa 3D de flechas (Canvas3D), la superficie de Plotly (Superficie3D), la tabla de lecturas, las tarjetas KPI y el historial. Se pueden reordenar y ajustar (forma, ejes, escalas), pero su uso y sus datos se mantienen.
 5. **Los commits los hace el usuario.** No hagas `git commit` ni `git push`, ni crees ramas, salvo que te lo pida.
 6. Para el frontend, el usuario quiere sus skills: **`web-design-guidelines`** para revisar y **`frontend-design`** para corregir.
@@ -96,16 +96,16 @@ PT/
 ├── docs/fase7-revision-diseno.md ← revisión de interfaz, plan de diseño y contrastes
 ├── docs/prompts-sesiones.md      ← prompts de cada fase pendiente
 ├── docs/instructivo-calibracion-y-conexiones.md ← cableado de los 3 TB6600 con pines físicos y calibración de pasos/mm
-├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, hotspot (su sección del sensor todavía describe el HMC5883L)
-├── docs/sensor-qmc5883p.md       ← el magnetómetro real: conexión, registros, rangos, medición y QUÉ FALTA en el firmware cliente
-├── docs/prompts-qmc5883p-y-serpentina.md ← prompts (2026-11-12): firmware cliente con QMC5883P y serpentina; servidor y página para el QMC5883P
-├── firmware/                     ← firmware MicroPython de la Pico W (2026-11-10; guía en firmware/README.md):
-│                                    config.py, main.py, red.py, cliente.py, sensor.py (⚠ todavía HMC5883L), motores.py (PIO + DMA, TB6600),
-│                                    barrido.py, led.py, registro.py, banco.py (prueba de banco y calibración),
+├── docs/firmware-pico-w.md       ← protocolo de la Pico W, token, NTP, hotspot, sensor QMC5883P (sección 4) y contrato de la serpentina (sección 7)
+├── docs/sensor-qmc5883p.md       ← el magnetómetro real: conexión, registros, rangos, medición; sección 6: lo hecho en el firmware y lo que le falta al servidor
+├── docs/prompts-qmc5883p-y-serpentina.md ← prompts (2026-11-12): firmware cliente con QMC5883P y serpentina (hecho); servidor y página para el QMC5883P (pendiente)
+├── firmware/                     ← firmware MicroPython FINAL de la Pico W (2026-11-10; QMC5883P y serpentina 2026-11-12; guía en firmware/README.md):
+│                                    config.py, main.py, red.py, cliente.py, sensor.py (QMC5883P, dos formatos de envío), motores.py (PIO + DMA, TB6600,
+│                                    holgura por eje), barrido.py (serpentina), led.py, registro.py, banco.py (prueba de banco y calibración),
 │                                    prueba_calibracion.py (independiente, para Thonny: X/Y/Z en mm y regreso al origen),
 │                                    prueba_qmc5883p.py y medicion_campo_qmc5883p.py (QMC5883P, independientes, funcionan),
 │                                    prueba_hall_49e.py (Hall 49E en el ADC, independiente),
-│                                    secretos_ejemplo.py (secretos.py está en .gitignore), pruebas_pc/ (stubs y tests en CPython)
+│                                    secretos_ejemplo.py (secretos.py está en .gitignore), pruebas_pc/ (stubs con un QMC5883P falso y tests en CPython)
 │                                    y pico_w_cliente_ejemplo.py (el ejemplo anterior, solo referencia)
 ├── firmware_hall_1d/             ← copia del firmware para el Hall 49E de un eje (2026-11-11; guía en su README.md):
 │                                    sensor_hall.py (nuevo), barrido.py y main.py adaptados, el resto copiado sin cambios;
@@ -123,6 +123,7 @@ PT/
 │   ├── migrations/005_trazabilidad.sql        ← DOUBLE en mediciones; metadatos y borrado lógico en sesiones (Fase 5)
 │   ├── migrations/006_paso_libre.sql          ← sesiones.paso_mm DECIMAL(4,1): paso libre en mm (2026-11-10)
 │   ├── migrations/007_zona_muestreo.sql       ← sesiones.zona_x/y/z_mm y barrido → límites de la base (2026-11-10)
+│   ├── migrations/008_sensor_qmc5883p.sql     ← configuracion.sensor → QMC5883P de 30 G (sin tocar tablas ni datos; 2026-11-12)
 │   ├── config/database.js        ← pool de mysql2, timezone 'Z', SET time_zone '+00:00'
 │   ├── config/barrido.js         ← lee la configuración: tamanoPlacaMM(), mallaParaPaso(paso), limiteCampoUT()
 │   ├── config/roles.js           ← ROLES ('admin','operador','observador') y TEMAS
@@ -151,7 +152,8 @@ PT/
 │   ├── services/sesionUsuario.js ← token, SHA-256, cookie tms_sesion, limpieza horaria
 │   ├── services/limiteIntentos.js ← 5 fallos por usuario+IP en 15 min, en memoria
 │   ├── services/configuracion.js ← caché en memoria; cargar() antes del listen; actualizar() valida, guarda y difunde
-│   ├── services/validacionConfiguracion.js ← reglas por clave (puro); ganancias HMC5883L; limiteSensorUT()
+│   ├── services/validacionConfiguracion.js ← reglas por clave (puro); MODELOS_SENSOR, RANGOS_QMC5883P y ganancias del
+│   │                                HMC5883L; SENSOR_POR_MODELO; limiteSensorUT() según el modelo
 │   ├── services/tiempoReal.js    ← SSE: ids, búfer de 2000, Last-Event-ID, retry 3000, drain, resincronizar, ping de 25 s
 │   ├── services/bufferEventos.js ← puro: búfer circular del SSE
 │   ├── services/trazabilidad.js  ← puro: calcularHuecos, encabezadoCSV, lineaCSV, nombreArchivoCSV
@@ -159,12 +161,13 @@ PT/
 │   ├── services/sesiones.js      ← una sola sesión abierta (cola de promesas), iniciar/finalizar, cierre de huérfanas
 │   ├── services/ingesta.js       ← registrarMedicion (simulador: seq desde 1, desborde → saturado) y
 │   │                                registrarLoteDispositivo (Pico W); valida, |B|, inserta, difunde
-│   ├── services/conversionSensor.js ← puro: cuentas → µT, −4096, validación de lecturas, clasificarLote
+│   ├── services/conversionSensor.js ← puro: cuentas → µT de los dos modelos (QMC5883P 16 bits / HMC5883L −4096),
+│   │                                campo saturado (bit OVFL), validación de lecturas, clasificarLote, utACrudo
 │   ├── services/dispositivo.js   ← estado de la Pico en memoria, temporizador de 1 s, event: dispositivo
 │   ├── services/simulador.js     ← setTimeout encadenado sobre la malla de la sesión; usa ingesta.js
 │   ├── services/simulacionPura.js · fisicaEspira.js · aleatorio.js · geometria.js ← puros, con tests
 │   ├── tests/*.test.js           ← unitarios (npm test = test:unit): simulador, conversion, ingesta-dispositivo,
-│   │                                trazabilidad, passwords (y límite de intentos), validadores — 53 pruebas
+│   │                                trazabilidad, passwords (y límite de intentos), validadores — 63 pruebas
 │   ├── tests/integracion/        ← helper.js + api.integ.js (npm run test:integracion, contra tms_db_test)
 │   ├── tests/setup_test_db.sql   ← setup_db.sql con el nombre tms_db_test
 │   ├── scripts/crear-admin.js    ← npm run crear-admin (o ADMIN_PASSWORD=…; --predeterminado = admin/admin)
@@ -195,7 +198,7 @@ PT/
 │       ├── components/panels/  ControlPanel.jsx (velocidad, paso, medio, progreso)
 │       ├── components/ui/      KpiCards.jsx · DataTable.jsx · LimiteErrores.jsx
 │       ├── components/modals/  StartModal · StopModal · ModalConfirmacion (refs + useModalBootstrap; sin globales)
-│       ├── components/config/  SeccionFormulario (genérico por clave) · SeccionUsuarios · SeccionDispositivo · TokenDispositivo
+│       ├── components/config/  SeccionFormulario (genérico por clave) · SelectorModeloSensor · SeccionUsuarios · SeccionDispositivo · TokenDispositivo
 │       └── styles/global.css     ← :root (oscuro, intacto) + tokens semánticos + [data-theme="light"]
 ```
 
@@ -217,7 +220,7 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | Método y ruta | Rol | Qué hace | Códigos |
 |---|---|---|---|
 | `GET /api/status` | público | Health-check: `version` (package.json), `commit`, `version_software`, `modo_operacion` | 200 |
-| `GET /api/configuracion` | sesión | `{data:{clave:valor…}, opciones:{pasos_mm, medios, ganancias_hmc5883l}, sesion_activa}` | 200 |
+| `GET /api/configuracion` | sesión | `{data:{clave:valor…}, opciones:{pasos_sugeridos_mm, paso_min_mm, max_puntos_sesion, medios, modelos_sensor, rangos_qmc5883p:[{rango_g, cuentas_por_g, fondo_ut}], ganancias_hmc5883l}, sesion_activa}` | 200 |
 | `PUT /api/configuracion/:clave {valor}` | admin | `valor` puede ser parcial en las claves que son objetos (se mezcla). Difunde `event: configuracion` | 200, 400, 404 clave desconocida, 409 (modo, barrido o sensor con sesión abierta), 422 |
 | `POST /api/auth/login {usuario,password}` | público | Crea la cookie `tms_sesion` (el usuario se normaliza a minúsculas) | 200, 400, 401 (mensaje único), 429 con `Retry-After` |
 | `POST /api/auth/logout` | sesión | Borra la fila de `sesiones_login` y la cookie | 200 |
@@ -243,7 +246,7 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `DELETE /api/dispositivo/token` | admin | Revoca el token | 200, 404 |
 | `PATCH /api/dispositivo {activo}` | admin | Activa o desactiva la Pico | 200, 400, 404 |
 | `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?, estado?, error?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw` | 200, 401, 422 |
-| `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
+| `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},saturado?,ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `raw` según el modelo de la sesión (QMC5883P −32768..32767; HMC5883L −4096..2047). `saturado` opcional; si no es booleano se rechaza esa lectura. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
 | `GET /api/sesiones/:id/mediciones` | sesión | Mediciones en JSON, con `seq`, crudos y `saturado` | 200, 404 (también si está eliminada) |
 
 **Detalles del login (Fase 2):**
@@ -355,7 +358,7 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Saturación (decisión):** el eje que vale −4096 se guarda NULL, con su crudo, y la lectura `saturado = 1`; `magnitud` también queda NULL. Las saturadas **no cuentan** para MAX ni MIN (`CASE WHEN saturado = 0`), y `GET /sesiones` devuelve además `saturadas`. El simulador hace lo mismo: un eje por encima del fondo de escala ya no se rechaza (422), se guarda como saturado con crudo −4096 (los demás crudos quedan NULL).
 - `seq`: el simulador lo numera desde 1 por sesión en `services/ingesta.js` (contador en memoria que se inicializa con `MAX(seq)`); los huecos del simulador **no** dejan saltos en `seq`. La Pico manda su propio `seq` y, si se reinicia, sigue desde `ultimo_seq + 1` del latido.
 - Solo hay un dispositivo "principal" (el de menor id): el estado en línea, el token y `PATCH /dispositivo` actúan sobre él. La tabla admite más, pero la interfaz no.
-- Las sesiones `hw` **no se cierran solas** al completar la malla (la Pico puede mandar varias lecturas por punto): las cierra el operador. El emulador avisa "Malla completa".
+- Las sesiones `hw` **se cierran solas** desde el 2026-11-13 (pedido del usuario: el botón Detener seguía activo al terminar): cuando los seq guardados llegan a `puntos_esperados × lecturas_por_punto` (copia del sensor de la sesión), `POST /dispositivo/mediciones` las finaliza con motivo `completa` antes de responder. Con lecturas rechazadas no se completan y las cierra el operador. El firmware todavía imprime «Falta que el operador la cierre» (texto viejo, sin efecto).
 - El latido se escribe en la BD como máximo cada 30 s si no cambia nada importante (firmware, IP o volver a estar en línea). El desfase de reloj (servidor − Pico) se guarda en memoria (`desfase_ms` en el estado) y se registra en el log cuando cambia más de 1 s.
 - `frontend/src/hooks/useStream.js` ya es el EventSource único que pide la Fase 6. El panel del token es provisional (dashboard, admin y modo real); pasa a Configuración › Dispositivo en la Fase 6.
 - `.claude/launch.json` tiene las entradas `backend` y `frontend` para el navegador integrado.
@@ -397,7 +400,7 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Zona de muestreo por sesión y límites de la base** (ver 7.0): migración 007, `mallaDeZona`/`limitesDeBarrido`/`erroresDeZona` (servidor y frontend), `zonaDeSesion`/`mallaDeSesion` en `config/barrido.js`, mallas rectangulares en el mapa 3D, la superficie y la gráfica de líneas; CSV con `# zona_mm`; latido con `zona_mm`, `grid_nx` y `grid_ny` (ya no `grid_n`). 55 tests unitarios y 7 de integración. ⚠ **La migración 007 tampoco se aplicó en la base local**: ejecuta la 006 y luego la 007 (`sudo mysql tms_db < server/migrations/007_zona_muestreo.sql`). Sin la 007 el servidor falla al crear sesiones (no existen las columnas de zona). Verificado contra una MariaDB temporal (esquema migrado = `setup_db.sql`, migración idempotente, sesión 40 × 20 × 10, Pico emulada 30 × 15 × 5, límites de la base 422).
 - **Login obligatorio al entrar:** cada pestaña nueva y cada navegador recién abierto piden usuario y contraseña. La marca `tms_login_pestana` vive en `sessionStorage` (por pestaña; sobrevive a la recarga, así que recargar a mitad de un barrido no saca al usuario). La cookie ya no lleva `Max-Age`, y al iniciar sesión el servidor borra la sesión de login anterior de ese navegador.
 
-**Firmware de la Pico W (2026-11-10, pedido por el usuario):**
+**Firmware de la Pico W (2026-11-10, pedido por el usuario; desde el 2026-11-12 manda lo de «Firmware cliente final» más abajo):**
 - Hardware confirmado: NEMA 17 con drivers **TB6600** y sensor **HMC5883L** (después se supo que el módulo es un **QMC5883P**, ver abajo). Los pines, micropasos, recorridos, finales de carrera, modo de Z y la posición de la bobina siguen como `PENDIENTE` en `firmware/config.py`.
 - Diseño: bucle cooperativo en `main.py`; homing y barrido son generadores. Los pulsos los genera el PIO (1 MHz) y un canal DMA le pasa los segmentos de la rampa, así que un lote sale mientras la mesa se mueve (necesita MicroPython ≥ 1.22). Coordenadas: `x_máquina = X_BOBINA_MM − zona.x/2 + xMM` y `z_máquina = Z_CERO_MM + zMM` (Z_CERO_MM es una constante de calibración agregada; vale 0 por defecto).
 - Reanudación con `lecturas_por_punto = N`: el seq s es la lectura (s − 1) % N del punto (s − 1) // N.
@@ -407,22 +410,8 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 
 **Sensor real y firmware del Hall de un eje (2026-11-11 y 2026-11-12):**
 - El HMC5883L nunca respondió porque el módulo es un **QMC5883P** (0x2C). Se borraron las pruebas del HMC5883L (`prueba_sensor.py` y `prueba_sensor_adafruit.py`, recuperables desde git) y se agregaron las del QMC5883P que hizo funcionar el usuario. Se probaron en el PC con un bus simulado.
-- **Pendiente (lo hará el usuario en otra sesión): adaptar el firmware cliente de `firmware/` al QMC5883P.** La lista completa está en `docs/sensor-qmc5883p.md`, sección 6. En resumen:
-  - `sensor.py` → clase `QMC5883P` con la misma interfaz (`verificar`, `configurar`, generador `medir`), DRDY, OVFL, promedio y reinicio tras `OSError`;
-  - `config.py`: GP0/GP1, 0x2C, 100 kHz;
-  - `banco.sensor()`;
-  - el fondo, en la Pico o en `offset_ut`.
-- **Decisión pendiente del usuario sobre el servidor.** Hoy está hecho para el HMC5883L:
-  - `raw` de −4096 a 2047 (`conversionSensor.js`);
-  - −4096 = saturado;
-  - ganancias del HMC (0,88 a 8,1 Ga) en `validacionConfiguracion.js`;
-  - `sensor.modelo = 'HMC5883L'`.
-
-  Las cuentas del QMC5883P (±32767) no caben. Hay dos opciones:
-  - **(a)** La Pico convierte a «cuentas HMC» con el `lsb_por_ga` de la sesión, como `firmware_hall_1d/sensor_hall.py` (`a_cuentas`). Llega como mucho a ±890 µT.
-  - **(b)** Adaptar el servidor al QMC5883P (modelo, rangos 2/8/12/30 G, `raw` de 16 bits, saturación explícita), que toca archivos del servidor y de la página.
-
-  No cambies el servidor sin su aprobación.
+- **Hecho el 2026-11-12: firmware cliente de `firmware/` con el QMC5883P** (detalle en `docs/sensor-qmc5883p.md`, sección 6, y en «Firmware cliente final» abajo).
+- **Servidor adaptado el 2026-11-12** (ver «Servidor y página: QMC5883P y serpentina» abajo). El firmware funciona con los dos modelos: si `sesion_activa.sensor.modelo == "QMC5883P"` manda cuentas crudas del QMC con `sensor.rango_g` y `"saturado"` por lectura (opción **b**); con `"HMC5883L"` manda «cuentas HMC» (opción **a**, ±249,6 µT con 1,9 Ga).
 - **`firmware_hall_1d/`:** firmware completo para el Hall 49E de un eje, copiado de `firmware/`.
   - **Sensor:** `sensor_hall.py` calibra el cero al arrancar (BOOTSEL en espera lo recalibra).
   - **Unidades:** como el servidor solo acepta cuentas HMC, con `UNIDAD_ENVIO = "mT"` **el número que muestra el dashboard (rotulado µT) son mT** (±249,6 con 1,9 Ga). Bx = By = 0.
@@ -431,16 +420,41 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
   - **Drivers y origen:** los drivers quedan habilitados todo el tiempo. La mesa vuelve al origen al terminar, al detener, ante un error y con Ctrl+C; nunca se reinicia sola.
   - **Motores:** 50 pulsos/mm y velocidad máxima de 60 mm/s.
   - **Verificación:** en el PC, contra una MariaDB temporal (50 puntos sin huecos; Ctrl+C a mitad del barrido → origen). **Sin probar en la Pico con la mesa.**
+**Firmware cliente final: QMC5883P y serpentina (2026-11-12, pedido por el usuario):**
+- `firmware/` se comporta ahora como `firmware_hall_1d/` (que no se tocó): sin finales de carrera (origen = posición al arrancar; el código de homing con finales sigue en `motores.py`), límites X 0–410, Y 0–562, Z 0–88 mm, zona desde `ORIGEN_ZONA_*_MM` (ya no `X_BOBINA_MM`/`Z_CERO_MM`), drivers habilitados todo el tiempo, regreso al origen al completar, detener, fallar, ante un 401 y con Ctrl+C (`apagar()`), sin `machine.reset()` ni watchdog, aviso de modo simulación, 50 pulsos/mm y 60 mm/s. Se quitó `MODO_Z = "manual"`. `firmware/secretos.py` es una copia del de `firmware_hall_1d/` (ignorado por git).
+- **Sensor (`sensor.py`, clase `QMC5883P`):** GP0/GP1, 0x2C, 100 kHz; Chip ID; promedio de `PROMEDIO_QMC` (10) con DRDY cediendo (100 ms) y OVFL; un reinicio del chip ante `OSError`. El **fondo** se mide al arrancar (100 lecturas en 30 G, bobina apagada) y con BOOTSEL en espera; se imprime para copiarlo en `offset_ut`. `RESTAR_FONDO_EN_PICO = False` por defecto.
+- **Formato de envío según `sesion_activa.sensor.modelo`:** `"QMC5883P"` → rango `rango_g`, `raw` crudo del QMC y `"saturado": bool`; otro → 30 G y «cuentas HMC» con `lsb_por_ga`, −4096 en los tres ejes si hay OVFL o no cabe. **Decisión tomada (difiere de `sensor_hall.a_cuentas`):** la Pico **no** suma `offset_ut` a las cuentas, para que el servidor sí reste el fondo copiado ahí.
+- **Búfer:** el bit de saturado va en los bits 30 (lleva saturado) y 29 (valor) del campo `seq` (8 enteros por lectura, igual que antes); `lote()` manda `saturado` solo en modo QMC.
+- **Serpentina** (`barrido.indices`/`punto`): contrato en `docs/firmware-pico-w.md`, sección 7 (vector 3 × 2 × 2). La reanudación no cambia. Desde el 2026-11-12 el servidor, el simulador, el emulador y la gráfica de líneas usan el mismo orden (ver la nota siguiente).
+- **Holgura por eje** (`"holgura_mm"` en cada `EJE_*`, 0,5 mm): se mantuvo; agrega unos 0,06–0,07 s por punto en las filas que van en X− (≈ 5 % de un barrido de 845 puntos). Pregunta al usuario antes de quitarla.
+- **Verificación (solo en el PC):** 23 pruebas en `firmware/pruebas_pc/prueba_logica.py` (conjunto de puntos igual al de `geometria.js`, vector del contrato, vecinos ±1 en un índice, límites, holgura, sensor y formatos, búfer); las de `firmware_hall_1d/` siguen pasando. De punta a punta contra una MariaDB temporal y el servidor de hoy: 12 puntos en el orden exacto del contrato; 147 puntos con Ctrl+C a mitad de un movimiento (vuelve al origen), caída de Wi-Fi, reanudación en `ultimo_seq + 1` y 3 % de OVFL (147 seq sin huecos ni duplicados, saturadas con −4096); 401 a mitad del barrido → origen. **Sin probar en la Pico con la mesa ni con el QMC5883P real; el modo QMC solo con pruebas unitarias (el servidor de hoy no lo acepta).**
+
 - **Para que la Pico alcance el backend de la laptop**, arráncalo con `cd server && HOST=0.0.0.0 npm run dev`. El `.env` tiene `HOST=127.0.0.1`, y dotenv no pisa una variable que ya existe. La Pico usa `SERVIDOR = "http://<IP de la laptop>:4000"`.
   - Red del laboratorio: `TP-LINK_5D41`; la laptop tenía la IP 192.168.0.186 (puede cambiar).
   - Las credenciales y el token están en `firmware_hall_1d/secretos.py` (ignorado por git). **No los copies a otros archivos.**
+
+**Servidor y página: QMC5883P y serpentina (2026-11-12, pedido por el usuario):**
+- **Dos modelos de sensor**, elegidos por `sensor.modelo` (la copia de la sesión manda: la usan el latido y los lotes):
+  - **`QMC5883P`** (por defecto; `setup_db.sql` y migración 008): `{modelo, rango_g ∈ {2, 8, 12, 30}, cuentas_por_g (derivado: 15000/3750/2500/1000), lecturas_por_punto, offset_ut}`. `raw` de −32768 a 32767; µT = raw / cuentas_por_g × 100 − offset. Fondo de escala 32767 / cuentas_por_g × 100 (3276,7 µT con 30 G). −4096 es una cuenta válida.
+  - **`HMC5883L`** (igual que antes; lo usa `firmware_hall_1d/`): `rango_ga`, `lsb_por_ga`, −4096 = saturado.
+  - **`saturado` en la lectura** (opcional, booleano; en los dos modelos): `true` → bx, by, bz y |B| NULL, crudos conservados, `saturado = 1`.
+  - **Al cambiar de modelo** (`PUT /configuracion/sensor {"valor":{"modelo":…}}`), `mezclarSensor` parte de `SENSOR_POR_MODELO` (QMC 30 G o HMC 1,9 Ga) y conserva `lecturas_por_punto` y `offset_ut`; las cuentas por gauss siempre se recalculan del rango. Un `sensor` sin `modelo` pero con `rango_ga` se lee como HMC5883L. Con una sesión abierta, 409 (como antes).
+  - **Simulador con QMC5883P:** la saturación inyectada (`prob_saturacion`, bz = 1,5 × fondo) se guarda con `saturado = 1`, bx/by/bz NULL y los crudos de los tres ejes recortados a 16 bits (`utACrudo`); las lecturas sin saturar siguen sin crudos (NULL). Con HMC5883L, como antes.
+  - **CSV:** agrega `# sensor_modelo:`.
+  - **Interfaz:** Configuración › Sensor tiene un selector de modelo aparte (`SelectorModeloSensor`, botón «Cambiar modelo») y debajo el rango y la calibración del modelo vigente; `opciones.rangos_qmc5883p` y `modelos_sensor` en `GET /configuracion` (se conserva `ganancias_hmc5883l`).
+  - ⚠ **Hall 49E:** con el modelo QMC5883P, `firmware_hall_1d/` no encuentra `lsb_por_ga`, usa 820 y manda cuentas HMC que el servidor dividiría entre `cuentas_por_g` (valores mal, sin error). **Antes de usar el Hall, pon el modelo HMC5883L** (lo dice la página y `docs/sensor-qmc5883p.md`). Protección (aprobada y hecha el mismo día): `pareceLoteHMC` en `conversionSensor.js`; si con QMC5883P todas las cuentas de un lote caben en −4096..2047 y alguna vale −4096, `ingesta.js` escribe un aviso en el log del servidor (`[ingesta] … pon el modelo HMC5883L`). Solo avisa: no rechaza nada, y si el Hall no satura no salta.
+- **Serpentina** en `services/geometria.js` (`indicesDeSerpentina`, `serpentinaDeIndices`, `puntoDeMalla`, `indiceDeMalla`) y `frontend/src/utils/geometria.js` (`indiceEnMalla`): el contrato de `docs/firmware-pico-w.md`, sección 7. El simulador y el emulador recorren igual que la Pico; los huecos se listan en ese orden; la gráfica de líneas ya no tiene huecos falsos.
+- **Migración 008** (`server/migrations/008_sensor_qmc5883p.sql`): solo cambia `configuracion.sensor` a QMC5883P de 30 G conservando `lecturas_por_punto` y `offset_ut`; idempotente. ⚠ **No se aplicó en la base local** (la 006 y la 007 sí estaban). Sin ella el sistema sigue con HMC5883L.
+- **Verificado** (MariaDB temporal y servidor de prueba): 64 tests unitarios (vector 3 × 2 × 2, ida y vuelta con un plano, `ny = 1`, `nx = 1`, conversión y saturado de los dos modelos, normalización) y 9 de integración (CSV contra el simulador, Pico emulada con pérdidas, duplicados y saturadas en los dos modelos y en serpentina, simulador QMC con saturadas). Con curl: QMC con −4096 no saturado, bit saturado, `saturado` inválido rechazado solo en esa lectura, HMC con −4096, 409, CSV con el modelo. Firmware real en el PC: QMC5883P (441 seq = 147 puntos × 3, orden del contrato, µT exactos, saturadas con `saturado = 1`), modo HMC (96 seq, −4096) y `firmware_hall_1d/` con HMC5883L (96 seq); las 23 pruebas de `firmware/pruebas_pc` y las de `firmware_hall_1d` pasan. En el navegador: Configuración › Sensor en los dos modelos y una simulación de 147 puntos con la gráfica sin cortes (índice = seq − 1 en las 147).
+- **Mapa 3D de puntos medidos** (2026-11-13, pedido del usuario): `Canvas3D` ya no dibuja flechas; pone un punto (esfera, color del plano) en cada posición con alguna lectura, saturadas incluidas, para ver qué zonas ya se sondearon. Sin |B| ni dirección.
+- `firmware/pruebas_pc/prueba_logica.py` (`test_mismo_conjunto_que_el_servidor`) todavía compara solo el **conjunto** de puntos con `geometria.js`; ahora podría compararlos punto por punto (es del firmware: pendiente de la decisión del usuario).
 
 **Notas que deja la Fase 8 (pendientes y mejoras futuras):**
 - ⚠ **Contraseña publicada:** el `.env` local usa `DB_PASSWORD=tms_password`, que aparece en el historial de git (commit `22d3e7f`, quitada en `010cb13`). No se reescribió el historial. En la Raspberry usa otra contraseña (COMANDOS.md 3.1); si el repositorio es público, cámbiala también en local.
 - **Acceso desde el hotspot (comprobado con Nginx y una copia de `tms.conf`):** por HTTPS funciona con la IP o cualquier nombre, porque `tms.conf` es el único servidor en el 443. Por HTTP, el sitio `default` de Raspberry Pi OS captura `http://<IP>`; la guía lo deshabilita y recomienda el nombre de host `tms` → `https://tms.local` por mDNS. `tms.ipn.local` no se resuelve por mDNS (dos etiquetas).
 - La versión en `/status` es `3.0.0+desconocido` si `/opt/tms` no es un repositorio git (por ejemplo, copiado con rsync); el unit de systemd agrega `safe.directory` para el caso con git.
-- Pendiente con hardware: probar el firmware con la Pico W, la mesa y el sensor real (el QMC5883P; ver «Sensor real» abajo).
-- Pendiente de decidir: «Medir cero» del sensor (necesita un endpoint), qué hacer con `lecturas_por_punto > 1` (promediar en la Pico o en el servidor), si las sesiones `hw` deben cerrarse solas al completar la malla, y las cuestiones abiertas de abajo.
+- Pendiente con hardware: probar el firmware de `firmware/` con la Pico W, la mesa y el QMC5883P real (ver «Firmware cliente final»).
+- Pendiente de decidir: «Medir cero» del sensor (necesita un endpoint), qué hacer con `lecturas_por_punto > 1` (promediar en la Pico o en el servidor), y las cuestiones abiertas de abajo.
 - Mejoras posibles: pasar Lighthouse o axe cuando se puedan instalar; mostrar en el historial la superficie de una sesión pasada; paginar `GET /sesiones` si el historial crece mucho; traducir a lenguaje llano los mensajes 422 del servidor.
 
 **Vulnerabilidades que quedan:**
@@ -499,7 +513,7 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
   |---|---|
   | `modo_operacion` | `'simulacion'` o `'real'` |
   | `barrido` | `{ limite_x_mm: 60, limite_y_mm: 60, limite_z_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 }` (límites de la base; antes de la migración 007 era `{grid_size_mm, z_max_mm, …}`, que el validador todavía convierte) |
-  | `sensor` | `{ modelo: 'HMC5883L', rango_ga: 1.9, lsb_por_ga: 820, lecturas_por_punto: 1, offset_ut: {x:0,y:0,z:0} }` (1,9 Ga por decisión del usuario, 2026-11-10: con 1,3 Ga saturaban 4 puntos) |
+  | `sensor` | `{ modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 1, offset_ut: {x:0,y:0,z:0} }` (desde la migración 008). Con `modelo: 'HMC5883L'`: `{ rango_ga: 1.9, lsb_por_ga: 820, … }` (1,9 Ga por decisión del usuario, 2026-11-10: con 1,3 Ga saturaban 4 puntos) |
   | `simulacion` | `{ ms_por_punto: {DC:60, AC:120}, semilla: 12345, ruido_sigma_ut: 0.25, radio_bobina_mm: 25, campo_centro_ut: 120, prob_hueco: 0, prob_saturacion: 0 }` |
   | `dispositivo` | `{ intervalo_latido_s: 5, umbral_desconexion_s: 15 }` |
   | `visualizacion` | `{ ventana_grafica: 80, filas_tabla: 60, decimales: 3, escala_superficie: 'Jet', rotacion_auto: true, reducir_animaciones: false }` |
@@ -534,10 +548,10 @@ Al iniciar una sesión, en la barra de **configuración de la medición** del pa
 - **Tabla `dispositivos`:** `id, nombre, token_hash, activo, creado_en, ultimo_latido DATETIME(3), ip, firmware, rssi, uptime_s`.
 - **Token:** lo genera un admin con `POST /api/dispositivo/token`, que lo muestra **una sola vez**. Se guarda como SHA-256. El dispositivo lo envía como `Authorization: Bearer <token>`. Se revoca con `DELETE /api/dispositivo/token` (agregado en la Fase 4).
 - **Latido:** `POST /api/dispositivo/latido {firmware, rssi, uptime_s, ts_dispositivo_ms}` cada `intervalo_latido_s`. Responde `{ ok, modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor} | null, intervalo_latido_s, servidor_ts_ms }`. Así la Pico sabe cuándo empezar a enviar sin necesidad de otra tecnología, y `ultimo_seq` le permite seguir numerando tras un reinicio.
-- **Ingesta por lotes:** `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq, xMM, yMM, zMM, raw:{x,y,z}, ts_ms}]}`.
+- **Ingesta por lotes:** `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq, xMM, yMM, zMM, raw:{x,y,z}, saturado?, ts_ms}]}`.
   - Solo en modo real y con la sesión abierta.
-  - El servidor convierte las cuentas a µT con la configuración del sensor y resta el offset.
-  - Marca `saturado` si algún eje vale −4096.
+  - El servidor convierte las cuentas a µT con la copia del sensor de la sesión y resta el offset (QMC5883P: `cuentas_por_g`; HMC5883L: `lsb_por_ga`).
+  - Marca `saturado` si la lectura trae `saturado: true` (los dos modelos) o, con HMC5883L, si algún eje vale −4096.
   - Es idempotente gracias a `UNIQUE(sesion_id, seq)`.
   - Responde `{aceptadas, duplicadas, rechazadas:[{seq, error}]}`.
 - **Columnas nuevas en `mediciones`:** `seq INT NULL, raw_x/raw_y/raw_z SMALLINT NULL, saturado BOOL NOT NULL DEFAULT 0, ts_dispositivo DATETIME(3) NULL`, más `UNIQUE(sesion_id, seq)`. El simulador también numera `seq`.

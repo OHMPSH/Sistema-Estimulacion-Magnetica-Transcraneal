@@ -302,7 +302,8 @@ export async function insertarLote(sesionId, clasificar, timestamp) {
       );
     }
     await conn.commit();
-    return { abierta: true, ...resultado };
+    // seq distintos guardados tras este lote (las nuevas ya vienen sin duplicados)
+    return { abierta: true, ...resultado, totalSeq: filas.length + resultado.nuevas.length };
   } catch (err) {
     await conn.rollback().catch(() => {});
     throw err;
