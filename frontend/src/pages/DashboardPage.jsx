@@ -18,6 +18,7 @@ import { StartModal } from '../components/modals/StartModal.jsx';
 import { StopModal } from '../components/modals/StopModal.jsx';
 import { mallaDeZona, leerPaso, leerZona, limitesDeBarrido } from '../utils/geometria.js';
 import { LimiteErrores } from '../components/ui/LimiteErrores.jsx';
+import { useTiempoEstimado } from '../hooks/useTiempoEstimado.js';
 
 // Plotly pesa: se carga aparte, cuando hace falta
 const Superficie3D = lazy(() => import('../components/charts/Superficie3D.jsx'));
@@ -39,7 +40,7 @@ export function DashboardPage({ usuario, medicion }) {
   const { config, modoOperacion } = useConfig();
   const { sesion, enCurso, mediciones, ultima, iniciando, deteniendo, errorAccion, iniciar, detener } = medicion;
   const puedeControlar = usuario.rol === 'operador' || usuario.rol === 'admin';
-  const vis = config?.visualizacion ?? { ventana_grafica: 80, filas_tabla: 60, decimales: 3, escala_superficie: 'Jet', rotacion_auto: true };
+  const vis = config?.visualizacion ?? { ventana_grafica: 80, filas_tabla: 60, decimales: 3, rotacion_auto: true };
   const zona = config?.datos?.zona_horaria;
   const { reducirMovimiento } = useConfig();
 
@@ -74,6 +75,14 @@ export function DashboardPage({ usuario, medicion }) {
   const progreso = Math.min(100, Math.round((recibidas / total) * 100)) || 0;
   const zActual = ultima?.zMM ?? null;
 
+  // Tiempo estimado (ritmo de las sesiones anteriores en la base y ritmo actual)
+  const estimado = useTiempoEstimado({
+    origen: enCurso && sesion ? sesion.origen : (modoOperacion === 'real' ? 'hw' : 'sim'),
+    modo: enCurso && sesion ? sesion.modo : elegidos.modo,
+    sesion, enCurso, mediciones, total,
+    totalElegido: elegidos.errorPaso || Object.keys(elegidos.erroresZona ?? {}).length ? 0 : mallaElegida.totalPuntos,
+  });
+
   const estado = enCurso ? 'adquiriendo'
     : !sesion ? 'inactiva'
       : (sesion.motivo === 'completa' || recibidas >= total ? 'terminada' : 'detenida');
@@ -99,7 +108,7 @@ export function DashboardPage({ usuario, medicion }) {
         enCurso={enCurso} iniciando={iniciando} deteniendo={deteniendo}
         parametros={elegidos} onCambiarParametros={cambiarParametros} sesion={sesion} mallaElegida={mallaElegida}
         recibidas={recibidas} totalPuntos={total} zActualMM={zActual}
-        progreso={progreso} etiquetaEstado={etiquetaEstado}
+        progreso={progreso} etiquetaEstado={etiquetaEstado} estimado={estimado} zonaHoraria={zona}
         onIniciar={() => refInicio.current?.abrir()} onDetener={() => refDetener.current?.abrir()}
         errorAccion={errorAccion} puedeControlar={puedeControlar}
       />
@@ -117,10 +126,9 @@ export function DashboardPage({ usuario, medicion }) {
           <Canvas3D mediciones={mediciones} zLevels={malla.zLevels} zona={malla.zona}
             sesionId={sesion?.id ?? null} rotacionAuto={vis.rotacion_auto} reducirMovimiento={reducirMovimiento} />
         </LimiteErrores>
-        <LimiteErrores nombre="Superficie de |B|">
-          <Suspense fallback={<section className="chart-card"><p className="chart-vacio">Cargando la superficie…</p></section>}>
-            <Superficie3D mediciones={mediciones} malla={malla} enCurso={enCurso}
-              escala={vis.escala_superficie} decimales={vis.decimales} sesionId={sesion?.id ?? null} />
+        <LimiteErrores nombre="Sábana 3D">
+          <Suspense fallback={<section className="chart-card"><p className="chart-vacio">Cargando la sábana 3D…</p></section>}>
+            <Superficie3D mediciones={mediciones} malla={malla} enCurso={enCurso} sesionId={sesion?.id ?? null} />
           </Suspense>
         </LimiteErrores>
       </div>

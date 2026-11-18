@@ -31,6 +31,8 @@ Los pines son los mismos en el programa de calibración y en el firmware. Si cam
 
 ## 2. Pines de la Raspberry Pi Pico W
 
+> **Nombres de los ejes (2026-11-14).** Esta sección, `prueba_calibracion.py` y el **firmware final** (`firmware/config.py`) usan los mismos nombres: X es el eje de GP10/GP11 (410 mm) e Y el de GP12/GP13 (562 mm). La mesa descansa en X = 0, Y = 562, Z = 88 mm y cada medición empieza en el origen (0, 0, 0); ver [`firmware/README.md`](../firmware/README.md), sección 3.
+
 La serigrafía de la placa numera los **pines físicos** del 1 al 40 (1 arriba a la izquierda con el USB hacia arriba, 40 arriba a la derecha). El código usa los nombres **GPxx**. Esta tabla relaciona ambos:
 
 | Uso | GPIO | Pin físico |
@@ -419,12 +421,12 @@ El requisito de la tesis es un error menor que ±1 mm. Con una buena calibració
 Cuando los tres ejes midan exactamente lo pedido, copia los valores a [`firmware/config.py`](../firmware/config.py):
 
 ```python
-EJE_X = {
-    "paso": 10, "dir": 11, "invertir": False,      # ← el mismo INVERTIR_X del programa de prueba
+EJE_X = {                                          # eje corto (410 mm)
+    "paso": 10, "dir": 11, "invertir": False,      # ← INVERTIR_X del programa de prueba
     "pasos_por_mm": 202.02,                        # ← PASOS_POR_MM_X calibrado
     ...
 }
-EJE_Y = {
+EJE_Y = {                                          # eje largo (562 mm)
     "paso": 12, "dir": 13, "invertir": False,      # ← INVERTIR_Y
     "pasos_por_mm": 199.47,                        # ← PASOS_POR_MM_Y calibrado
     ...
@@ -440,7 +442,7 @@ EJE_Z = {
 
 Revisa también:
 
-- `config.py` ya trae los factores de `prueba_calibracion.py` (50 pulsos/mm, sin inversiones) y los límites medidos con ella (`LIMITE_X_MM` 410, `LIMITE_Y_MM` 562, `LIMITE_Z_MM` 88). Si los cambias aquí, cámbialos allá.
+- `config.py` ya trae los factores de `prueba_calibracion.py` (50 pulsos/mm, sin inversiones) y los límites medidos con ella, con los mismos nombres (`LIMITE_X_MM` 410, `LIMITE_Y_MM` 562, `LIMITE_Z_MM` 88). Si los cambias aquí, cámbialos allá.
 - `PIN_ENA = None` si dejaste ENA sin conectar.
 - Si en la calibración usaste una velocidad más baja porque el motor perdía pasos, baja también `VEL_MAX_MM_S` en `config.py`.
 

@@ -38,7 +38,7 @@ const COLUMNAS_SESION = `s.id, s.usuario_id, u.nombre AS iniciada_por, s.modo, s
   s.iniciada_en, s.terminada_en, s.notas, s.puntos_esperados, s.puntos_recibidos, s.huecos,
   s.version_software, s.version_firmware, s.eliminada_en`;
 
-const COLUMNAS_CONFIG = 's.config_barrido, s.config_sensor, s.config_simulacion';
+const COLUMNAS_CONFIG = 's.config_barrido, s.config_sensor, s.config_simulacion, s.config_general';
 
 const DESDE_SESIONES = 'FROM sesiones s LEFT JOIN usuarios u ON u.id = s.usuario_id';
 
@@ -50,7 +50,7 @@ function normalizarSesion(fila) {
   for (const c of ['paso_mm', 'zona_x_mm', 'zona_y_mm', 'zona_z_mm']) {
     if (r[c] !== undefined && r[c] !== null) r[c] = Number(r[c]);
   }
-  for (const c of ['config_barrido', 'config_sensor', 'config_simulacion']) {
+  for (const c of ['config_barrido', 'config_sensor', 'config_simulacion', 'config_general']) {
     if (c in r) r[c] = leerJSON(r[c]);
   }
   return r;
@@ -60,7 +60,7 @@ function normalizarSesion(fila) {
  * Crea una nueva sesión en la BD y devuelve su ID.
  * La regla de "una sola sesión abierta" la aplica services/sesiones.js.
  * @param {object} s  { modo, origen, pasoMM, medio, zona: {x,y,z}, usuarioId, puntosEsperados,
- *                      configBarrido, configSensor, configSimulacion, versionSoftware, versionFirmware }
+ *                      configBarrido, configSensor, configSimulacion, configGeneral, versionSoftware, versionFirmware }
  * @returns {Promise<number>} ID de la sesión recién creada
  */
 export async function crearSesion(s) {
@@ -68,10 +68,10 @@ export async function crearSesion(s) {
   const [result] = await pool.execute(
     `INSERT INTO sesiones (usuario_id, modo, origen, paso_mm, medio, zona_x_mm, zona_y_mm, zona_z_mm,
                            iniciada_en, puntos_esperados,
-                           config_barrido, config_sensor, config_simulacion, version_software, version_firmware)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?)`,
+                           config_barrido, config_sensor, config_simulacion, config_general, version_software, version_firmware)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?, ?)`,
     [s.usuarioId ?? null, s.modo, s.origen, s.pasoMM, s.medio, s.zona.x, s.zona.y, s.zona.z, s.puntosEsperados ?? null,
-     json(s.configBarrido), json(s.configSensor), json(s.configSimulacion),
+     json(s.configBarrido), json(s.configSensor), json(s.configSimulacion), json(s.configGeneral),
      s.versionSoftware ?? null, s.versionFirmware ?? null]
   );
   return result.insertId;

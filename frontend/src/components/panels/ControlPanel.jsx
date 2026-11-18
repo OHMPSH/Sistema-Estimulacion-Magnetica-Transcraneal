@@ -10,6 +10,7 @@
 import React from 'react';
 import { MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo, etiquetaZona } from '../../utils/geometria.js';
 import { entero } from '../../utils/formato.js';
+import { tiempoAproximado } from '../../hooks/useTiempoEstimado.js';
 
 /** Grupo de opciones como radios con aspecto de botones */
 function GrupoOpciones({ nombre, leyenda, icono, opciones, valor, onCambio, deshabilitado }) {
@@ -99,9 +100,40 @@ function CampoZona({ textos, errores, limites, onCambio, deshabilitado }) {
   );
 }
 
+/**
+ * Tiempo restante (con un barrido en curso) o duración estimada de la
+ * malla elegida (sin barrido). Se calcula en useTiempoEstimado.
+ */
+function TiempoEstimado({ estimado, enCurso, zonaHoraria }) {
+  if (!estimado) return null;
+  const ritmo = `${estimado.sPorLectura.toLocaleString('es-MX', { maximumFractionDigits: 2 })}\u00a0s por punto`;
+  if (!enCurso) {
+    return (
+      <p className="scan-estimado mb-0">
+        <i className="bi bi-hourglass-split" aria-hidden="true" /> Duración estimada del barrido elegido:{' '}
+        <span className="cifra">≈ {tiempoAproximado(estimado.restanteS)}</span>
+        <span className="scan-estimado-fuente"> ({ritmo}, {estimado.fuente})</span>
+      </p>
+    );
+  }
+  let fin = '';
+  try {
+    fin = estimado.fin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: zonaHoraria || undefined });
+  } catch { fin = estimado.fin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); }
+  return (
+    <p className="scan-estimado mb-0">
+      <i className="bi bi-hourglass-split" aria-hidden="true" />{' '}
+      {estimado.restanteS < 1
+        ? 'Terminando…'
+        : <>Tiempo restante: <span className="cifra">≈ {tiempoAproximado(estimado.restanteS)}</span>, termina hacia las <span className="cifra">{fin}</span></>}
+      <span className="scan-estimado-fuente"> ({ritmo}, {estimado.fuente})</span>
+    </p>
+  );
+}
+
 export function ControlPanel({
   enCurso, iniciando, deteniendo, parametros, onCambiarParametros, sesion, mallaElegida,
-  recibidas, totalPuntos, zActualMM, progreso, etiquetaEstado,
+  recibidas, totalPuntos, zActualMM, progreso, etiquetaEstado, estimado, zonaHoraria,
   onIniciar, onDetener, errorAccion, puedeControlar,
 }) {
   const vista = enCurso && sesion
@@ -178,6 +210,7 @@ export function ControlPanel({
             <span className="cifra">{enCurso && zActualMM !== null ? `Plano Z = ${zActualMM}\u00a0mm` : ''}</span>
             <span className="cifra">{entero(recibidas)} / {entero(totalPuntos)}{'\u00a0'}puntos</span>
           </div>
+          <TiempoEstimado estimado={estimado} enCurso={enCurso} zonaHoraria={zonaHoraria} />
         </div>
       </div>
 

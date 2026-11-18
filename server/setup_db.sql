@@ -16,7 +16,7 @@
 --   • Tabla:         dispositivos   — la Pico W (token como hash)
 --
 -- Una instalación limpia con este archivo queda igual que una base
--- antigua a la que se le aplicaron las migraciones 001 a 008: NO hace
+-- antigua a la que se le aplicaron las migraciones 001 a 009: NO hace
 -- falta ejecutar las migraciones después de este script.
 --
 -- Después de ejecutarlo, crea el primer administrador:
@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS sesiones (
   config_barrido    JSON         NULL,                        -- copias de la configuración al iniciar
   config_sensor     JSON         NULL,
   config_simulacion JSON         NULL,                        -- solo en simulación (incluye la semilla)
+  config_general    JSON         NULL,                        -- punto de inicio de la medición (migración 009)
   version_software  VARCHAR(64)  NULL,                        -- versión del servidor + commit
   version_firmware  VARCHAR(40)  NULL,                        -- firmware de la Pico (modo real)
   eliminada_en      DATETIME     NULL,                        -- borrado lógico (NULL = visible)
@@ -186,6 +187,7 @@ CREATE TABLE IF NOT EXISTS configuracion (
 );
 
 INSERT IGNORE INTO configuracion (clave, valor, actualizado_en) VALUES
+  ('general',        '{"inicio_medicion":{"x_mm":0,"y_mm":0,"z_mm":0}}', UTC_TIMESTAMP()),   -- migración 009
   ('modo_operacion', '"simulacion"', UTC_TIMESTAMP()),
   ('barrido',        '{"limite_x_mm":60,"limite_y_mm":60,"limite_z_mm":20,"standoff_mm":5,"paso_predeterminado_mm":5}', UTC_TIMESTAMP()),
   ('sensor',         '{"modelo":"QMC5883P","rango_g":30,"cuentas_por_g":1000,"lecturas_por_punto":1,"offset_ut":{"x":0,"y":0,"z":0}}', UTC_TIMESTAMP()),   -- QMC5883P (migración 008)

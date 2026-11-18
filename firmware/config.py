@@ -3,12 +3,19 @@
 #
 # Firmware cliente final de la Pico W: magnetómetro QMC5883P de 3 ejes,
 # mesa XYZ con NEMA 17 y TB6600, recorrido de la malla en serpentina.
-# Se comporta igual que el firmware de prueba del Hall (firmware_hall_1d/):
-#   - No hay finales de carrera: la posición en que está la mesa al
-#     arrancar el programa es el origen (0, 0, 0), y los límites de
-#     software no dejan salir de 0–LIMITE en ningún eje.
-#   - La zona de la sesión empieza en ORIGEN_ZONA_*_MM (por defecto, el
-#     propio origen), no centrada bajo la bobina.
+# Como el firmware de prueba del Hall (firmware_hall_1d/), sin finales de
+# carrera, pero (2026-11-13):
+#   - X es el eje corto (0–410 mm) e Y el largo (0–562 mm), como en
+#     prueba_calibracion.py (2026-11-14: se deshizo el intercambio del 13).
+#   - La mesa descansa en POSICION_ARRANQUE_* (0, 0, 0): ahí debe estar
+#     al arrancar y ahí vuelve al terminar. Los límites de software no dejan
+#     salir de 0–LIMITE en ningún eje.
+#   - Cada medición empieza en el punto de inicio de la medición (lo manda
+#     el servidor; por defecto, el origen 0, 0, 0) y la zona crece en el
+#     sentido SENTIDO_* de cada eje: X+, Y+, Z+.
+#   - Para bajar Z, la mesa mueve primero X e Y (con Z arriba) y después
+#     baja; para subir Z, sube primero. Así nunca cruza la mesa con el
+#     sensor abajo (motores.Mesa.mover_a).
 #
 # Las credenciales (Wi-Fi, token y URL del servidor) NO van aquí: van en
 # secretos.py (ver secretos_ejemplo.py), que no se sube a git.
@@ -16,15 +23,42 @@
 # Unidades: mm, mm/s, mm/s², ms, µT.
 # ═══════════════════════════════════════════════════════════════
 
-FIRMWARE = "pico-tms-2.0"          # se manda en cada latido (máx. 40 caracteres)
+FIRMWARE = "pico-tms-2.2"          # se manda en cada latido (máx. 40 caracteres)
 
 # ── Límites de la mesa (medidos con prueba_calibracion.py) ─────
-# Desde el origen (la posición al arrancar) hasta estos valores. La mesa
-# nunca va a menos de 0 ni a más del límite: un movimiento fuera se
-# rechaza ANTES de dar un solo pulso.
+# Coordenadas de MÁQUINA: cada eje va de 0 a su límite. La mesa nunca va a
+# menos de 0 ni a más del límite: un movimiento fuera se rechaza ANTES de
+# dar un solo pulso.
+# X es el eje corto (410 mm, GP10/GP11) e Y el largo (562 mm, GP12/GP13),
+# los mismos nombres que prueba_calibracion.py y el instructivo.
 LIMITE_X_MM = 410.0
 LIMITE_Y_MM = 562.0
 LIMITE_Z_MM = 88.0
+
+# ── Posición de la mesa al arrancar (no hay finales de carrera) ─
+# Dónde está la mesa, en coordenadas de máquina, cuando arranca el
+# programa. Antes de ejecutar, deja la mesa AQUÍ: el firmware no tiene
+# otra forma de saberlo. Al terminar, detener o fallar una sesión, y con
+# Ctrl+C, la mesa vuelve a esta posición.
+# Es la posición de «descanso», el extremo de cada eje desde el que DIR = 1
+# (sentido +) aleja la mesa: (0, 0, 0), como en prueba_calibracion.py y en
+# la versión 9a1ab30. (0, 562, 88) mandaba Y y Z contra su tope (2026-11-15).
+POSICION_ARRANQUE_X_MM = 0.0
+POSICION_ARRANQUE_Y_MM = 0.0
+POSICION_ARRANQUE_Z_MM = 0.0
+
+# ── Punto de inicio de la medición y sentido de la zona ────────
+# El punto (0, 0, 0) de cada sesión está en el «punto de inicio de la
+# medición», en coordenadas de máquina. Lo manda el servidor en el latido
+# (sesion_activa.inicio_medicion = {x_mm, y_mm, z_mm}, Configuración ›
+# General de la página). Si el servidor no lo manda, se usa este (el origen):
+INICIO_MEDICION_MM = (0.0, 0.0, 0.0)
+# Desde el punto de inicio, la zona crece hacia dentro de la mesa:
+#   x_máquina = inicio.x + SENTIDO_X · xMM      (igual en Y y en Z)
+# Desde el origen (0, 0, 0): X, Y y Z suben (el plano z = 0 es el más bajo).
+SENTIDO_X = 1
+SENTIDO_Y = 1
+SENTIDO_Z = 1
 
 # ── Magnetómetro QMC5883P (I2C) ────────────────────────────────
 # SDA → GP0 (pin 1) · SCL → GP1 (pin 2) · VCC → 3V3(OUT) (pin 36) · GND → pin 38
@@ -40,7 +74,7 @@ TIMEOUT_DRDY_MS = 100              # máximo de espera de cada dato nuevo (DRDY)
 # todavía espera un HMC5883L (ver «Formato de las lecturas» en README.md).
 # 30 G es el único que no satura nunca dentro de lo que caben las cuentas HMC.
 RANGO_G_PREDETERMINADO = 30
-# Fondo (Tierra + entorno) con la mesa en el origen y la bobina apagada:
+# Fondo (Tierra + entorno) con la mesa en la posición de arranque y la bobina apagada:
 # se mide al arrancar y, en espera, con el botón BOOTSEL.
 LECTURAS_FONDO = 100
 # False (recomendado): las cuentas se mandan crudas y el fondo se resta en
@@ -58,8 +92,9 @@ MOSTRAR_LECTURAS = True            # imprime cada lectura en la consola de Thonn
 #   invertir       True si el eje se mueve al revés de lo esperado
 #   pasos_por_mm   pulsos por milímetro
 #   recorrido_mm   límite de software (no tocar: sale de LIMITE_*)
-#   final          None: sin final de carrera (el origen es la posición al
-#                  arrancar). Con interruptores: GPIO del lado − y
+#   arranque_mm    posición del eje al arrancar (no tocar: sale de POSICION_ARRANQUE_*)
+#   final          None: sin final de carrera (la posición al arrancar es
+#                  arranque_mm). Con interruptores: GPIO del lado − y
 #                  "final_nc": True (motores.py ya sabe hacer el homing).
 #   holgura_mm     compensación del juego del husillo (ver HOLGURA_MM)
 #
@@ -69,17 +104,19 @@ MOSTRAR_LECTURAS = True            # imprime cada lectura en la consola de Thonn
 # mitad de las filas van en X−: cada punto de esas filas hace ese vaivén
 # (unos 0,06 s más por punto; README.md, sección 6). 0 la desactiva en ese eje.
 HOLGURA_MM = 0.5
-EJE_X = {
+EJE_X = {                          # eje corto (0–410 mm), el X de prueba_calibracion.py
     "paso": 10, "dir": 11, "invertir": False,
     "pasos_por_mm": 50.0,
     "recorrido_mm": LIMITE_X_MM,
+    "arranque_mm": POSICION_ARRANQUE_X_MM,
     "final": None,
     "holgura_mm": HOLGURA_MM,
 }
-EJE_Y = {
+EJE_Y = {                          # eje largo (0–562 mm), el Y de prueba_calibracion.py
     "paso": 12, "dir": 13, "invertir": False,
     "pasos_por_mm": 50.0,
     "recorrido_mm": LIMITE_Y_MM,
+    "arranque_mm": POSICION_ARRANQUE_Y_MM,
     "final": None,
     "holgura_mm": HOLGURA_MM,
 }
@@ -87,6 +124,7 @@ EJE_Z = {
     "paso": 14, "dir": 15, "invertir": False,
     "pasos_por_mm": 50.0,
     "recorrido_mm": LIMITE_Z_MM,
+    "arranque_mm": POSICION_ARRANQUE_Z_MM,
     "final": None,
     "holgura_mm": HOLGURA_MM,
 }
@@ -97,13 +135,6 @@ MODO_Z = "motor"                   # "motor", o "ninguno" si solo se mide el pla
 # así los motores sostienen la posición y el origen no se pierde.
 PIN_ENA = 16
 ENA_HABILITADO = 0
-
-# ── Dónde empieza la zona de la sesión (coordenadas de máquina) ─
-# x_máquina = ORIGEN_ZONA_X_MM + xMM   (igual en Y y en Z)
-# Con 0, 0, 0 el punto (0, 0, 0) de la sesión es la posición al arrancar.
-ORIGEN_ZONA_X_MM = 0.0
-ORIGEN_ZONA_Y_MM = 0.0
-ORIGEN_ZONA_Z_MM = 0.0
 
 # ── Movimiento ─────────────────────────────────────────────────
 # prueba_calibracion.py usa un medio periodo de 100 µs (100 mm/s con 50

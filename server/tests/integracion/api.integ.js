@@ -120,6 +120,46 @@ for (const modelo of ['QMC5883P', 'HMC5883L']) {
   });
 }
 
+test('Punto de inicio de la medición: 409 con una sesión abierta, latido con la copia de la sesión y línea en el CSV', async (t) => {
+  if (omitir(t)) return;
+  const inicio = { x_mm: 100, y_mm: 300, z_mm: 50 };
+  assert.deepEqual((await admin.get('/configuracion')).datos.data.general, { inicio_medicion: { x_mm: 0, y_mm: 0, z_mm: 0 } });
+  assert.equal((await admin.put('/configuracion/general', { valor: { inicio_medicion: { x_mm: -1 } } })).status, 422);
+  assert.equal((await admin.put('/configuracion/general', { inicio_medicion: inicio })).status, 400);
+  const parcial = await admin.put('/configuracion/general', { valor: { inicio_medicion: { x_mm: 100 } } });
+  assert.deepEqual(parcial.datos.valor, { inicio_medicion: { x_mm: 100, y_mm: 0, z_mm: 0 } });
+  assert.equal((await admin.put('/configuracion/general', { valor: { inicio_medicion: inicio } })).status, 200);
+
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 200);
+  const token = (await admin.post('/dispositivo/token')).datos.token;
+  const pico = cliente(entorno.base);
+  const latir = () => pico.post('/dispositivo/latido', { firmware: 'prueba' }, { Authorization: `Bearer ${token}` });
+  const s = await admin.post('/sesiones', { modo: 'AC', paso_mm: 20 });
+  assert.equal(s.status, 201);
+  const id = s.datos.sesion.id;
+  assert.equal(s.datos.sesion.config_general, undefined, 'la copia no se manda al navegador');
+
+  // Con la sesión abierta no se puede cambiar, y el latido manda la copia de la sesión
+  assert.equal((await admin.put('/configuracion/general', { valor: { inicio_medicion: { x_mm: 5 } } })).status, 409);
+  const l = await latir();
+  assert.equal(l.status, 200);
+  assert.deepEqual(l.datos.sesion_activa.inicio_medicion, inicio);
+
+  assert.equal((await admin.put(`/sesiones/${id}`)).status, 200);
+  const csv = leerCSV((await admin.get(`/sesiones/${id}/csv`)).datos);
+  assert.equal(csv.meta.inicio_medicion_mm, '100, 300, 50');
+
+  // Sin sesión abierta, el latido no manda sesion_activa
+  assert.equal((await latir()).datos.sesion_activa, null);
+
+  assert.equal((await admin.put('/configuracion/general', { valor: { inicio_medicion: { x_mm: 0, y_mm: 0, z_mm: 0 } } })).status, 200);
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'simulacion' })).status, 200);
+  assert.equal((await admin.del('/dispositivo/token')).status, 200);
+  // En simulación no se guarda copia ni sale la línea en el CSV
+  const idSim = await sesionSimulada(admin, { modo: 'DC', paso_mm: 20 });
+  assert.equal(leerCSV((await admin.get(`/sesiones/${idSim}/csv`)).datos).meta.inicio_medicion_mm, undefined);
+});
+
 test('Simulador con QMC5883P: las saturadas quedan con saturado = 1, sin Bx/By/Bz y con crudos de 16 bits', async (t) => {
   if (omitir(t)) return;
   assert.equal((await admin.put('/configuracion/sensor', { valor: { modelo: 'QMC5883P' } })).status, 200);

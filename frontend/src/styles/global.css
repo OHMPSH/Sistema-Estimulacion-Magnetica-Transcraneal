@@ -335,6 +335,9 @@ button, a, label, select, summary, .opcion-boton, .segmento { touch-action: mani
 
 /* ── Progreso ───────────────────────────────────────────────── */
 .scan-info { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.scan-estimado { font-size: 13px; color: var(--text-primary); margin-top: 4px; }
+.scan-estimado .bi { color: var(--text-secondary); }
+.scan-estimado-fuente { color: var(--text-secondary); }
 .progress-tms { height: 8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .progress-tms-bar { width: 100%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #8b1a2f 0%, var(--guinda-bright) 100%); transform-origin: left center; transition: transform .3s ease-out; }
 
@@ -381,6 +384,10 @@ button, a, label, select, summary, .opcion-boton, .segmento { touch-action: mani
 .chart-body { flex: 1; position: relative; min-height: 300px; }
 .chart-lineas .chart-body { height: 320px; }
 .superficie-cuerpo { height: 400px; }
+.superficie-controles { display: flex; flex-wrap: wrap; gap: 10px; }
+.superficie-controles .campo-compacto { min-width: 185px; }
+/* Figura científica: fondo blanco en los dos temas (como en la exportación) */
+.superficie-figura { position: absolute; inset: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .chart-vacio { color: var(--text-secondary); padding: 20px; margin: 0; }
 .legend-inline { display: flex; gap: 12px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
@@ -472,6 +479,7 @@ table.tms-table tbody tr.new-row td { animation: fila-nueva .6s ease-out; }
 .session-stats dt { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .session-stats dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .huecos { margin-bottom: 12px; }
+.sabana-historial { margin-top: 16px; }
 .huecos summary { cursor: pointer; color: var(--text-primary); }
 .lista-huecos { display: flex; flex-wrap: wrap; gap: 4px 12px; list-style: none; padding: 8px 0 0; margin: 0; font-size: 13px; color: var(--text-secondary); max-height: 160px; overflow: auto; }
 .notas-editor, .notas-lectura { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }

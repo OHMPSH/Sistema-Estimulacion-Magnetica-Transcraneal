@@ -19,6 +19,7 @@ import * as dispositivo from '../services/dispositivo.js';
 import * as sesiones from '../services/sesiones.js';
 import { registrarLoteDispositivo, ultimoSeq, ErrorIngesta } from '../services/ingesta.js';
 import { obtener } from '../services/configuracion.js';
+import { inicioMedicionDe } from '../services/validacionConfiguracion.js';
 import * as Medicion from '../models/Medicion.js';
 
 /** GET /dispositivo/estado */
@@ -95,6 +96,10 @@ export const latido = async (req, res, next) => {
         // La copia de la sesión: modelo, rango y cuentas por gauss con los que se mide
         sensor: sesiones.sensorDeSesionAbierta() ?? obtener('sensor'),
       };
+      // Punto de inicio de la medición (mm de máquina) de la copia de la sesión;
+      // sin copia (sesión anterior a la migración 009) no se manda y la Pico usa su predeterminado
+      const inicio = inicioMedicionDe(sesiones.generalDeSesionAbierta());
+      if (inicio) sesionActiva.inicio_medicion = inicio;
     }
     res.json({
       ok: true,

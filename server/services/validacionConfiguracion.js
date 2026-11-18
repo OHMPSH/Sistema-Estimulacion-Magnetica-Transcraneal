@@ -66,7 +66,7 @@ export const MODOS_OPERACION = ['simulacion', 'real'];
 export const ESCALAS_SUPERFICIE = ['Jet', 'Viridis'];
 
 export const CLAVES = [
-  'modo_operacion', 'barrido', 'sensor', 'simulacion',
+  'general', 'modo_operacion', 'barrido', 'sensor', 'simulacion',
   'dispositivo', 'visualizacion', 'datos',
 ];
 
@@ -95,7 +95,42 @@ function booleano(errores, nombre, v) {
   if (typeof v !== 'boolean') errores.push(`${nombre} debe ser true o false`);
 }
 
+/** Tope del punto de inicio de la medición (como los límites de la base); los de la mesa (410/562/88) los valida la Pico */
+export const INICIO_MAXIMO_MM = 1000;
+const EJES_INICIO = ['x_mm', 'y_mm', 'z_mm'];
+
+/**
+ * Punto de inicio de la medición de una copia de `general` guardada con
+ * una sesión, tal como lo espera la Pico en el latido: {x_mm, y_mm, z_mm}
+ * con los tres números, o null si la sesión no tiene copia (anterior a la
+ * migración 009) o no está completa. Con null, el latido no manda el campo
+ * y la Pico usa su predeterminado.
+ */
+export function inicioMedicionDe(configGeneral) {
+  const i = esObjeto(configGeneral) ? configGeneral.inicio_medicion : null;
+  if (!esObjeto(i) || !EJES_INICIO.every(e => esNumero(i[e]))) return null;
+  return { x_mm: i.x_mm, y_mm: i.y_mm, z_mm: i.z_mm };
+}
+
 const VALIDADORES = {
+  /** General: punto de inicio de la medición, en mm de máquina (docs/firmware-pico-w.md, 1.3) */
+  general(v) {
+    const errores = clavesDesconocidas(v, ['inicio_medicion']);
+    const i = v.inicio_medicion;
+    if (!esObjeto(i)) {
+      errores.push('inicio_medicion debe ser un objeto {x_mm, y_mm, z_mm}');
+      return { valor: v, errores };
+    }
+    errores.push(...clavesDesconocidas(i, EJES_INICIO, 'inicio_medicion.'));
+    for (const eje of EJES_INICIO) {
+      const n = i[eje];
+      if (!esNumero(n) || n < 0 || n > INICIO_MAXIMO_MM || !unDecimal(n)) {
+        errores.push(`inicio_medicion.${eje} debe ser un número entre 0 y ${INICIO_MAXIMO_MM} mm, con un decimal como máximo`);
+      }
+    }
+    return { valor: v, errores };
+  },
+
   modo_operacion(valor) {
     if (!MODOS_OPERACION.includes(valor)) {
       return { valor, errores: [`modo_operacion debe ser ${MODOS_OPERACION.join(' o ')}`] };

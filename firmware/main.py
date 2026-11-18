@@ -4,23 +4,26 @@
 # Bucle cooperativo, sin hilos: en cada vuelta
 #   1. mantiene el Wi-Fi (red.py),
 #   2. manda el latido cuando toca y reacciona a sesion_activa,
-#   3. avanza un poco la tarea en curso (barrido o regreso al origen,
+#   3. avanza un poco la tarea en curso (barrido o regreso al arranque,
 #      que son generadores: ceden el control mientras los motores se mueven
 #      o el sensor convierte),
 #   4. manda un lote si hay suficientes lecturas.
 # Los motores se mueven por PIO + DMA, así que un lote puede salir
 # mientras la mesa va al siguiente punto.
 #
-# Comportamiento (el mismo que firmware_hall_1d/):
+# Comportamiento (como firmware_hall_1d/, con la posición de arranque y el
+# punto de inicio de 2026-11-13):
 #   - Sensor: magnetómetro QMC5883P de 3 ejes (sensor.py).
-#   - Sin finales de carrera: el ORIGEN (0, 0, 0) es la posición de la mesa
-#     al arrancar. Antes de ejecutar, deja la mesa ahí.
-#   - La malla se recorre en serpentina en X, Y y Z (barrido.py).
+#   - Sin finales de carrera: al arrancar, la mesa está en la POSICIÓN DE
+#     ARRANQUE («descanso») de config.py (X=0, Y=562, Z=88 mm). Antes de ejecutar, deja
+#     la mesa ahí.
+#   - La zona de cada sesión empieza en el punto de inicio de la medición
+#     (lo manda el servidor) y se recorre en serpentina (barrido.py).
 #   - Los drivers quedan habilitados todo el tiempo (sostienen la posición).
 #   - Al terminar o detener una sesión, ante un error, ante un 401 y al
 #     detener el programa con Ctrl+C o el botón rojo de Thonny, la mesa
-#     vuelve al origen.
-#   - Nunca se reinicia sola: un reinicio tomaría como origen la posición
+#     vuelve a la posición de arranque.
+#   - Nunca se reinicia sola: un reinicio tomaría como arranque la posición
 #     en que haya quedado la mesa.
 #   - Al arrancar se mide el fondo del sensor (bobina apagada). En espera
 #     (sin sesión), el botón BOOTSEL lo vuelve a medir.
@@ -93,7 +96,7 @@ class Controlador:
         return self.sensor_ok
 
     def homing_inicial(self):
-        """Sin finales de carrera: fija el origen en la posición actual."""
+        """Sin finales de carrera: la posición actual es POSICION_ARRANQUE_* (config.py)."""
         self.mesa.habilitar(True)
         self.fase = "homing"
         self.tarea = self.mesa.homing()
@@ -185,8 +188,7 @@ class Controlador:
                 self.fase = "vaciando"
                 self.homing_al_vaciar = True
             elif self.fase in ("homing", "cierre"):
-                self.fase = None
-                log("Mesa en el origen X=%.2f Y=%.2f Z=%.2f mm" % self.mesa.posicion_mm())
+                self.fase = None            # motores.homing() ya escribió la posición
         except ERRORES_DE_TAREA as e:
             self.fallar(e)
 
@@ -203,11 +205,11 @@ class Controlador:
         self.tarea = barrido.ejecutar(s, self.mesa, self.sensor, self.bufer, red.ahora_ms, self.progreso)
 
     def terminar_vaciado(self):
-        log("Sesión %d: todas las lecturas confirmadas. Falta que el operador la cierre en el dashboard." % self.sesion["id"])
+        log("Sesión %d: todas las lecturas confirmadas (si el servidor no la cerró solo, ciérrala en el dashboard)." % self.sesion["id"])
         self.no_medir = self.sesion["id"]
         self.sesion = None
         if self.homing_al_vaciar:
-            self.volver_al_origen()
+            self.volver_al_arranque()
         else:
             self.fase = None
 
@@ -218,7 +220,7 @@ class Controlador:
             self.no_autorizado()
 
     # ── Paradas ────────────────────────────────────────────────
-    def volver_al_origen(self):
+    def volver_al_arranque(self):
         self.fase = "cierre"
         self.tarea = self.mesa.homing()
 
@@ -232,16 +234,16 @@ class Controlador:
         self.mesa.detener()
 
     def abortar_sesion(self, motivo):
-        """Sesión cerrada desde el servidor: para los motores, vacía el búfer y vuelve al origen."""
-        log("Parada: %s. Se descartan %d lecturas sin enviar; vuelve al origen." % (motivo, len(self.bufer)))
+        """Sesión cerrada desde el servidor: para los motores, vacía el búfer y vuelve a la posición de arranque."""
+        log("Parada: %s. Se descartan %d lecturas sin enviar; vuelve a la posición de arranque." % (motivo, len(self.bufer)))
         self._cerrar_tarea()
         self.bufer.vaciar()
         self.no_medir = self.sesion["id"] if self.sesion else self.no_medir
         self.sesion = None
-        self.volver_al_origen()
+        self.volver_al_arranque()
 
     def fallar(self, e):
-        """Error de zona, de movimiento o del sensor: para, manda lo ya medido y vuelve al origen."""
+        """Error de zona, de movimiento o del sensor: para, manda lo ya medido y vuelve a la posición de arranque."""
         self.error = str(e)
         log("ERROR:", e)
         if isinstance(e, ErrorSensor):
@@ -255,7 +257,7 @@ class Controlador:
                 self.homing_al_vaciar = True
                 return
             self.sesion = None
-        self.volver_al_origen()
+        self.volver_al_arranque()
 
     def no_autorizado(self):
         if not self.sin_token:
@@ -266,7 +268,7 @@ class Controlador:
         self.bufer.vaciar()
         self.sesion = None
         self.pendiente = None
-        self.volver_al_origen()
+        self.volver_al_arranque()
 
     def estado_pico(self):
         """Lo que se informa al servidor en el latido."""
@@ -300,11 +302,11 @@ def _correr(gen):
 
 
 def apagar(c):
-    """Para todo, vuelve al origen (bloqueando) y deshabilita los drivers."""
+    """Para todo, vuelve a la posición de arranque (bloqueando) y deshabilita los drivers."""
     try:
         c._cerrar_tarea()
-        if any(abs(v) > 1e-6 for v in c.mesa.posicion_mm()):
-            log("Volviendo al origen antes de salir (X=%.2f Y=%.2f Z=%.2f mm); "
+        if not c.mesa.en_arranque():
+            log("Volviendo a la posición de arranque antes de salir (ahora X=%.2f Y=%.2f Z=%.2f mm); "
                 "otro Ctrl+C lo interrumpe" % c.mesa.posicion_mm())
             _correr(c.mesa.homing())
         log("Mesa en X=%.2f Y=%.2f Z=%.2f mm" % c.mesa.posicion_mm())
@@ -331,8 +333,9 @@ def principal():
         led.poner("apagado")
         log("BOOTSEL pulsado: el firmware no arranca (modo de edición)")
         return
-    log("Origen (0, 0, 0) = posición actual de la mesa. Límites: X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
-        % (config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM))
+    log("La mesa debe estar en la posición de arranque X=%.1f Y=%.1f Z=%.1f mm. Límites: X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
+        % (config.POSICION_ARRANQUE_X_MM, config.POSICION_ARRANQUE_Y_MM, config.POSICION_ARRANQUE_Z_MM,
+           config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM))
     c = Controlador()
     try:
         c.verificar_sensor()
@@ -345,13 +348,13 @@ def principal():
         led.poner("apagado")
         apagar(c)
     except Exception as e:
-        log("Fallo inesperado; el programa se detiene (sin reiniciar, para no perder el origen):")
+        log("Fallo inesperado; el programa se detiene (sin reiniciar, para no perder la posición):")
         sys.print_exception(e)
         led.poner("error")
         try:
             apagar(c)
         except Exception as e2:
-            log("No se pudo volver al origen:", e2)
+            log("No se pudo volver a la posición de arranque:", e2)
 
 
 if __name__ == "__main__":

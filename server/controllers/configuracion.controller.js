@@ -6,7 +6,7 @@
  *   getConfiguracion     — GET /api/configuracion           (cualquier usuario con sesión)
  *   putConfiguracion     — PUT /api/configuracion/:clave {valor}  (solo admin)
  *
- * modo_operacion, barrido y sensor no se pueden cambiar con una
+ * general, modo_operacion, barrido y sensor no se pueden cambiar con una
  * sesión abierta (409): cambiarían el significado de los datos a
  * mitad de un barrido.
  * ─────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ import { sesionAbierta } from '../services/sesiones.js';
 import { PASOS_SUGERIDOS_MM, PASO_MIN_MM, MAX_PUNTOS_SESION, MEDIOS } from '../services/geometria.js';
 import { RANGOS_GA, GANANCIAS_HMC5883L, RANGOS_G, RANGOS_QMC5883P, MODELOS_SENSOR, limiteSensorUT } from '../services/validacionConfiguracion.js';
 
-const BLOQUEADAS_CON_SESION = ['modo_operacion', 'barrido', 'sensor'];
+const BLOQUEADAS_CON_SESION = ['general', 'modo_operacion', 'barrido', 'sensor'];
 
 /** GET /api/configuracion — todo, más las opciones fijas que la interfaz necesita */
 export const getConfiguracion = (_req, res) => {

@@ -54,7 +54,8 @@ Respuesta:
     "grid_nx": 7, "grid_ny": 7, "z_levels_mm": [0, 10, 20], "puntos_esperados": 147,
     "ultimo_seq": 0,
     "barrido": { "limite_x_mm": 60, "limite_y_mm": 60, "limite_z_mm": 20, "standoff_mm": 5, "paso_predeterminado_mm": 5 },
-    "sensor":  { "modelo": "HMC5883L", "rango_ga": 1.9, "lsb_por_ga": 820, "lecturas_por_punto": 1, "offset_ut": { "x": 0, "y": 0, "z": 0 } }
+    "sensor":  { "modelo": "HMC5883L", "rango_ga": 1.9, "lsb_por_ga": 820, "lecturas_por_punto": 1, "offset_ut": { "x": 0, "y": 0, "z": 0 } },
+    "inicio_medicion": { "x_mm": 0, "y_mm": 0, "z_mm": 0 }
   },
   "intervalo_latido_s": 5,
   "servidor_ts_ms": 1794294889858
@@ -63,10 +64,11 @@ Respuesta:
 
 - `sesion_activa` es `null` si no hay ninguna sesión abierta, si el sistema está en **modo simulación**, o si la sesión abierta es simulada. Mientras sea `null`, la Pico no debe enviar lecturas.
 - Cuando aparece una sesión con un `id` nuevo, la Pico empieza a recorrer la malla de esa sesión: `grid_nx × grid_ny` puntos en X–Y con paso `paso_mm`, en cada plano de `z_levels_mm`, **en serpentina** (sección 7).
-- **Zona de muestreo** (`zona_mm`, desde la migración 007): el operador elige en cada sesión el tamaño X × Y × Z, sin pasar de los límites de la base (`barrido.limite_*_mm`). Las coordenadas que manda la Pico son **de la zona**: `xMM` de 0 a `zona_mm.x`, `yMM` de 0 a `zona_mm.y`, `zMM` uno de `z_levels_mm` (0 = el standoff). En el simulador la zona va centrada bajo la bobina (el eje en `zona_mm.x / 2`, `zona_mm.y / 2`). En la mesa real, el firmware de `firmware/` pone la zona a partir de `ORIGEN_ZONA_*_MM` (por defecto, el origen de la mesa): `x_máquina = ORIGEN_ZONA_X_MM + xMM` (igual en Y y Z), y rechaza la sesión si no cabe en los límites de la mesa.
+- **Zona de muestreo** (`zona_mm`, desde la migración 007): el operador elige en cada sesión el tamaño X × Y × Z, sin pasar de los límites de la base (`barrido.limite_*_mm`). Las coordenadas que manda la Pico son **de la zona**: `xMM` de 0 a `zona_mm.x`, `yMM` de 0 a `zona_mm.y`, `zMM` uno de `z_levels_mm` (0 = el standoff). En el simulador la zona va centrada bajo la bobina (el eje en `zona_mm.x / 2`, `zona_mm.y / 2`). En la mesa real (desde el 2026-11-13), el punto (0, 0, 0) de la zona está en el **punto de inicio de la medición**, `sesion_activa.inicio_medicion = {x_mm, y_mm, z_mm}` en coordenadas de máquina (sección 1.3), y la zona crece en el sentido fijo del firmware: `x_máquina = inicio.x + xMM`, `y_máquina = inicio.y + yMM`, `z_máquina = inicio.z + zMM`. La Pico rechaza la sesión si la zona no cabe en los límites de la mesa (X 0–410, Y 0–562, Z 0–88 mm).
 - `paso_mm` es **libre** (desde la migración 006): cualquier valor de 1 mm en adelante con un decimal, por ejemplo `7.5`. Las posiciones son `i × paso_mm` redondeadas a décimas (`0, 7.5, 15 … 60`); si el paso no divide la placa, el último punto queda antes del borde. Manda `zMM` exactamente como aparece en `z_levels_mm`.
 - `ultimo_seq` es el mayor `seq` que el servidor ya tiene de esa sesión. Si la Pico se reinicia a mitad de una sesión, **continúa en `ultimo_seq + 1`** (no vuelve a 1).
 - `sensor` es la configuración del sensor. Si `sensor.modelo` es `"QMC5883P"` (servidor adaptado), el firmware programa `sensor.rango_g` y manda cuentas crudas del QMC; si no, mide en 30 G y manda «cuentas HMC» con `sensor.lsb_por_ga` (sección 4.4).
+- `inicio_medicion` (desde la migración 009) es el punto de inicio de la medición en mm de máquina: la copia de Configuración › General guardada con la sesión al iniciarla (sección 1.3). Las sesiones sin copia (anteriores a la 009) no lo traen.
 - `servidor_ts_ms` sirve para estimar el desfase de reloj. El servidor también lo calcula y lo registra en su log (`[dispositivo] Desfase de reloj…`).
 
 ### 1.2 Lote de mediciones
@@ -118,6 +120,16 @@ Respuesta (200):
 | 409 | modo simulación, sesión cerrada o sesión simulada | descartar el lote y esperar el siguiente latido |
 | 422 | más de 200 lecturas, lote vacío o `sesionId` inválido | partir el lote / corregir |
 | 5xx o sin red | error del servidor o de la red | **reintentar el mismo lote** (mismos `seq`) con espera creciente |
+
+### 1.3 Punto de inicio de la medición (desde el 2026-11-13)
+
+La mesa no tiene finales de carrera: al arrancar está en la **posición de descanso** del firmware (`POSICION_ARRANQUE_*_MM`, desde el 2026-11-14 X = 0, Y = 562, Z = 88 mm, con X el eje corto de 410 mm e Y el largo de 562 mm) y vuelve ahí al terminar. El **punto de inicio de la medición** dice dónde, en esas coordenadas de máquina, está el punto (0, 0, 0) de la zona de cada sesión.
+
+- El servidor lo manda en `sesion_activa.inicio_medicion = {"x_mm": número, "y_mm": número, "z_mm": número}` (la copia guardada con la sesión al iniciarla). Se configura en la página, Configuración › General (clave `general`, migración 009; por defecto el origen 0, 0, 0), y no se puede cambiar con una sesión abierta (409).
+- Si no viene, la Pico usa `INICIO_MEDICION_MM` de `config.py`, que por defecto es el origen (0, 0, 0). Así el firmware funciona con servidores anteriores a esta función.
+- Si viene con otro formato (falta un campo o no es un número), la Pico rechaza la sesión con un error (estado `error`, visible en el dashboard), sin mover nada.
+- Desde ese punto, la zona crece en el sentido fijo de la Pico (`SENTIDO_X/Y/Z` = +1, +1, +1 desde el 2026-11-14): `x_máquina = inicio.x + xMM`, `y_máquina = inicio.y + yMM`, `z_máquina = inicio.z + zMM` (el plano z = 0 es el más bajo). Para bajar Z, la mesa mueve primero X e Y; para subir, sube Z primero. Si algún punto queda fuera de 0–límite, la Pico rechaza la sesión entera y lo dice en `error`.
+- Las lecturas siguen llevando coordenadas **de la zona** (`xMM`, `yMM`, `zMM`); el punto de inicio no cambia la ingesta.
 
 ---
 

@@ -57,7 +57,7 @@ export { zonaDeSesion, mallaDeSesion };
 /** Sesión con su geometría, tal como se envía al navegador (sin las copias de configuración) */
 function conGeometria(sesion) {
   const malla = mallaDeSesion(sesion);
-  const { config_barrido: _b, config_sensor: _s, config_simulacion: _c, ...publica } = sesion;
+  const { config_barrido: _b, config_sensor: _s, config_simulacion: _c, config_general: _g, ...publica } = sesion;
   return {
     ...publica,
     zona_mm: malla.zona,
@@ -84,6 +84,9 @@ export const sesionAbierta = () => (abierta ? conGeometria(abierta) : null);
 
 /** Copia de la configuración del sensor guardada con la sesión abierta (o null) */
 export const sensorDeSesionAbierta = () => abierta?.config_sensor ?? null;
+
+/** Copia de la clave `general` (punto de inicio de la medición) guardada con la sesión abierta (o null) */
+export const generalDeSesionAbierta = () => abierta?.config_general ?? null;
 
 /**
  * Si la sesión real se creó antes del primer latido de la Pico, su
@@ -141,6 +144,7 @@ export function iniciar({ modo, pasoMM, medio, zona, usuarioId = null }) {
       configBarrido,
       configSensor: obtener('sensor'),
       configSimulacion,
+      configGeneral: origen === 'hw' ? obtener('general') : null,   // el punto de inicio solo existe en la mesa real
       versionSoftware: VERSION_SOFTWARE,
       versionFirmware: origen === 'hw' ? (estadoDispositivo().firmware ?? null) : null,
     });

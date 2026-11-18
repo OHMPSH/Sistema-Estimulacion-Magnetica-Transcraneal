@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export const VISTAS = ['dashboard', 'historial', 'configuracion'];
-export const SECCIONES = ['barrido', 'sensor', 'simulacion', 'dispositivo', 'visualizacion', 'usuarios'];
+export const SECCIONES = ['general', 'barrido', 'sensor', 'simulacion', 'dispositivo', 'visualizacion', 'usuarios'];
 
 function leer() {
   const p = new URLSearchParams(window.location.search);

@@ -27,6 +27,7 @@ import * as sesiones from '../services/sesiones.js';
 import { ErrorIngesta } from '../services/ingesta.js';
 import { conectar, totalClientes, difundir } from '../services/tiempoReal.js';
 import { obtener } from '../services/configuracion.js';
+import { inicioMedicionDe } from '../services/validacionConfiguracion.js';
 import { VERSION_SOFTWARE, VERSION_PAQUETE, COMMIT } from '../services/version.js';
 import {
   encabezadoCSV, lineaCSV, COLUMNAS_CSV, nombreArchivoCSV,
@@ -183,6 +184,7 @@ export const getCsv = async (req, res, next) => {
     const s = await Medicion.obtenerSesion(req.idSesion, { conConfig: true });
     const malla = sesiones.mallaDeSesion(s);
     const iso = v => (v ? new Date(v).toISOString() : '');
+    const inicio = inicioMedicionDe(s.config_general);   // solo en sesiones con copia (migración 009)
 
     const meta = [
       ['sistema', 'TMS — Sistema de Adquisición de Datos (IPN, ESIME Zacatenco)'],
@@ -202,6 +204,7 @@ export const getCsv = async (req, res, next) => {
       ['puntos_recibidos', s.puntos_recibidos ?? ''],
       ['huecos', s.huecos ? s.huecos.total : ''],
       ['config_barrido', s.config_barrido ?? ''],
+      ...(inicio ? [['inicio_medicion_mm', `${inicio.x_mm}, ${inicio.y_mm}, ${inicio.z_mm}`]] : []),
       ['sensor_modelo', s.config_sensor?.modelo ?? ''],
       ['config_sensor', s.config_sensor ?? ''],
       ...(s.origen === 'sim' ? [['config_simulacion', s.config_simulacion ?? '']] : []),

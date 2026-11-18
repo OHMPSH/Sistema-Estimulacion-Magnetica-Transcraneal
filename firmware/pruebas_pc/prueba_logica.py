@@ -130,27 +130,50 @@ class Malla(unittest.TestCase):
 
 
 class Limites(unittest.TestCase):
+    def test_configuracion_de_la_mesa(self):
+        """X corto (0–410), Y largo (0–562); descanso e inicio en (0, 0, 0) (2026-11-15: el descanso
+        (0, 562, 88) mandaba Y y Z contra su tope)."""
+        self.assertEqual((config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM), (410.0, 562.0, 88.0))
+        self.assertEqual((config.EJE_X["paso"], config.EJE_X["dir"]), (10, 11), "X es el eje corto (GP10/GP11)")
+        self.assertEqual((config.EJE_Y["paso"], config.EJE_Y["dir"]), (12, 13), "Y es el eje largo (GP12/GP13)")
+        self.assertEqual((config.POSICION_ARRANQUE_X_MM, config.POSICION_ARRANQUE_Y_MM, config.POSICION_ARRANQUE_Z_MM),
+                         (0.0, 0.0, 0.0))
+        self.assertEqual(config.INICIO_MEDICION_MM, (0.0, 0.0, 0.0))
+        self.assertEqual(barrido.sentidos(), (1, 1, 1))
+
     def test_a_maquina(self):
-        self.assertEqual(barrido.a_maquina(0, 0, 0), (config.ORIGEN_ZONA_X_MM, config.ORIGEN_ZONA_Y_MM, config.ORIGEN_ZONA_Z_MM))
-        viejo = config.ORIGEN_ZONA_X_MM
-        try:
-            config.ORIGEN_ZONA_X_MM = 100.0
-            self.assertEqual(barrido.a_maquina(30, 20, 10), (130.0, 20.0, 10.0))
-        finally:
-            config.ORIGEN_ZONA_X_MM = viejo
+        # Sin inicio del servidor: desde el origen, X+, Y+, Z+
+        self.assertEqual(barrido.a_maquina(0, 0, 0), (0.0, 0.0, 0.0))
+        self.assertEqual(barrido.a_maquina(30, 20, 10), (30.0, 20.0, 10.0))
+        self.assertEqual(barrido.a_maquina(30, 20, 10, (100.0, 200.0, 50.0)), (130.0, 220.0, 60.0))
+
+    def test_inicio_del_servidor(self):
+        s = sesion((60, 60, 20), 5)
+        self.assertEqual(barrido.inicio_de(s), (0.0, 0.0, 0.0), "sin inicio_medicion: el del firmware")
+        s["inicio_medicion"] = {"x_mm": 100, "y_mm": 300.5, "z_mm": 60}
+        self.assertEqual(barrido.inicio_de(s), (100.0, 300.5, 60.0))
+        self.assertEqual(barrido.errores_de_zona(s), [])
+        for malo in ({"x_mm": 1}, {"x_mm": "a", "y_mm": 0, "z_mm": 0}, [0, 0, 0], 5):
+            s["inicio_medicion"] = malo
+            with self.assertRaises(barrido.ErrorZona):
+                barrido.inicio_de(s)
+            self.assertTrue(barrido.errores_de_zona(s), "un inicio inválido rechaza la sesión")
 
     def test_zona(self):
+        # Desde (0, 0, 0): X cabe hasta 410, Y hasta 562 y Z hasta 88
         self.assertEqual(barrido.errores_de_zona(sesion((410, 562, 88), 20)), [])
         self.assertEqual(barrido.errores_de_zona(sesion((60, 60, 20), 5)), [])
         self.assertTrue(any(e.startswith("X") for e in barrido.errores_de_zona(sesion((420, 60, 20), 5))))
-        self.assertTrue(any(e.startswith("Y") for e in barrido.errores_de_zona(sesion((60, 600, 20), 5))))
+        self.assertTrue(any(e.startswith("Y") for e in barrido.errores_de_zona(sesion((60, 570, 20), 5))))
         self.assertTrue(any(e.startswith("Z") for e in barrido.errores_de_zona(sesion((60, 60, 90), 10))))
-        viejo = config.ORIGEN_ZONA_X_MM
-        try:
-            config.ORIGEN_ZONA_X_MM = 400.0
-            self.assertTrue(any(e.startswith("X") for e in barrido.errores_de_zona(sesion((20, 20, 0), 5))))
-        finally:
-            config.ORIGEN_ZONA_X_MM = viejo
+        # Con otro punto de inicio, la zona se valida desde ahí y en su sentido
+        s = sesion((60, 60, 20), 5)
+        s["inicio_medicion"] = {"x_mm": 360, "y_mm": 0, "z_mm": 0}
+        self.assertTrue(any(e.startswith("X") for e in barrido.errores_de_zona(s)), "360 + 60 > 410")
+        s["inicio_medicion"] = {"x_mm": 0, "y_mm": 520, "z_mm": 0}
+        self.assertTrue(any(e.startswith("Y") for e in barrido.errores_de_zona(s)), "520 + 60 > 562")
+        s["inicio_medicion"] = {"x_mm": 0, "y_mm": 0, "z_mm": 75}
+        self.assertTrue(any(e.startswith("Z") for e in barrido.errores_de_zona(s)), "75 + 20 > 88")
         viejo = config.MODO_Z
         try:
             config.MODO_Z = "ninguno"
@@ -161,8 +184,23 @@ class Limites(unittest.TestCase):
         malo = dict(sesion((60, 60, 20), 5), puntos_esperados=12)
         self.assertTrue(any("puntos_esperados" in e for e in barrido.errores_de_zona(malo)))
 
+    def test_recorrido_dentro_de_los_limites(self):
+        """Toda la serpentina de una zona válida cae dentro de 0–LIMITE en coordenadas de máquina."""
+        for zona, paso, inicio in (((410, 562, 88), 20, None), ((60, 60, 20), 5, None),
+                                   ((40, 20, 10), 10, {"x_mm": 100, "y_mm": 200, "z_mm": 50})):
+            s = sesion(zona, paso)
+            if inicio:
+                s["inicio_medicion"] = inicio
+            self.assertEqual(barrido.errores_de_zona(s), [])
+            ini = barrido.inicio_de(s)
+            for k in range(s["puntos_esperados"]):
+                xm, ym, zm = barrido.a_maquina(*barrido.punto(s, k), ini)
+                self.assertTrue(-1e-6 <= xm <= 410 + 1e-6 and -1e-6 <= ym <= 562 + 1e-6 and -1e-6 <= zm <= 88 + 1e-6)
+
     def test_mesa(self):
         mesa = motores.Mesa()
+        self.assertEqual(mesa.posicion_mm(), (0.0, 0.0, 0.0), "arranca en la posición de descanso")
+        self.assertTrue(mesa.en_arranque())
 
         def mover(x, y, z):
             try:
@@ -171,13 +209,40 @@ class Limites(unittest.TestCase):
             except motores.ErrorMovimiento:
                 return False
 
-        self.assertTrue(mover(410, 562, 88))
+        self.assertTrue(mover(410, 0, 0))
         self.assertFalse(mover(410.5, 0, 0))
+        self.assertFalse(mover(0, 562.5, 0))
         self.assertFalse(mover(0, -1, 0))
         self.assertFalse(mover(0, 0, 89))
-        self.assertEqual(mesa.posicion_mm(), (410, 562, 88), "los rechazos no mueven nada")
+        self.assertEqual(mesa.posicion_mm(), (410, 0, 0), "los rechazos no mueven nada")
+        self.assertFalse(mesa.en_arranque())
         correr(mesa.homing())
-        self.assertEqual(mesa.posicion_mm(), (0, 0, 0), "homing sin finales vuelve a 0, 0, 0")
+        self.assertEqual(mesa.posicion_mm(), (0.0, 0.0, 0.0), "sin finales vuelve a la posición de descanso")
+        self.assertTrue(mesa.en_arranque())
+
+    def test_orden_de_los_ejes(self):
+        """Para bajar Z, primero X e Y y después Z; para subir, primero Z (nunca cruza con el sensor abajo)."""
+        mesa = motores.Mesa()
+        etapas = []
+        for e in mesa.ejes:
+            e.mover_pasos = (lambda delta, *a, _e=e, **k: delta and (etapas.append(_e.nombre),
+                                                                      setattr(_e, "pos", _e.pos + delta)))
+            e.ocupado = lambda: False
+        correr(mesa.mover_a(0, 0, 0))            # del descanso (0, 0, 0) al origen: no se mueve
+        self.assertEqual(etapas, [])
+        correr(mesa.mover_a(10, 0, 10))          # sube Z: primero Z, después X
+        self.assertEqual(etapas, ["Z", "X"])
+        etapas.clear()
+        correr(mesa.mover_a(20, 10, 10))         # mismo plano: X e Y juntos
+        self.assertEqual(sorted(etapas), ["X", "Y"])
+        etapas.clear()
+        correr(mesa.mover_a(0, 0, 0))            # baja Z: primero X e Y (en 0 no hay holgura posible), después Z
+        self.assertEqual((sorted(etapas[:2]), etapas[2:]), (["X", "Y"], ["Z"]))
+        etapas.clear()
+        correr(mesa.mover_a(10, 10, 10))
+        etapas.clear()
+        correr(mesa.homing())                    # vuelta al descanso: Z primero
+        self.assertEqual(etapas[0], "Z")
 
     def test_holgura_por_eje(self):
         mesa = motores.Mesa()
@@ -186,7 +251,7 @@ class Limites(unittest.TestCase):
             e.mover_pasos = (lambda delta, *a, _e=e, **k: delta and (movimientos.append((_e.nombre, delta)),
                                                                       setattr(_e, "pos", _e.pos + delta)))
             e.ocupado = lambda: False
-        correr(mesa.mover_a(20, 20, 10))
+        correr(mesa.mover_a(20, 20, 10))         # desde el descanso (0, 0, 0)
         movimientos.clear()
         correr(mesa.mover_a(10, 20, 10))         # X en sentido −: se pasa 0,5 mm y vuelve
         self.assertEqual(movimientos, [("X", -525), ("X", 25)])

@@ -1,7 +1,7 @@
 /**
  * pages/ConfiguracionPage.jsx
  * Configuración del sistema por secciones (?vista=configuracion&seccion=…):
- * Barrido, Sensor, Simulación, Dispositivo, Visualización y Usuarios.
+ * General (punto de inicio de la medición), Barrido, Sensor, Simulación, Dispositivo, Visualización y Usuarios.
  * Usa GET/PUT /api/configuracion/:clave y las rutas de usuarios y del
  * dispositivo. Para quien no es admin, todo es de solo lectura, y
  * Usuarios muestra un aviso.
@@ -15,6 +15,7 @@ import { SelectorModeloSensor } from '../components/config/SelectorModeloSensor.
 import { numero } from '../utils/formato.js';
 
 const SECCIONES = [
+  ['general', 'General', 'bi-crosshair'],
   ['barrido', 'Barrido', 'bi-grid-3x3'],
   ['sensor', 'Sensor', 'bi-magnet'],
   ['simulacion', 'Simulación', 'bi-cpu'],
@@ -25,6 +26,10 @@ const SECCIONES = [
 
 const AVISO_SESION = 'No se puede cambiar con una medición en curso (el servidor responde 409).';
 
+/** Posición de descanso de la mesa (firmware/config.py) y origen, el punto de inicio por defecto */
+const DESCANSO_MM = { x: 0, y: 562, z: 88 };
+const ORIGEN_MM = { x: 0, y: 0, z: 0 };
+
 export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }) {
   const { config, opciones } = useConfig();
   const esAdmin = usuario.rol === 'admin';
@@ -34,6 +39,22 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
 
   let contenido;
   switch (seccion) {
+    case 'general':
+      contenido = (
+        <SeccionFormulario clave="general" titulo="Punto de inicio de la medición" soloLectura={!esAdmin}
+          descripcion={`Dónde empieza la zona de cada medición en la mesa real, en coordenadas de la mesa: X de 0 a 410 mm, Y de 0 a 562 mm y Z de 0 a 88 mm. La mesa descansa en (${DESCANSO_MM.x}, ${DESCANSO_MM.y}, ${DESCANSO_MM.z}): al iniciar una medición va a este punto, desde ahí la zona crece hacia X+, Y+ y Z+ (el plano z = 0 es el más bajo), y al terminar vuelve a descansar. Si la zona no cabe en la mesa, la Pico W rechaza la sesión y el aviso aparece en el dashboard. Se copia en cada sesión al iniciarla. ${sesionAbierta ? AVISO_SESION : ''}`}
+          campos={[
+            { ruta: ['inicio_medicion', 'x_mm'], etiqueta: 'Inicio en X', tipo: 'numero', unidad: 'mm', ayuda: 'Eje corto de la mesa (0–410 mm). La zona avanza hacia X+.' },
+            { ruta: ['inicio_medicion', 'y_mm'], etiqueta: 'Inicio en Y', tipo: 'numero', unidad: 'mm', ayuda: 'Eje largo de la mesa (0–562 mm). La zona avanza hacia Y+.' },
+            { ruta: ['inicio_medicion', 'z_mm'], etiqueta: 'Inicio en Z (altura)', tipo: 'numero', unidad: 'mm', ayuda: 'De 0 a 88 mm. Es la altura del plano z = 0; los demás planos quedan arriba.' },
+          ]}
+          relleno={{
+            etiqueta: `Usar el origen (${ORIGEN_MM.x}, ${ORIGEN_MM.y}, ${ORIGEN_MM.z})`,
+            valores: { 'inicio_medicion.x_mm': ORIGEN_MM.x, 'inicio_medicion.y_mm': ORIGEN_MM.y, 'inicio_medicion.z_mm': ORIGEN_MM.z },
+          }}
+        />
+      );
+      break;
     case 'sensor': {
       const camposComunes = [
         { ruta: ['lecturas_por_punto'], etiqueta: 'Lecturas por punto', tipo: 'entero', ayuda: 'De 1 a 100.' },
@@ -95,8 +116,6 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
             { ruta: ['ventana_grafica'], etiqueta: 'Lecturas en la gráfica de líneas', tipo: 'entero' },
             { ruta: ['filas_tabla'], etiqueta: 'Filas de la tabla', tipo: 'entero' },
             { ruta: ['decimales'], etiqueta: 'Decimales', tipo: 'entero', ayuda: 'Solo para mostrar: los datos se guardan sin redondear.' },
-            { ruta: ['escala_superficie'], etiqueta: 'Escala de color de la superficie', tipo: 'select',
-              opciones: [{ valor: 'Jet', etiqueta: 'Jet (por defecto)' }, { valor: 'Viridis', etiqueta: 'Viridis (apta para daltonismo)' }] },
             { ruta: ['rotacion_auto'], etiqueta: 'Rotación automática del mapa 3D', tipo: 'bool', ayuda: 'Nunca rota si el sistema pide reducir el movimiento.' },
             { ruta: ['reducir_animaciones'], etiqueta: 'Reducir animaciones', tipo: 'bool' },
           ]}

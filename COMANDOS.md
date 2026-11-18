@@ -93,6 +93,7 @@ Las migraciones están en `server/migrations/` y se ejecutan **una sola vez, en 
 | `006_paso_libre.sql` | `sesiones.paso_mm` pasa a `DECIMAL(4,1)`: el paso de medición es libre (en mm, con un decimal). |
 | `007_zona_muestreo.sql` | `sesiones.zona_x_mm/zona_y_mm/zona_z_mm` (zona de muestreo por sesión) y la configuración `barrido` pasa a límites de la base (`limite_x_mm`, `limite_y_mm`, `limite_z_mm`). |
 | `008_sensor_qmc5883p.sql` | La configuración `sensor` pasa al QMC5883P de 30 G (el módulo real), conservando las lecturas por punto y el offset. No toca tablas ni datos. Para usar el firmware del Hall 49E, vuelve a poner el modelo HMC5883L en Configuración › Sensor. |
+| `009_inicio_medicion.sql` | Clave de configuración `general` con el **punto de inicio de la medición** (por defecto el origen de la mesa, X = 0, Y = 0, Z = 0 mm) y columna `sesiones.config_general` (su copia en cada sesión). No cambia datos. ⚠ **El servidor de esta versión la necesita:** sin ella falla al arrancar y al abrir, cerrar o exportar sesiones. |
 
 ```bash
 cd /opt/tms/server/migrations
@@ -103,6 +104,7 @@ sudo mysql tms_db < 005_trazabilidad.sql
 sudo mysql tms_db < 006_paso_libre.sql
 sudo mysql tms_db < 007_zona_muestreo.sql
 sudo mysql tms_db < 008_sensor_qmc5883p.sql
+sudo mysql tms_db < 009_inicio_medicion.sql
 ```
 
 Si la base vieja usaba la contraseña publicada o `ALL PRIVILEGES`, cámbiala y reduce los permisos:

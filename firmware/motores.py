@@ -150,7 +150,9 @@ class Eje:
         self.nombre = nombre
         self.cfg = cfg
         self.ppmm = cfg["pasos_por_mm"]
-        self.pos = 0                  # en pasos, desde el origen del homing
+        # Posición al arrancar (sin finales de carrera, es la única referencia)
+        self.arranque = int(round(cfg.get("arranque_mm", 0.0) * self.ppmm))
+        self.pos = self.arranque      # en pasos, en coordenadas de máquina
         self.referenciado = False     # True después de un homing con final de carrera
         self.final_tocado = False
         self._dir_actual = 0
@@ -287,12 +289,21 @@ class Mesa:
     def posicion_mm(self):
         return (self.x.mm(), self.y.mm(), self.z.mm() if self.z else 0.0)
 
+    def posicion_arranque_mm(self):
+        return tuple(e.arranque / e.ppmm if e else 0.0 for e in (self.x, self.y, self.z))
+
+    def en_arranque(self):
+        """True si todos los ejes están en su posición de arranque."""
+        return all(e.pos == e.arranque for e in self.ejes)
+
     def final_tocado(self):
         return [e.nombre for e in self.ejes if e.final_tocado]
 
     # ── Movimientos (generadores) ──────────────────────────────
     def mover_a(self, x_mm, y_mm, z_mm=None):
-        """Mueve a coordenadas de MÁQUINA. Aproxima siempre en sentido + (holgura_mm de cada eje)."""
+        """Mueve a coordenadas de MÁQUINA. Aproxima siempre en sentido + (holgura_mm de cada eje).
+        Si Z baja, primero se mueven X e Y (con Z donde está) y después baja Z; si Z sube,
+        primero sube Z. Así la mesa nunca cruza con el sensor abajo (2026-11-14)."""
         destinos = [(self.x, x_mm), (self.y, y_mm)]
         if self.z and z_mm is not None:
             destinos.append((self.z, z_mm))
@@ -301,6 +312,19 @@ class Mesa:
             if not (0 <= mm <= eje.cfg["recorrido_mm"] + 1e-6):
                 raise ErrorMovimiento("%s = %.2f mm está fuera del recorrido 0–%.1f mm" % (eje.nombre, mm, eje.cfg["recorrido_mm"]))
             objetivos.append((eje, int(round(mm * eje.ppmm))))
+        z = [(e, p) for e, p in objetivos if e is self.z and p != e.pos]
+        xy = [(e, p) for e, p in objetivos if e is not self.z]
+        if not z:
+            etapas = [objetivos]
+        elif z[0][1] < self.z.pos:
+            etapas = [xy, z]            # bajar: primero X e Y, después Z
+        else:
+            etapas = [z, xy]            # subir: primero Z, después X e Y
+        for etapa in etapas:
+            yield from self._mover_objetivos(etapa)
+
+    def _mover_objetivos(self, objetivos):
+        """Generador: mueve a la vez los ejes de `objetivos` [(eje, pasos)], con la holgura."""
         holgura = []
         for e, p in objetivos:
             h = e.cfg.get("holgura_mm", config.HOLGURA_MM)
@@ -316,24 +340,26 @@ class Mesa:
                 raise ErrorMovimiento("final de carrera inesperado en %s" % ", ".join(tocados))
 
     def homing(self):
-        """Generador: referencia los ejes (Z primero; X e Y a la vez) y deja la mesa en 0, 0, 0."""
+        """Generador: referencia los ejes (Z primero; X e Y a la vez). Sin finales de
+        carrera, lleva cada eje a su posición de arranque (arranque_mm)."""
         self.referenciada = False
         self.habilitar(True)
         if self.z:
             yield from self._homing_eje(self.z)
         yield from _en_paralelo(self._homing_eje(self.x), self._homing_eje(self.y))
         self.referenciada = True
-        log("Homing terminado: mesa en el origen X=%.2f Y=%.2f Z=%.2f mm" % self.posicion_mm())
+        log("Mesa en la posición de arranque X=%.2f Y=%.2f Z=%.2f mm" % self.posicion_mm())
 
     def _homing_eje(self, eje):
         rapida, lenta = config.HOMING_VEL_RAPIDA_MM_S, config.HOMING_VEL_LENTA_MM_S
         sep = config.HOMING_SEPARACION_MM
         if eje.final is None:
-            # Sin final de carrera: vuelve a donde estaba al encender (el operador lo dejó en el origen)
+            # Sin final de carrera: vuelve a donde estaba al encender (arranque_mm)
             if not eje.referenciado:
-                log("AVISO: el eje %s no tiene final de carrera; su origen es la posición al encender" % eje.nombre)
+                log("AVISO: el eje %s no tiene final de carrera; al arrancar está en %.1f mm (arranque_mm)"
+                    % (eje.nombre, eje.arranque / eje.ppmm))
                 eje.referenciado = True
-            eje.mover_pasos(-eje.pos)
+            eje.mover_pasos(eje.arranque - eje.pos)
             yield from eje.esperar()
             return
         ppmm = eje.ppmm

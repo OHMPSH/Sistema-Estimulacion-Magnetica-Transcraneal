@@ -184,3 +184,47 @@ test('Sensor: QMC5883P y HMC5883L; cuentas por gauss derivadas; al cambiar de mo
   assert.equal(validarClave('sensor', mezclarSensor(qmc, { rango_g: 12 })).valor.cuentas_por_g, 2500);
   assert.equal(validarClave('sensor', mezclarSensor(hmc, { rango_ga: 8.1 })).valor.lsb_por_ga, 230);
 });
+
+test('General: punto de inicio de la medición (válido, 400, 422 y mezcla parcial)', async () => {
+  const { validarClave, mezclar } = await import('../services/validacionConfiguracion.js');
+  const { POR_DEFECTO } = await import('../services/configuracion.js');
+  const general = POR_DEFECTO.general;
+  assert.deepEqual(general, { inicio_medicion: { x_mm: 0, y_mm: 0, z_mm: 0 } });
+  assert.deepEqual(validarClave('general', general).errores, []);
+  assert.deepEqual(validarClave('general', { inicio_medicion: { x_mm: 100.5, y_mm: 0, z_mm: 1000 } }).errores, []);
+
+  // 400: la clave existe pero falta {valor}
+  espera(correr(v.validarClaveConfiguracion, { params: { clave: 'general' }, body: { inicio_medicion: {} } }), 400);
+  assert.equal(correr(v.validarClaveConfiguracion, { params: { clave: 'general' }, body: { valor: general } }).siguio, true);
+
+  // 422: negativos, más de un decimal, más del tope, textos, campos que faltan o sobran
+  const errores = i => validarClave('general', { inicio_medicion: { ...general.inicio_medicion, ...i } }).errores;
+  assert.match(errores({ x_mm: -1 })[0], /^inicio_medicion\.x_mm /);
+  assert.match(errores({ y_mm: 10.25 })[0], /^inicio_medicion\.y_mm .*un decimal/);
+  assert.match(errores({ z_mm: 1000.1 })[0], /^inicio_medicion\.z_mm /);
+  assert.ok(errores({ x_mm: '5' }).length > 0);
+  assert.ok(errores({ x_mm: null }).length > 0);
+  assert.ok(errores({ w_mm: 1 }).some(e => /desconocido: inicio_medicion\.w_mm/.test(e)));
+  assert.ok(validarClave('general', { inicio_medicion: { x_mm: 0, y_mm: 410 } }).errores.some(e => /z_mm/.test(e)));
+  assert.ok(validarClave('general', { inicio_medicion: [0, 410, 88] }).errores.length > 0);
+  assert.ok(validarClave('general', { otro: 1, ...general }).errores.some(e => /desconocido: otro/.test(e)));
+  assert.ok(validarClave('general', 'texto').errores.length > 0);
+
+  // Valor parcial: se mezcla con el actual
+  const parcial = mezclar(general, { inicio_medicion: { x_mm: 100 } });
+  assert.deepEqual(parcial, { inicio_medicion: { x_mm: 100, y_mm: 0, z_mm: 0 } });
+  assert.deepEqual(validarClave('general', parcial).errores, []);
+});
+
+test('Latido: inicio_medicion sale de la copia de la sesión, y no se manda si la sesión no la tiene', async () => {
+  const { inicioMedicionDe } = await import('../services/validacionConfiguracion.js');
+  assert.deepEqual(inicioMedicionDe({ inicio_medicion: { x_mm: 100, y_mm: 300, z_mm: 50 } }), { x_mm: 100, y_mm: 300, z_mm: 50 });
+  // Solo los tres números, aunque la copia trajera algo más
+  assert.deepEqual(inicioMedicionDe({ inicio_medicion: { x_mm: 0, y_mm: 410, z_mm: 88, extra: 1 } }), { x_mm: 0, y_mm: 410, z_mm: 88 });
+  // Sesión anterior a la migración 009 (NULL) o copia incompleta: sin campo (la Pico usa su predeterminado)
+  assert.equal(inicioMedicionDe(null), null);
+  assert.equal(inicioMedicionDe(undefined), null);
+  assert.equal(inicioMedicionDe({}), null);
+  assert.equal(inicioMedicionDe({ inicio_medicion: { x_mm: 0, y_mm: 410 } }), null);
+  assert.equal(inicioMedicionDe({ inicio_medicion: { x_mm: '0', y_mm: 410, z_mm: 88 } }), null);
+});

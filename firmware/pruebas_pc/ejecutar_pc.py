@@ -3,16 +3,20 @@
 Los motores, el Wi-Fi y el QMC5883P están simulados (stubs/), pero el
 protocolo, el búfer, los lotes, los tiempos de cada movimiento y el
 recorrido en serpentina son los del firmware. Como en la mesa real, no hay
-finales de carrera: la posición al arrancar es el origen (0, 0, 0).
+finales de carrera: al arrancar, la mesa está en POSICION_ARRANQUE_* de
+config.py (0, 410, 88).
 
 El QMC5883P falso mide el campo de la Tierra más el de un imán simulado en
-(--iman X Y) de la mesa, que baja con la distancia y con la altura. Al final
-simula un Ctrl+C para comprobar que la mesa vuelve al origen.
+(--iman X Y Z) de la mesa (mm de máquina), que baja con la distancia. Al
+final simula un Ctrl+C para comprobar que la mesa vuelve a la posición de
+arranque.
 
     PICO_TOKEN=<token> python3 ejecutar_pc.py --url http://127.0.0.1:4100 --segundos 60
     opciones: --sin-wifi DESDE HASTA   (segundos: simula la caída del Wi-Fi)
               --saturar P              (probabilidad de OVFL en cada lectura)
               --hasta-vacio            (termina cuando no hay sesión ni tarea)
+              --inicio X Y Z           (agrega sesion_activa.inicio_medicion al latido,
+                                        como lo hará el servidor; sin él, el del firmware)
 """
 import argparse
 import os
@@ -31,7 +35,8 @@ op.add_argument("--segundos", type=float, default=60)
 op.add_argument("--sin-wifi", type=float, nargs=2, default=None)
 op.add_argument("--saturar", type=float, default=0)
 op.add_argument("--hasta-vacio", action="store_true", help="termina cuando no hay sesión ni tarea")
-op.add_argument("--iman", type=float, nargs=2, default=(20.0, 20.0), help="posición del imán (mm de máquina)")
+op.add_argument("--iman", type=float, nargs=3, default=(20.0, 390.0, 70.0), help="posición del imán (mm de máquina)")
+op.add_argument("--inicio", type=float, nargs=3, default=None, help="inicio_medicion que simula mandar el servidor")
 args = op.parse_args()
 
 secretos = types.ModuleType("secretos")
@@ -52,7 +57,7 @@ def campo_ut():
     bx, by, bz = 20.0, -5.0, 40.0
     if _mesa is not None:
         x, y, z = _mesa.posicion_mm()
-        dx, dy, h = x - args.iman[0], y - args.iman[1], z + 5
+        dx, dy, h = x - args.iman[0], y - args.iman[1], z - args.iman[2] + 5
         r2 = dx * dx + dy * dy + h * h
         f = 150.0 * 125 / (r2 ** 1.5 / 25 + 125)
         bz += f
@@ -62,8 +67,32 @@ def campo_ut():
 
 
 c.sensor.i2c.campo_ut = campo_ut
+
+if args.inicio:
+    _latido_original = main.cliente.latido
+
+    def _latido_con_inicio(*a, **k):
+        status, datos = _latido_original(*a, **k)
+        if datos and datos.get("sesion_activa"):
+            x, y, z = args.inicio
+            datos["sesion_activa"]["inicio_medicion"] = {"x_mm": x, "y_mm": y, "z_mm": z}
+        return status, datos
+
+    main.cliente.latido = _latido_con_inicio
+
+# Registro de los destinos de máquina (para comprobar el recorrido real de la mesa)
+_destinos = []
+_mover_a_original = c.mesa.mover_a
+
+
+def _mover_a(x, y, z=None):
+    _destinos.append((x, y, z))
+    return _mover_a_original(x, y, z)
+
+
+c.mesa.mover_a = _mover_a
 c.sensor.i2c.saturar = args.saturar
-c.verificar_sensor()          # mide el fondo con la mesa en el origen (sin el imán todavía)
+c.verificar_sensor()          # mide el fondo con la mesa en el arranque (sin el imán todavía)
 _mesa = c.mesa
 main.red.conectar_inicial(c.alimentar)
 c.homing_inicial()
@@ -86,4 +115,10 @@ while time.monotonic() - t0 < args.segundos:
         break
 log("  (simulación) Ctrl+C: fase=%s sesión=%s búfer=%d error=%s posición=(%.2f, %.2f, %.2f)" % (
     (c.fase, c.sesion and c.sesion["id"], len(c.bufer), c.error) + c.mesa.posicion_mm()))
+if _destinos:
+    ejes = list(zip(*_destinos))
+    log("  (simulación) %d movimientos; destinos de máquina: X %.1f–%.1f, Y %.1f–%.1f, Z %.1f–%.1f mm; primero %s" % (
+        (len(_destinos), min(ejes[0]), max(ejes[0]), min(ejes[1]), max(ejes[1]),
+         min(z for z in ejes[2] if z is not None), max(z for z in ejes[2] if z is not None), _destinos[0])))
 main.apagar(c)
+log("  (simulación) posición final %s; en arranque: %s" % (c.mesa.posicion_mm(), c.mesa.en_arranque()))

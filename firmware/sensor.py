@@ -210,7 +210,7 @@ class QMC5883P:
         return tuple(c / self.cuentas_por_g * 100 for c in crudos)
 
     def medir_fondo(self, n=None):
-        """Promedia LECTURAS_FONDO lecturas (mesa en el origen, bobina apagada)."""
+        """Promedia LECTURAS_FONDO lecturas (mesa en la posición de arranque, bobina apagada)."""
         n = n or config.LECTURAS_FONDO
         crudos, saturado = self.medir_bloqueando(n)
         self.fondo_ut = self.a_ut(crudos)

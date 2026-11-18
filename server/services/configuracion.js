@@ -10,7 +10,7 @@
  * Si falta alguna clave en la base (por ejemplo, alguien la borró),
  * se usa el valor por defecto de CLAUDE.md 7.2 y se guarda.
  *
- * Los cambios de modo_operacion, barrido y sensor con una sesión
+ * Los cambios de general, modo_operacion, barrido y sensor con una sesión
  * abierta los rechaza el controlador (409), porque cambiarían los
  * datos a mitad de un barrido.
  * ─────────────────────────────────────────────────────────────
@@ -22,6 +22,8 @@ import { difundir } from './tiempoReal.js';
 
 /** Valores por defecto (iguales a la migración 003 y a setup_db.sql) */
 export const POR_DEFECTO = {
+  // Punto de inicio de la medición: el origen de la mesa (migración 009; 2026-11-14)
+  general:        { inicio_medicion: { x_mm: 0, y_mm: 0, z_mm: 0 } },
   modo_operacion: 'simulacion',
   barrido:        { limite_x_mm: 60, limite_y_mm: 60, limite_z_mm: 20, standoff_mm: 5, paso_predeterminado_mm: 5 },
   sensor:         { modelo: 'QMC5883P', rango_g: 30, cuentas_por_g: 1000, lecturas_por_punto: 1, offset_ut: { x: 0, y: 0, z: 0 } },

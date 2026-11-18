@@ -2,19 +2,20 @@
 # banco.py — prueba de banco y calibración, SIN servidor ni Wi-Fi
 #
 # Desde la consola de Thonny, con main.py detenido (botón rojo) y la mesa
-# en el origen (la posición al importar banco es el 0, 0, 0):
+# en la posición de arranque (POSICION_ARRANQUE_* de config.py: X=0,
+# Y=562, Z=88). Todas las coordenadas son de MÁQUINA (mm):
 #
 #   >>> import banco
 #   >>> banco.sensor()                  # Chip ID, fondo y 10 lecturas (cuentas, µT, |B|)
 #   >>> banco.sensor(rango=2)           # lo mismo en el rango de 2 G (2, 8, 12 o 30)
 #   >>> banco.fondo()                   # vuelve a medir el fondo (bobina apagada)
 #   >>> banco.ir(100, 50, 10)           # coordenadas de máquina en mm (con límites)
-#   >>> banco.mover("x", 10)            # 10 mm relativos (negativo = hacia el origen)
+#   >>> banco.mover("x", 10)            # 10 mm relativos (negativo = hacia 0)
 #   >>> banco.pasos("x", 2000)          # pulsos crudos (para calibrar los pulsos/mm)
 #   >>> banco.posicion()
-#   >>> banco.prueba(nx=3, ny=3, paso=10, planos=(0, 10))   # malla pequeña en serpentina
-#   >>> banco.origen()                  # vuelve a 0, 0, 0
-#   >>> banco.apagar()                  # vuelve al origen y deshabilita los drivers
+#   >>> banco.prueba(nx=3, ny=3, paso=10, planos=(0, 10))   # malla pequeña desde INICIO_MEDICION_MM
+#   >>> banco.arranque()                # vuelve a la posición de arranque
+#   >>> banco.apagar()                  # vuelve a la posición de arranque y deshabilita los drivers
 # ═══════════════════════════════════════════════════════════════
 import time
 
@@ -32,8 +33,8 @@ def _m():
     if _mesa is None:
         _mesa = Mesa()
         _mesa.habilitar(True)
-        print("Origen (0, 0, 0) = posición actual. Límites X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
-              % (config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM))
+        print("Posición actual = arranque X=%.1f Y=%.1f Z=%.1f mm. Límites X 0–%.0f, Y 0–%.0f, Z 0–%.0f mm"
+              % (_mesa.posicion_mm() + (config.LIMITE_X_MM, config.LIMITE_Y_MM, config.LIMITE_Z_MM)))
     return _mesa
 
 
@@ -77,11 +78,12 @@ def sensor(n=10, rango=None, cada_ms=200):
 
 
 def fondo():
-    """Vuelve a medir el fondo (mesa en el origen, bobina apagada)."""
+    """Vuelve a medir el fondo (mesa en la posición de arranque, bobina apagada)."""
     return _s().medir_fondo()
 
 
-def ir(x, y, z=0.0):
+def ir(x, y, z=None):
+    """Va a (x, y, z) de máquina. Sin z, Z no se mueve."""
     _correr(_m().mover_a(x, y, z if config.MODO_Z == "motor" else None))
     posicion()
 
@@ -94,7 +96,7 @@ def mover(eje, mm):
 
 def pasos(eje, n, vel_mm_s=5):
     """Pulsos crudos sin rampa larga, para medir cuánto avanza el eje. Sin límites:
-    úsalo solo cerca del origen y vuelve con banco.origen()."""
+    úsalo con cuidado y vuelve con banco.arranque()."""
     m = _m()
     e = {"x": m.x, "y": m.y, "z": m.z}[eje]
     e.mover_pasos(n, vel_mm_s)
@@ -106,13 +108,15 @@ def posicion():
     print("X=%.2f  Y=%.2f  Z=%.2f mm" % _m().posicion_mm())
 
 
-def origen():
+def arranque():
+    """Vuelve a la posición de arranque (POSICION_ARRANQUE_* de config.py)."""
     _correr(_m().homing())
     posicion()
 
 
 def prueba(nx=3, ny=3, paso=10.0, planos=(0,), lecturas=1):
-    """Recorre una malla pequeña en serpentina desde ORIGEN_ZONA_* e imprime cada lectura."""
+    """Recorre una malla pequeña en serpentina desde INICIO_MEDICION_MM (con los SENTIDO_*)
+    e imprime cada lectura. Vuelve a la posición de arranque al terminar."""
     sesion = {
         "id": 0, "paso_mm": paso, "grid_nx": nx, "grid_ny": ny, "z_levels_mm": list(planos),
         "zona_mm": {"x": (nx - 1) * paso, "y": (ny - 1) * paso, "z": max(planos)}, "ultimo_seq": 0,
@@ -133,11 +137,11 @@ def prueba(nx=3, ny=3, paso=10.0, planos=(0,), lecturas=1):
             crudos, saturado = s.medir_bloqueando()
             print("%4d (%6.1f, %6.1f, %5.1f) mm  %s" % (seq, x, y, z, _texto(s, crudos, saturado)))
             seq += 1
-    origen()
+    arranque()
     print("Prueba terminada: %d lecturas" % (seq - 1))
 
 
 def apagar():
-    origen()
+    arranque()
     _m().habilitar(False)
     print("Drivers deshabilitados")

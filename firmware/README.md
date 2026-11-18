@@ -2,7 +2,7 @@
 
 Firmware cliente final de la Pico W para el sistema TMS. Mueve la mesa (NEMA 17 con drivers TB6600), lee el magnetómetro **QMC5883P** de 3 ejes, recorre la malla de cada sesión **en serpentina** y habla con el servidor con el protocolo de [docs/firmware-pico-w.md](../docs/firmware-pico-w.md): latido, sesión activa y lotes de lecturas.
 
-Se comporta igual que el firmware de prueba del Hall 49E ([`../firmware_hall_1d/`](../firmware_hall_1d/README.md)), que ya funcionó con el servidor y la mesa: sin finales de carrera, con el origen en la posición al arrancar, límites de software y regreso al origen al terminar, detener, fallar o con Ctrl+C.
+Se comporta como el firmware de prueba del Hall 49E ([`../firmware_hall_1d/`](../firmware_hall_1d/README.md)): sin finales de carrera, con límites de software y regreso a la posición de arranque al terminar, detener, fallar o con Ctrl+C. **Desde el 2026-11-13** (sección 3): X e Y están intercambiados, la mesa arranca en **X = 0, Y = 410, Z = 88 mm** y la zona de cada sesión empieza en el **punto de inicio de la medición** que manda el servidor.
 
 > **Estado (2026-11-12):** probado en el PC contra el servidor real, con motores, sensor y Wi-Fi simulados (sección 10). **Todavía no se ha probado en la Pico con la mesa y el QMC5883P.** Haz la prueba de banco (sección 7) antes de conectarlo al servidor.
 
@@ -14,7 +14,7 @@ Se comporta igual que el firmware de prueba del Hall 49E ([`../firmware_hall_1d/
 |---|---|
 | `config.py` | **Lo que se ajusta:** límites, pines, factores de los motores, holgura, sensor, tiempos. |
 | `secretos.py` | Wi-Fi, token y URL del servidor. **No se sube a git** (está en `.gitignore`). Se crea a partir de `secretos_ejemplo.py`. |
-| `main.py` | Bucle principal: latido, sesiones, envío de lotes, LED y regreso al origen. Arranca solo al encender. |
+| `main.py` | Bucle principal: latido, sesiones, envío de lotes, LED y regreso a la posición de arranque. Arranca solo al encender. |
 | `sensor.py` | QMC5883P: escaneo I2C, Chip ID, rango, lectura con DRDY y OVFL, promedio, fondo y los dos formatos de envío (sección 5). |
 | `barrido.py` | Malla de la sesión en **serpentina**, coordenadas de zona → máquina, límites y reanudación. |
 | `motores.py` | Ejes con PIO + DMA (los pulsos los genera el hardware), rampa trapezoidal, holgura por eje y homing (con finales de carrera, para cuando se instalen). |
@@ -26,7 +26,7 @@ Se comporta igual que el firmware de prueba del Hall 49E ([`../firmware_hall_1d/
 | `prueba_qmc5883p.py` | Prueba mínima del QMC5883P para Thonny: escaneo I2C (debe salir `0x2c`) y cuentas crudas. Independiente. |
 | `medicion_campo_qmc5883p.py` | Medición con el QMC5883P para Thonny: rango, promedio, fondo, µT, SATURADO y reconexión. Independiente. Ver [docs/sensor-qmc5883p.md](../docs/sensor-qmc5883p.md). |
 | `prueba_hall_49e.py` | Prueba de un Hall 49E en el ADC para Thonny. Independiente. |
-| `prueba_calibracion.py` | Programa independiente para Thonny: pide X, Y, Z en mm, mueve la mesa y regresa al origen. Sirve para calibrar los pulsos por mm ([docs/instructivo-calibracion-y-conexiones.md](../docs/instructivo-calibracion-y-conexiones.md)). |
+| `prueba_calibracion.py` | Programa independiente para Thonny: pide X, Y, Z en mm, mueve la mesa y regresa al origen. **Usa los nombres viejos:** su X es la Y del firmware y su Y es la X. Sirve para calibrar los pulsos por mm ([docs/instructivo-calibracion-y-conexiones.md](../docs/instructivo-calibracion-y-conexiones.md)). |
 | `pruebas_pc/` | Pruebas en el PC (no se copian a la Pico). |
 | `pico_w_cliente_ejemplo.py` | El ejemplo anterior, solo de referencia (no se copia a la Pico). |
 
@@ -41,13 +41,13 @@ Se comporta igual que el firmware de prueba del Hall 49E ([`../firmware_hall_1d/
 | QMC5883P SDA | GP0 (I2C0) | 1 | 100 kHz, dirección 0x2C |
 | QMC5883P SCL | GP1 (I2C0) | 2 | |
 | QMC5883P VCC / GND | 3V3(OUT) / GND | 36 / 38 | **3,3 V, nunca 5 V** |
-| X PUL+ / DIR+ | GP10 / GP11 | 14 / 15 | |
-| Y PUL+ / DIR+ | GP12 / GP13 | 16 / 17 | |
+| X PUL+ / DIR+ (eje corto, 410 mm) | GP10 / GP11 | 14 / 15 | Igual que en `prueba_calibracion.py` |
+| Y PUL+ / DIR+ (eje largo, 562 mm) | GP12 / GP13 | 16 / 17 | Igual que en `prueba_calibracion.py` |
 | Z PUL+ / DIR+ | GP14 / GP15 | 19 / 20 | Con `MODO_Z = "motor"` |
 | ENA+ (los tres TB6600) | GP16 | 21 | `ENA_HABILITADO = 0` |
 | LED de estado | el de la placa | | |
 
-Los pines y los factores son los de `prueba_calibracion.py` (50 pulsos/mm, sin inversiones). Si allí los corregiste, copia los valores finales a `EJE_X`, `EJE_Y` y `EJE_Z`.
+Los pines, los nombres y los factores son los de `prueba_calibracion.py` (50 pulsos/mm, sin inversiones): su `PASOS_POR_MM_X` va en `EJE_X` y su `PASOS_POR_MM_Y` en `EJE_Y`. (El 2026-11-13 se habían intercambiado X e Y; el 2026-11-14 se deshizo a pedido del usuario.)
 
 ### 2.2 TB6600
 
@@ -59,18 +59,29 @@ Los pines y los factores son los de `prueba_calibracion.py` (50 pulsos/mm, sin i
 
 Hoy la mesa no tiene interruptores: todos los ejes llevan `"final": None` y `recorrido_mm` = el límite. El código de homing con finales sigue en `motores.py`; cuando se instalen, basta con poner el GPIO en `"final"` y `"final_nc": True` (interruptor NC entre el GPIO y GND).
 
-## 3. Origen, límites y regreso al origen
+## 3. Posición de arranque, punto de inicio y límites
 
-- El **origen (0, 0, 0)** es la posición de la mesa **cuando arranca el programa**. Antes de ejecutarlo, deja la mesa en el mismo origen que usaste con `prueba_calibracion.py`.
-- La mesa nunca sale de **X 0–410, Y 0–562, Z 0–88 mm** (`LIMITE_*_MM`). Un movimiento fuera se rechaza antes de dar un pulso, y una sesión cuya zona no cabe se rechaza entera (el error se ve en el dashboard).
-- La zona de la sesión empieza en `ORIGEN_ZONA_*_MM` (por defecto, el origen): `x_máquina = ORIGEN_ZONA_X_MM + xMM` (igual en Y y Z). Ya **no** va centrada bajo la bobina.
-- Los drivers quedan **habilitados** todo el tiempo que corre el programa, para que nadie mueva la mesa a mano y se pierda el origen.
-- La mesa **vuelve al origen** al completar una sesión, al detenerla en el dashboard, ante un error, ante un 401 y al detener el programa (**Ctrl+C o el botón rojo de Thonny**): `apagar()` vuelve al origen bloqueando y después deshabilita los drivers. Un segundo Ctrl+C interrumpe ese regreso; en ese caso, regresa la mesa a mano antes de volver a ejecutar.
-- **Nunca se reinicia sola:** ni `machine.reset()` ni watchdog, porque un reinicio tomaría como origen la posición en que quedó la mesa.
+**Coordenadas de máquina** (mm): X de 0 a 410 (eje corto), Y de 0 a 562 (eje largo), Z de 0 a 88 (`LIMITE_*_MM`). La mesa nunca sale de ahí: un movimiento fuera se rechaza antes de dar un pulso, y una sesión cuya zona no cabe se rechaza entera (el error se ve en el dashboard).
+
+- **Posición de arranque** (`POSICION_ARRANQUE_*_MM`): dónde está la mesa cuando arranca el programa. Es la posición de **descanso**: **X = 0, Y = 562, Z = 88** (Y en su máximo y Z arriba). Sin finales de carrera, el firmware no tiene otra forma de saberlo: **deja la mesa ahí antes de ejecutar**.
+- **Punto de inicio de la medición:** dónde está el punto (0, 0, 0) de cada sesión, en coordenadas de máquina. Lo elige un admin en la página (Configuración › General) y el servidor lo manda en el latido como `sesion_activa.inicio_medicion = {x_mm, y_mm, z_mm}`. Si no lo manda (servidor anterior a esa función), se usa `INICIO_MEDICION_MM`, que por defecto es el **origen (0, 0, 0)**, igual que en la página.
+- **Sentido de la zona** (`SENTIDO_X/Y/Z` = +1, +1, +1): desde el punto de inicio, la zona crece hacia dentro de la mesa:
+
+  ```
+  x_máquina = inicio.x + xMM
+  y_máquina = inicio.y + yMM
+  z_máquina = inicio.z + zMM      (el plano z = 0 es el más bajo)
+  ```
+
+  Ejemplo: con el inicio en (0, 0, 0) y una zona de 60 × 60 × 20 mm, la mesa va de (0, 562, 88) a (0, 0, 0), recorre X 0–60, Y 0–60 y Z 0–20, y vuelve a (0, 562, 88).
+- **Orden de los ejes:** para bajar Z, la mesa mueve primero X e Y (con Z donde está) y después baja; para subir, sube Z primero. Así nunca cruza la mesa con el sensor abajo.
+- Los drivers quedan **habilitados** todo el tiempo que corre el programa, para que nadie mueva la mesa a mano y se pierda la posición.
+- La mesa **vuelve a la posición de arranque** al completar una sesión, al detenerla en el dashboard, ante un error, ante un 401 y al detener el programa (**Ctrl+C o el botón rojo de Thonny**). El regreso sube Z primero y luego mueve X e Y. Un segundo Ctrl+C interrumpe ese regreso; en ese caso, lleva la mesa a mano a la posición de arranque antes de volver a ejecutar.
+- **Nunca se reinicia sola:** ni `machine.reset()` ni watchdog, porque un reinicio tomaría como arranque la posición en que quedó la mesa.
 
 ## 4. Recorrido en serpentina
 
-La malla se recorre de forma continua: X avanza hasta el máximo, Y sube un paso y X regresa midiendo punto por punto, y así hasta terminar el plano. Z sube un paso y el plano siguiente se recorre **desde donde quedó la mesa** (Y también va y viene). Entre dos puntos seguidos solo cambia un índice en ±1. La mesa solo vuelve al origen al terminar la sesión.
+La malla se recorre de forma continua (en coordenadas de la zona): X avanza hasta el máximo, Y sube un paso y X regresa midiendo punto por punto, y así hasta terminar el plano. Z sube un paso y el plano siguiente se recorre **desde donde quedó la mesa** (Y también va y viene). Entre dos puntos seguidos solo cambia un índice en ±1. La mesa solo vuelve a la posición de arranque al terminar la sesión. En la mesa, «Y sube» y «Z sube» son movimientos hacia 0 (sección 3).
 
 El orden es un contrato con el servidor (`barrido.indices`). Con `nx = grid_nx`, `ny = grid_ny` y `k` el índice del punto:
 
@@ -95,11 +106,11 @@ La reanudación no cambia: con `lecturas_por_punto = N`, el seq `s` es la lectur
 - `verificar()` escanea el bus y comprueba el Chip ID (`0x00` = `0x80`). Si en su lugar aparece un HMC5883L (0x1E), un QMC5883L (0x0D) o nada, el mensaje lo dice.
 - Inicialización: `0x29 ← 0x06`, `0x0B ← bits << 2` (30 G → 0, 12 G → 1, 8 G → 2, 2 G → 3), `0x0A ← 0xCD` y 20 ms.
 - Cada medición promedia `PROMEDIO_QMC` lecturas (10, unos 50 ms a 200 Hz). Para cada una cede el control mientras espera DRDY (máximo `TIMEOUT_DRDY_MS`, 100 ms) y lee `'<hhh'` (X, Y, Z). Si cualquiera trae OVFL, la medición es **saturada**.
-- Ante un `OSError` del bus, reinicia el chip una vez; si vuelve a fallar, la sesión falla con un error de sensor, se manda lo ya medido y la mesa vuelve al origen.
+- Ante un `OSError` del bus, reinicia el chip una vez; si vuelve a fallar, la sesión falla con un error de sensor, se manda lo ya medido y la mesa vuelve a la posición de arranque.
 
 ### 5.2 Fondo
 
-Al arrancar, con la mesa en el origen y **la bobina apagada**, se promedian `LECTURAS_FONDO` (100) lecturas en 30 G y el log imprime el fondo por eje:
+Al arrancar, con la mesa en la posición de arranque y **la bobina apagada**, se promedian `LECTURAS_FONDO` (100) lecturas en 30 G y el log imprime el fondo por eje:
 
 ```
 Fondo (100 lecturas, 30 G): Bx +20.00  By -5.00  Bz +40.10  |B| 45.09 µT
@@ -127,20 +138,21 @@ Con la serpentina, **la mitad de las filas van en X−**, así que cada punto de
 
 ## 7. Prueba de banco (sin servidor)
 
-Con `main.py` detenido (botón rojo de Thonny) y la mesa en el origen, en la consola:
+Con `main.py` detenido (botón rojo de Thonny) y la mesa en la posición de arranque, en la consola (coordenadas de máquina):
 
 ```python
 >>> import banco
 >>> banco.sensor()                   # Chip ID, fondo y 10 lecturas: cuentas, µT, |B| y SATURADO
 >>> banco.sensor(rango=2)            # lo mismo en 2 G (2, 8, 12 o 30)
 >>> banco.fondo()                    # vuelve a medir el fondo
->>> banco.ir(100, 50, 10)            # mm de máquina, con los mismos límites
+>>> banco.ir(100, 300, 60)           # mm de máquina, con los mismos límites (sin z, Z no se mueve)
 >>> banco.mover("x", 10)             # relativo
->>> banco.prueba(nx=3, ny=3, paso=10, planos=(0, 10))   # malla pequeña en serpentina
->>> banco.apagar()                   # vuelve al origen y deshabilita los drivers
+>>> banco.prueba(nx=3, ny=3, paso=10, planos=(0, 10))   # malla pequeña desde INICIO_MEDICION_MM
+>>> banco.arranque()                 # vuelve a la posición de arranque
+>>> banco.apagar()                   # vuelve a la posición de arranque y deshabilita los drivers
 ```
 
-`banco.prueba` recorre la malla desde `ORIGEN_ZONA_*` en el mismo orden que una sesión, imprime cada lectura y vuelve al origen.
+`banco.prueba` recorre la malla desde `INICIO_MEDICION_MM`, con los mismos sentidos y el mismo orden que una sesión, imprime cada lectura y vuelve a la posición de arranque.
 
 ## 8. Instalar y calibrar
 
@@ -165,8 +177,8 @@ Para que el firmware no arranque al encender (por ejemplo, para editar), pulsa *
 
 1. **Sensor:** primero `prueba_qmc5883p.py` (debe decir `I2C: ['0x2c']`); después `banco.sensor()`. Comprueba los ejes con un imán como dice [docs/sensor-qmc5883p.md](../docs/sensor-qmc5883p.md), sección 5.
 2. **Pulsos por mm:** con `prueba_calibracion.py` (instructivo en `docs/`). Copia los factores finales a `config.py`.
-3. **Juego del husillo:** `banco.ir(50, 50)`, `banco.ir(60, 60)`, `banco.ir(50, 50)` varias veces, midiendo con un calibrador. Si ida y vuelta difieren más de 0,1 mm, sube `holgura_mm` de ese eje.
-4. **Velocidad:** `VEL_MAX_MM_S = 60` y `ACEL_MM_S2 = 300`. Sin finales de carrera, un paso perdido corre el origen: si un motor vibra o se salta pasos, bájalos.
+3. **Juego del husillo:** `banco.ir(50, 350)`, `banco.ir(60, 360)`, `banco.ir(50, 350)` varias veces, midiendo con un calibrador. Si ida y vuelta difieren más de 0,1 mm, sube `holgura_mm` de ese eje.
+4. **Velocidad:** `VEL_MAX_MM_S = 60` y `ACEL_MM_S2 = 300`. Sin finales de carrera, un paso perdido corre la posición: si un motor vibra o se salta pasos, bájalos.
 
 ## 9. Conexión con el servidor (la laptop)
 
@@ -186,31 +198,31 @@ Si el servidor está en **modo simulación**, el log de la Pico lo avisa: un adm
 
 ### Primera prueba
 
-1. Deja la mesa en el origen, la bobina apagada, y ejecuta `main.py` (F5). Deben salir el fondo, `Sensor: QMC5883P en 0x2C`, `Wi-Fi: conectado` y `Latido: servidor en línea (modo real)`. El LED queda fijo.
+1. Deja la mesa en la posición de descanso (X = 0, Y = 562, Z = 88), la bobina apagada, y ejecuta `main.py` (F5). Deben salir el fondo, `Sensor: QMC5883P en 0x2C`, `Wi-Fi: conectado` y `Latido: servidor en línea (modo real)`. El LED queda fijo.
 2. Inicia una sesión pequeña: zona 20 × 10 × 10 mm con paso 10 mm (3 × 2 × 2 = 12 puntos). La consola imprime cada lectura (Bx, By, Bz, |B| en µT) y los lotes aceptados; el dashboard dibuja los puntos.
-3. La mesa recorre la serpentina, dice «malla completa» y vuelve al origen. **Cierra la sesión** en el dashboard (las sesiones reales no se cierran solas).
-4. Prueba también **Detener** a mitad de una sesión: la mesa se detiene con el siguiente latido y vuelve al origen.
+3. La mesa va al punto de inicio, recorre la serpentina, dice «malla completa» y vuelve a la posición de arranque. El servidor cierra la sesión al completar la malla; si no, ciérrala en el dashboard.
+4. Prueba también **Detener** a mitad de una sesión: la mesa se detiene con el siguiente latido y vuelve a la posición de arranque.
 
 ## 10. LED y comportamiento ante fallas
 
 | LED | Estado |
 |---|---|
 | Parpadeo rápido (5 Hz) | Desde que se alimenta hasta que el servidor responde; también si se pierde el Wi-Fi o el servidor |
-| **Fijo** | Conectada al servidor (en espera, volviendo al origen o midiendo) |
-| Tres destellos y pausa | Error: zona fuera de los límites, sensor o movimiento (el motivo está en la consola y en el dashboard) |
+| **Fijo** | Conectada al servidor (en espera, volviendo a la posición de arranque o midiendo) |
+| Tres destellos y pausa | Error: zona fuera de los límites (desde el punto de inicio), inicio inválido, sensor o movimiento (el motivo está en la consola y en el dashboard) |
 | Parpadeo lento (1 Hz) | 401: token inválido o dispositivo desactivado |
 
 | Situación | Qué hace el firmware |
 |---|---|
 | Se cae el Wi-Fi | Sigue midiendo; guarda hasta `MAX_BUFER` (1000) lecturas en RAM. Si se llena, pausa el barrido. Al volver la red, reenvía los mismos `seq`. |
 | 5xx o timeout | Reintenta el mismo lote a los 0,25, 0,5, 1, 2, 4 y 8 s. |
-| `sesion_activa = null` o 404/409 en un lote | Para los motores, descarta lo pendiente y vuelve al origen. |
-| Malla completa | Vuelve al origen; los drivers siguen habilitados. |
-| Error de sensor o de movimiento | Para, manda lo ya medido y vuelve al origen. No reintenta esa sesión; la siguiente vuelve a verificar el sensor. |
+| `sesion_activa = null` o 404/409 en un lote | Para los motores, descarta lo pendiente y vuelve a la posición de arranque. |
+| Malla completa | Vuelve a la posición de arranque; los drivers siguen habilitados. |
+| Error de sensor o de movimiento | Para, manda lo ya medido y vuelve a la posición de arranque. No reintenta esa sesión; la siguiente vuelve a verificar el sensor. |
 | La zona no cabe | No mueve nada; aviso en el dashboard. |
-| 401 | Para todo, vuelve al origen y prueba el latido cada 30 s. |
-| Ctrl+C / botón rojo | Vuelve al origen (bloqueando) y deshabilita los drivers. |
-| Corte de luz | Al volver, la posición al arrancar es el origen: **deja la mesa en el origen antes de encender**. El latido trae `ultimo_seq` y el barrido sigue en `ultimo_seq + 1`. |
+| 401 | Para todo, vuelve a la posición de arranque y prueba el latido cada 30 s. |
+| Ctrl+C / botón rojo | Vuelve a la posición de arranque (bloqueando) y deshabilita los drivers. |
+| Corte de luz | Al volver, el firmware supone que la mesa está en la posición de arranque: **llévala ahí antes de encender**. El latido trae `ultimo_seq` y el barrido sigue en `ultimo_seq + 1`. |
 
 ## 11. Pruebas en el PC
 
@@ -226,9 +238,13 @@ Prueba la rampa y el PIO; la malla (el mismo **conjunto** de puntos que `server/
 cd firmware/pruebas_pc && PICO_TOKEN=<token> python3 ejecutar_pc.py --url http://127.0.0.1:4100 --segundos 120 --hasta-vacio
 ```
 
-Corre `main.Controlador` contra un servidor de verdad (modo real y una sesión abierta), con un imán simulado en `--iman X Y`, y al final simula un Ctrl+C. Opciones: `--sin-wifi DESDE HASTA`, `--saturar P` (OVFL) y `--hasta-vacio`.
+Corre `main.Controlador` contra un servidor de verdad (modo real y una sesión abierta), con un imán simulado en `--iman X Y Z` (mm de máquina), y al final simula un Ctrl+C. Imprime el rango de destinos de máquina que recorrió la mesa. Opciones: `--sin-wifi DESDE HASTA`, `--saturar P` (OVFL), `--hasta-vacio` e `--inicio X Y Z` (agrega `inicio_medicion` al latido, como lo hará el servidor).
 
 Verificado el 2026-11-12 contra una MariaDB temporal y el servidor de hoy (modo «cuentas HMC»): 12 puntos (3 × 2 × 2) en el orden exacto del contrato; 147 puntos (7 × 7 × 3) con Ctrl+C a mitad de un movimiento (la mesa volvió al origen), caída de Wi-Fi, reanudación en `ultimo_seq + 1` y 3 % de OVFL (147 `seq` sin huecos ni duplicados, posiciones idénticas al contrato, saturadas con −4096); y un 401 a mitad del barrido (regreso al origen).
+
+Verificado el 2026-11-13 con la posición de arranque y el punto de inicio (servidor actual con QMC5883P): sin `inicio_medicion`, la mesa recorrió X 0–20, Y 410→400, Z 88→78 desde (0, 410, 88); con `--inicio 100 300 50` (simula el servidor), 147 puntos en X 100–160, Y 300→240, Z 50→30, con Ctrl+C a mitad de un movimiento, reanudación y 2 % de OVFL (147 `seq` en el orden del contrato); una zona que no cabe desde (540, 410, 88) se rechazó sin mover nada y con el error en el dashboard. Siempre volvió a (0, 410, 88).
+
+Verificado el 2026-11-14 con el descanso en (0, 562, 88), el inicio en (0, 0, 0) del servidor y X+, Y+, Z+: 147 puntos (60 × 60 × 20, paso 10) con destinos X 0–60, Y 0–60, Z 0–20 y regreso a (0, 562, 88); una zona que no cabe desde X = 380 se rechazó sin mover nada. 27 pruebas en `prueba_logica.py` (incluido el orden de los ejes).
 
 ## 12. Límites conocidos
 

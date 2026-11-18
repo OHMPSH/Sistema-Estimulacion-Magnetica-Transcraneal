@@ -7,16 +7,22 @@
  *   - notas editables (admin, o el operador que inició la sesión);
  *   - Exportar CSV: enlace al CSV que genera el servidor, con metadatos;
  *   - Eliminar (admin) con un modal que explica que es un borrado lógico;
- *   - "Ver eliminadas" y Restaurar, solo para admin.
+ *   - "Ver eliminadas" y Restaurar, solo para admin;
+ *   - Ver sábana 3D: carga las lecturas de la sesión (GET /sesiones/:id/mediciones)
+ *     y las dibuja con el mismo componente del dashboard (Superficie3D).
  * La lista se recarga sola con los eventos `sesion` del SSE.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, enviarJSON, leerJSON } from '../api/cliente.js';
 import { useConfig } from '../context/ConfigContext.jsx';
 import { useEventoStream } from '../hooks/useStream.js';
 import { ModalConfirmacion } from '../components/modals/ModalConfirmacion.jsx';
-import { PASOS_SUGERIDOS, MEDIOS, MODOS, etiquetaPaso, etiquetaZona, etiquetaMedio, etiquetaMedioCorta, etiquetaModo } from '../utils/geometria.js';
+import { PASOS_SUGERIDOS, MEDIOS, MODOS, mallaDeZona, limitesDeBarrido, etiquetaPaso, etiquetaZona, etiquetaMedio, etiquetaMedioCorta, etiquetaModo } from '../utils/geometria.js';
 import { numero, entero, fechaHora, diaLocal, duracion } from '../utils/formato.js';
+import { LimiteErrores } from '../components/ui/LimiteErrores.jsx';
+
+// Plotly pesa: se carga solo si alguien abre una sábana 3D
+const Superficie3D = lazy(() => import('../components/charts/Superficie3D.jsx'));
 
 const NOTAS_MAXIMO = 5000;
 
@@ -64,8 +70,56 @@ function EditorNotas({ sesion, puedeEditar, onGuardada }) {
   );
 }
 
-function SesionCard({ sesion, usuario, zona, onEliminar, onRestaurar, onActualizada }) {
+/** Lecturas de GET /sesiones/:id/mediciones en el formato que usa el dashboard */
+const comoLectura = r => ({
+  seq: r.seq, xMM: r.x_mm, yMM: r.y_mm, zMM: r.z_mm,
+  bx: r.bx, by: r.by, bz: r.bz, magnitud: r.magnitud, saturado: r.saturado,
+});
+
+/**
+ * Sábana 3D de una sesión pasada. Las lecturas se piden una vez, al abrirla;
+ * la malla sale de la zona y el paso guardados con la sesión (las anteriores
+ * a la migración 007 no tienen zona: se usan los límites de la base).
+ */
+function SabanaSesion({ sesion, barrido }) {
+  const [estado, setEstado] = useState({ cargando: true, lecturas: [], error: '' });
+  useEffect(() => {
+    let vigente = true;
+    apiFetch(`/api/sesiones/${sesion.id}/mediciones`)
+      .then(leerJSON)
+      .then(json => {
+        if (!vigente) return;
+        if (json.ok) setEstado({ cargando: false, lecturas: json.data.map(comoLectura), error: '' });
+        else setEstado({ cargando: false, lecturas: [], error: json.error || 'No se pudieron cargar las lecturas.' });
+      })
+      .catch(() => { if (vigente) setEstado({ cargando: false, lecturas: [], error: 'No se pudo conectar con el servidor.' }); });
+    return () => { vigente = false; };
+  }, [sesion.id]);
+
+  const malla = useMemo(() => {
+    const zonaSesion = sesion.zona_x_mm != null
+      ? { x: Number(sesion.zona_x_mm), y: Number(sesion.zona_y_mm), z: Number(sesion.zona_z_mm) }
+      : limitesDeBarrido(barrido);
+    return mallaDeZona(zonaSesion, Number(sesion.paso_mm));
+  }, [sesion, barrido]);
+
+  if (estado.cargando) return <p className="texto-secundario sabana-historial" role="status">Cargando las lecturas de la sesión {sesion.id}…</p>;
+  if (estado.error) return <p className="texto-error sabana-historial" role="alert">{estado.error}</p>;
+  return (
+    <div className="sabana-historial">
+      <LimiteErrores nombre="Sábana 3D">
+        <Suspense fallback={<p className="texto-secundario" role="status">Cargando la sábana 3D…</p>}>
+          <Superficie3D mediciones={estado.lecturas} malla={malla} sesionId={sesion.id}
+            titulo={`Sábana 3D de la sesión ${sesion.id}`} nivelTitulo="h4" />
+        </Suspense>
+      </LimiteErrores>
+    </div>
+  );
+}
+
+function SesionCard({ sesion, usuario, zona, barrido, onEliminar, onRestaurar, onActualizada }) {
   const [abierta, setAbierta] = useState(false);
+  const [verSabana, setVerSabana] = useState(false);
   const esAdmin = usuario.rol === 'admin';
   const puedeEditar = esAdmin || (usuario.rol === 'operador' && sesion.usuario_id === usuario.id);
   const esperados = sesion.puntos_esperados;
@@ -138,6 +192,12 @@ function SesionCard({ sesion, usuario, zona, onEliminar, onRestaurar, onActualiz
                 <i className="bi bi-download" aria-hidden="true" /> Exportar CSV
               </a>
             )}
+            {!eliminada && recibidos > 0 && (
+              <button type="button" className="btn-tms btn-secundario" aria-expanded={verSabana}
+                aria-controls={`sabana-${sesion.id}`} onClick={() => setVerSabana(v => !v)}>
+                <i className={`bi ${verSabana ? 'bi-eye-slash' : 'bi-badge-3d'}`} aria-hidden="true" /> {verSabana ? 'Ocultar sábana 3D' : 'Ver sábana 3D'}
+              </button>
+            )}
             {esAdmin && !eliminada && !sesion.activa && (
               <button type="button" className="btn-tms btn-stop" onClick={() => onEliminar(sesion)}>
                 <i className="bi bi-trash3" aria-hidden="true" /> Eliminar
@@ -149,6 +209,12 @@ function SesionCard({ sesion, usuario, zona, onEliminar, onRestaurar, onActualiz
               </button>
             )}
           </div>
+
+          {verSabana && !eliminada && (
+            <div id={`sabana-${sesion.id}`}>
+              <SabanaSesion sesion={sesion} barrido={barrido} />
+            </div>
+          )}
         </div>
       )}
     </article>
@@ -329,7 +395,7 @@ export function HistorialPage({ usuario }) {
         </div>
       ) : (
         visibles.map(s => (
-          <SesionCard key={s.id} sesion={s} usuario={usuario} zona={zona}
+          <SesionCard key={s.id} sesion={s} usuario={usuario} zona={zona} barrido={config?.barrido}
             onEliminar={eliminar} onRestaurar={restaurar} onActualizada={actualizada} />
         ))
       )}

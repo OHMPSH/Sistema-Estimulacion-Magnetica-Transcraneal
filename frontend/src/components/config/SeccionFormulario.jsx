@@ -10,6 +10,8 @@
  *
  * campos: [{ ruta: ['ms_por_punto', 'DC'], etiqueta, tipo: 'entero'|'numero'|'select'|'bool',
  *            opciones?: [{valor, etiqueta}], unidad?, ayuda?, paso? }]
+ * relleno (opcional): { etiqueta, valores: { 'ruta.del.campo': valor } } — un botón
+ *   que escribe esos valores en los campos (no guarda: el admin revisa y guarda).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useConfig } from '../../context/ConfigContext.jsx';
@@ -24,7 +26,7 @@ function escribirRuta(obj, ruta, valor) {
 }
 const aTexto = v => (v === undefined || v === null ? '' : String(v));
 
-export function SeccionFormulario({ clave, titulo, descripcion, campos, soloLectura, extra = null, transformar }) {
+export function SeccionFormulario({ clave, titulo, descripcion, campos, soloLectura, extra = null, transformar, relleno = null }) {
   const { config, guardarClave } = useConfig();
   const actual = config?.[clave];
   const [borrador, setBorrador] = useState({});
@@ -134,6 +136,15 @@ export function SeccionFormulario({ clave, titulo, descripcion, campos, soloLect
           );
         })}
       </fieldset>
+
+      {relleno && !soloLectura && (
+        <div className="fila-formulario">
+          <button type="button" className="btn-tms btn-secundario"
+            onClick={() => setBorrador(b => ({ ...b, ...Object.fromEntries(Object.entries(relleno.valores).map(([k, v]) => [k, aTexto(v)])) }))}>
+            {relleno.etiqueta}
+          </button>
+        </div>
+      )}
 
       {extra}
 
