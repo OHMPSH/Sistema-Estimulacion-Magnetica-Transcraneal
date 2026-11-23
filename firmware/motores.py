@@ -141,7 +141,22 @@ if rp2:
         jmp(y_dec, "bajo")
         jmp(x_dec, "paso")
 
-_DMA_ABORT = 0x50000444
+def es_rp2350():
+    """True en la Pico 2 / Pico 2 W (RP2350)."""
+    try:
+        import sys
+        return "RP2350" in getattr(sys.implementation, "_machine", "")
+    except Exception:
+        return False
+
+
+# Registro CHAN_ABORT del DMA: 0x50000444 en el RP2040 (Pico W) y
+# 0x50000464 en el RP2350 (Pico 2 W). En el RP2350, 0x444 es TIMER1, que
+# guarda lo que se le escribe: con esa dirección, detener() se quedaba
+# esperando para siempre y la Pico se colgaba al parar a mitad de un movimiento.
+_DMA_ABORT = 0x50000464 if es_rp2350() else 0x50000444
+_ESPERA_ABORT_US = 10_000     # el abort tarda unos ciclos; nunca se espera más que esto
+# PIO0 y PIO1 (y el TXF de cada SM) están en las mismas direcciones en los dos chips
 _PIO_BASE = (0x50200000, 0x50300000)
 
 
@@ -242,8 +257,12 @@ class Eje:
         if self.dma:
             mascara = 1 << self.dma.channel
             mem32[_DMA_ABORT] = mascara
+            t_abort = time.ticks_us()
             while mem32[_DMA_ABORT] & mascara:
-                pass
+                if time.ticks_diff(time.ticks_us(), t_abort) > _ESPERA_ABORT_US:
+                    log("AVISO: el DMA del eje %s no confirmó el abort en %d µs; se sigue igual"
+                        % (self.nombre, _ESPERA_ABORT_US))
+                    break
         self.sm.active(0)
         hechos = min(pasos_hechos(self._segmentos, transcurrido), abs(self._objetivo - self.pos))
         self.pos += hechos * self._dir_actual

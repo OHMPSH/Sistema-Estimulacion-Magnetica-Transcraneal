@@ -158,7 +158,7 @@ Con `main.py` detenido (botón rojo de Thonny) y la mesa en la posición de arra
 
 ### 8.1 MicroPython
 
-1. Descarga el firmware **Raspberry Pi Pico W** (no Pico 2 W) de micropython.org, **versión 1.22 o posterior** (hace falta `rp2.DMA`; con una versión anterior los movimientos bloquean el programa y el firmware lo avisa).
+1. Descarga de micropython.org el firmware de **tu placa**, **versión 1.22 o posterior** (hace falta `rp2.DMA`; con una versión anterior los movimientos bloquean el programa y el firmware lo avisa): **Raspberry Pi Pico W** (RP2040) o **Raspberry Pi Pico 2 W** (RP2350). Las dos funcionan desde `pico-tms-2.3`: `motores.py` detecta el chip y usa la dirección de CHAN_ABORT del DMA de cada uno (0x50000444 en el RP2040, 0x50000464 en el RP2350). Antes, en la Pico 2 W, detener a mitad de un movimiento colgaba el programa: no volvía al arranque, Thonny no mostraba nada, el LED seguía parpadeando y el servidor la marcaba desconectada.
 2. Conecta la Pico con **BOOTSEL** pulsado, suelta el botón y arrastra el `.uf2` a la unidad `RPI-RP2`.
 
 ### 8.2 Cargar los archivos

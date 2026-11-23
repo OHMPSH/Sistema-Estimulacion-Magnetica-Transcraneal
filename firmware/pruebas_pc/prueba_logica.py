@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import types
 import unittest
 
@@ -243,6 +244,30 @@ class Limites(unittest.TestCase):
         etapas.clear()
         correr(mesa.homing())                    # vuelta al descanso: Z primero
         self.assertEqual(etapas[0], "Z")
+
+    def test_detener_no_se_cuelga(self):
+        """Si el bit de CHAN_ABORT nunca se borra (la dirección del RP2040 en un RP2350), detener() termina igual."""
+        self.assertEqual(motores._DMA_ABORT, 0x50000444, "en CPython (sin RP2350) queda la dirección del RP2040")
+
+        class SiempreUno:
+            def __getitem__(self, direccion):
+                return 0xFFFFFFFF
+
+            def __setitem__(self, direccion, valor):
+                pass
+
+        mesa = motores.Mesa()
+        original = motores.mem32
+        motores.mem32 = SiempreUno()
+        try:
+            mesa.x.mover_pasos(5000)          # 100 mm: sigue «en movimiento» al detener
+            self.assertTrue(mesa.x.ocupado())
+            t0 = time.monotonic()
+            mesa.detener()
+            self.assertLess(time.monotonic() - t0, 1.0)
+            self.assertFalse(mesa.x.ocupado())
+        finally:
+            motores.mem32 = original
 
     def test_holgura_por_eje(self):
         mesa = motores.Mesa()

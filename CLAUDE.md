@@ -27,7 +27,7 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 | Pieza | Detalle |
 |---|---|
 | Servidor | Raspberry Pi 5 con Node.js, MariaDB y Nginx. **Esta carpeta NO es la Raspberry**: el usuario descargará el proyecto ahí y lo levantará después. |
-| Microcontrolador | **Raspberry Pi Pico W** (RP2040). No es la Pico 2W, aunque algunos textos viejos digan "Pico 2W". |
+| Microcontrolador | **Raspberry Pi Pico 2 W** (RP2350, MicroPython 1.29) en la mesa desde noviembre de 2026; el firmware también funciona en la **Pico W** (RP2040): `motores.py` detecta el chip (ver la nota «Pico 2 W: cuelgue al detener»). |
 | Sensor magnético (3 ejes) | Módulo **QMC5883P** por I2C, dirección **0x2C** (confirmado y funcionando, 2026-11-12). La tienda lo vendía como HMC5883L, pero **no lo es**: ni HMC5883L (0x1E) ni QMC5883L (0x0D). Rangos de 2, 8, 12 y 30 G; 200 Hz. Ficha completa en [docs/sensor-qmc5883p.md](docs/sensor-qmc5883p.md). |
 | Sensor Hall (1 eje) | **49E** (SS49E) lineal, analógico, en GP26/ADC0 con 3,3 V: unos 9,24 mV/mT y unos 0,09 mT por cuenta del ADC. Lo usa el firmware de prueba [firmware_hall_1d/](firmware_hall_1d/README.md). |
 | Posicionamiento | Mesa cartesiana XY con motores NEMA 17 y husillos T8 (0,04 mm por paso teórico). Requisito: error posicional menor que ±1 mm. Desde el 2026-11-14, en el firmware X es el eje corto (0–410 mm, GP10/GP11), Y el largo (0–562 mm, GP12/GP13) y Z 0–88 mm, como en `prueba_calibracion.py`; la mesa descansa en **X = 0, Y = 562, Z = 88** (sin finales de carrera) y cada medición empieza en el origen **(0, 0, 0)** |
@@ -434,6 +434,12 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Para que la Pico alcance el backend de la laptop**, arráncalo con `cd server && HOST=0.0.0.0 npm run dev`. El `.env` tiene `HOST=127.0.0.1`, y dotenv no pisa una variable que ya existe. La Pico usa `SERVIDOR = "http://<IP de la laptop>:4000"`.
   - Red del laboratorio: `TP-LINK_5D41`; la laptop tenía la IP 192.168.0.186 (puede cambiar).
   - Las credenciales y el token están en `firmware_hall_1d/secretos.py` (ignorado por git). **No los copies a otros archivos.**
+
+**Pico 2 W: cuelgue al detener a mitad de un movimiento (2026-11-18, corregido a pedido del usuario; `FIRMWARE = "pico-tms-2.3"`):**
+- **Síntoma** (en la mesa, con la Pico 2 W): al pulsar Detener mientras un eje se movía, el log terminaba en «Parada: … vuelve a la posición de arranque», la mesa no regresaba, Thonny no mostraba nada, el LED seguía parpadeando (lo mueve un `Timer`) y el servidor marcaba la Pico desconectada (sin latidos).
+- **Causa:** `Eje.detener()` escribía la máscara del canal en `0x50000444` y esperaba a que el bit se borrara. Esa es la dirección de CHAN_ABORT del **RP2040**; en el **RP2350** CHAN_ABORT está en `0x50000464` y `0x444` es TIMER1, que guarda lo escrito, así que el `while` no terminaba nunca. Solo pasaba al detener durante un movimiento (no entre puntos).
+- **Corrección** (`firmware/motores.py`): `es_rp2350()` (por `sys.implementation._machine`) elige la dirección, y la espera tiene un límite de 10 ms (`_ESPERA_ABORT_US`) con un aviso en el log. Las direcciones del PIO (TXF) y los DREQ de PIO0/PIO1 son iguales en los dos chips. Prueba nueva `test_detener_no_se_cuelga` (28 pruebas en el PC). **Pendiente: probarlo en la mesa** (detener a mitad de un movimiento y comprobar que vuelve al descanso).
+- **Problema físico resuelto el mismo periodo (no era del firmware):** reinicios y desconexiones USB a mitad de una medición por el cableado del shield (bus de tierras recableado); al corregir el cableado, todo funcionó.
 
 **Descanso en (0, 562, 88) y medición desde el origen (2026-11-14, pedido por el usuario; reemplaza parte de las dos notas siguientes):**
 - **Qué pasaba:** el firmware suponía el arranque en X = 0 (eje largo), Y = 410 (eje corto), pero la mesa real descansa con el eje corto en 0 y el largo en su máximo. Al medir (y en la prueba de banco), el eje corto empujaba contra su tope.

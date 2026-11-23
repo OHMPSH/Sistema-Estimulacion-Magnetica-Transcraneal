@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794633789.4834664,
-    "seen": 1794633792.3112783,
-    "ast_hash": "abf15e2a51fd8d8593c4844c267e4c59",
+    "mtime": 1795044367.868834,
+    "seen": 1795044370.9387665,
+    "ast_hash": "0cf3ec09e5bb261cbab00f7f640cf5df",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -666,9 +666,9 @@
     "semantic_hash": ""
   },
   "firmware/config.py": {
-    "mtime": 1794625064.9422228,
-    "seen": 1794632988.6549602,
-    "ast_hash": "f548b182934f1470968ebc27745bfe59",
+    "mtime": 1795044350.4682267,
+    "seen": 1795044370.9385262,
+    "ast_hash": "c1b239c342addd375aa7c0d2f4cdaa3e",
     "semantic_hash": ""
   },
   "firmware/led.py": {
@@ -684,9 +684,9 @@
     "semantic_hash": ""
   },
   "firmware/motores.py": {
-    "mtime": 1794617574.621408,
-    "seen": 1794618023.9594624,
-    "ast_hash": "0f6faa798cbf8316a2f6afc05d80b907",
+    "mtime": 1795044249.868537,
+    "seen": 1795044370.9385347,
+    "ast_hash": "89dffe37aa944bcb7ebdb96ff76a18c3",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/ejecutar_pc.py": {
@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/prueba_logica.py": {
-    "mtime": 1794625134.0225549,
-    "seen": 1794632988.6549795,
-    "ast_hash": "dac8c6127820a38c7be8e5f7b8ed04fa",
+    "mtime": 1795044327.639417,
+    "seen": 1795044370.9385455,
+    "ast_hash": "f4d1a786a4acd014b42a5abf5ab0692c",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/_compat.py": {
@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "firmware/README.md": {
-    "mtime": 1794618504.7965786,
-    "seen": 1794618542.2869024,
-    "ast_hash": "4c6cf3d7f8468abe72ae1646c2523c40",
+    "mtime": 1795044367.868834,
+    "seen": 1795044370.9388196,
+    "ast_hash": "59aa4f09de5d737c97a83eb7036b3d17",
     "semantic_hash": ""
   },
   "firmware/prueba_calibracion.py": {

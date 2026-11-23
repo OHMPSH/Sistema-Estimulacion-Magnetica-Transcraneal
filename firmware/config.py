@@ -23,7 +23,7 @@
 # Unidades: mm, mm/s, mm/s², ms, µT.
 # ═══════════════════════════════════════════════════════════════
 
-FIRMWARE = "pico-tms-2.2"          # se manda en cada latido (máx. 40 caracteres)
+FIRMWARE = "pico-tms-2.3"          # se manda en cada latido (máx. 40 caracteres)
 
 # ── Límites de la mesa (medidos con prueba_calibracion.py) ─────
 # Coordenadas de MÁQUINA: cada eje va de 0 a su límite. La mesa nunca va a
