@@ -2,7 +2,172 @@
 
 Este archivo es la fuente de contexto para cualquier sesión de Claude que trabaje en este repositorio. Léelo completo antes de tocar código. Al terminar una fase, **actualiza la sección "Estado de las fases"** (y lo que haya cambiado en las demás secciones) para que la siguiente sesión parta del estado real.
 
-Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md). **Las 8 fases están hechas** (ver la sección 6); lo que queda está en las notas de la Fase 8.
+Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md). **Las 8 fases están hechas** (ver la sección 6). **La versión funcional en la mesa quedó registrada el 2026-11-23 en la sección 0**: empieza por ahí; lo que queda está en 0.9 y en las notas de la Fase 8. **Es la base de referencia para las mejoras: el punto de restauración y cómo regresar a él están en 0.10.**
+
+---
+
+## 0. Versión funcional registrada (2026-11-23)
+
+El usuario confirma que **esta versión funciona en la mesa** y pidió dejarla registrada sin modificar nada más. Esta sección es la foto del estado real al 2026-11-23, contrastada con el código, la base local (solo `SELECT`) y las pruebas. **Si algo de las secciones siguientes contradice esta, manda esta** (y, por encima de todo, el código).
+
+### 0.1 Git y versiones
+
+- **HEAD:** `232ca28` (2026-11-23). El código funcional es `8ad6a0d` «ya jaló papá» (2026-11-18, incluye la app móvil, las capturas, `docs/tesis/` y todos los cambios del 13 al 18 de noviembre) más `9b3f81c` (2026-11-23: arreglo del cuelgue de la Pico 2 W al detener). Los demás commits recientes solo regeneran `graphify-out/`. **Árbol de trabajo limpio**: todo está registrado en git.
+
+| Parte | Versión | Detalle |
+|---|---|---|
+| Servidor (`server/package.json`) | `tms-server` 3.0.0 | Node ≥ 20 (22.23.4 en la laptop), Express 4.22.3, mysql2 3.24.6, cors 2.8.6, dotenv 16.6.1, nodemon 3.1.14 (dev). Las sesiones recientes guardan `version_software` = `3.0.0+b26b176` |
+| Frontend (`frontend/package.json`) | `tms-frontend` 2.0.0 | React 18.3.1, Vite 5.4.21, Bootstrap 5.3.8, Bootstrap Icons 1.13.2, Chart.js 4.5.1, Three 0.165.0, plotly.js-gl3d-dist-min 3.7.0, react-plotly.js 3.0.0, @fontsource 5.3.0 |
+| Firmware principal (`firmware/config.py`) | `pico-tms-2.3` | Pico 2 W (RP2350, MicroPython 1.29) en la mesa; también corre en la Pico W (RP2040) |
+| Firmware del Hall (`firmware_hall_1d/config.py`) | `pico-tms-hall1d-0.1` | Sin cambios desde el 2026-11-11 |
+| App móvil (`app/package.json`, `app/app.json`) | `tms-app` 3.0.0, `versionCode` 3 | Expo SDK ~57, React Native 0.86.3, React 19.2.3, TypeScript ~6.0.3; APK en `app/dist/TMS-Monitor-3.0.0.apk` (39 MB, ignorado por git) |
+| Infraestructura local | — | MariaDB 11.8.6 y Nginx 1.26.3 en la laptop de desarrollo |
+
+### 0.2 Firmware vigente: los valores que mandan (`firmware/config.py`)
+
+- **Ejes:** X = eje corto 0–410 mm (GP10/GP11), Y = eje largo 0–562 mm (GP12/GP13), Z 0–88 mm (GP14/GP15), ENA común GP16 (0 = habilitado). **50 pulsos/mm** en los tres, sin inversiones; holgura 0,5 mm; 60 mm/s, 300 mm/s², arranque 6 mm/s, tope 15 kHz; asentamiento 300 ms.
+- **⚠ Posición de descanso (`POSICION_ARRANQUE_*_MM`) = (0, 0, 0)**, no (0, 562, 88). El comentario de `config.py` (fechado 2026-11-15) dice que (0, 562, 88) «mandaba Y y Z contra su tope». Inicio de la medición por defecto (0, 0, 0) y sentidos X+, Y+, Z+ (el plano z = 0 es el más bajo). La nota del 2026-11-14 de la sección 6 («Descanso en (0, 562, 88)») queda **superada** en ese punto.
+- `Mesa.mover_a`: si Z baja, primero X e Y y después Z; si sube, primero Z. `Mesa.homing()` (regreso al descanso) mueve primero Z y luego X e Y a la vez; con el descanso en Z = 0 eso **baja** Z primero (la regla se pensó para Z arriba). El usuario reporta que funciona; no hay registro de que se haya revisado ese caso a propósito.
+- **Sensor:** QMC5883P en GP0/GP1, 0x2C, 100 kHz; promedio de 10 lecturas; DRDY con límite de 100 ms; fondo con 100 lecturas en 30 G; `RESTAR_FONDO_EN_PICO = False`.
+- **Envío:** lotes de 25 o cuando la lectura más vieja cumple 3 s; búfer de 1000; reintentos de 0,25 a 8 s; timeout HTTP 5 s; tras un 401, latido cada 30 s; NTP `pool.ntp.org` cada hora; sin watchdog ni `machine.reset()`.
+- **Pico 2 W:** `motores.es_rp2350()` elige la dirección de CHAN_ABORT del DMA (0x50000464 en el RP2350, 0x50000444 en el RP2040), con espera máxima de 10 ms (ver la nota «Pico 2 W: cuelgue al detener» en la sección 6).
+
+### 0.3 Base local `tms_db` (2026-11-23, solo `SELECT`)
+
+- **89 sesiones:** 33 simuladas y 56 reales; ninguna abierta ni eliminada. **29 745 mediciones.** 3 usuarios (uno por rol, incluido el admin predeterminado). Dispositivo `pico-w-1` activo, con token; último latido el 2026-11-20 00:30 UTC con `pico-tms-2.3`.
+- **Configuración actual:** `modo_operacion = real`; `barrido` = límites 400 × 500 × 60 mm, paso predeterminado 10 mm, standoff 5 mm; `general` = inicio (0, 0, 0); `sensor` = QMC5883P 30 G, offset 0; el resto, valores por defecto.
+- **Migraciones:** de la 002 a la 009 están **aplicadas** (el esquema tiene `paso_mm DECIMAL(4,1)`, las columnas de zona y `config_general`, y el sensor es QMC5883P). Las notas de la sección 6 que dicen que la 006, la 007 o la 008 «no se aplicaron» son viejas. La 001 sigue sin ejecutarse (decisión del usuario).
+
+| Firmware | Sesiones reales | Lecturas |
+|---|---|---|
+| `pico-tms-hall1d-0.1` | 7 (59–65, 2026-11-11) | 917 |
+| `pico-tms-2.0` | 9 (66–76) | 1 357 |
+| `pico-tms-2.1` | 2 (77–78) | 19 |
+| `pico-tms-2.2` | 18 (79–82 y 89–102, hasta el 2026-11-18) | 427 |
+| `pico-tms-2.3` | 20 (103–122, 2026-11-18 y 19) | 1 760 |
+
+**Barridos reales completos desde el 2026-11-17** (hora local; todos con QMC5883P en 30 G, inicio (0, 0, 0), sin saturadas ni huecos):
+
+| Sesión | Firmware | Zona (mm) | Paso | Puntos | s/punto | Nota |
+|---|---|---|---|---|---|---|
+| 92 | 2.2 | 50 × 50 × 20 | 10 | 108 | 1,14 | |
+| 93 | 2.2 | 50 × 50 × 30 | 10 | 144 | 0,95 | La de las capturas de la tesis (19:03–19:05 del 2026-11-17) |
+| 94 | 2.2 | 20 × 20 × 20 | 10 | 27 | 0,75 | |
+| 108 | 2.3 | 30 × 30 × 5 | 10 | 16 | 0,89 | |
+| 109 | 2.3 | 60 × 60 × 5 | 10 | 49 | 0,72 | |
+| 113 | 2.3 | 180 × 100 × 0 | 5 | **777** | 0,73 | El barrido real más grande: 9,4 min |
+| 116 | 2.3 | 180 × 300 × 0 | 30 | 77 | 1,08 | |
+| 117 | 2.3 | 220 × 500 × 0 | 30 | 136 | 1,15 | Casi todo el eje largo |
+| 120 | 2.3 | 100 × 400 × 0 | 30 | 56 | 1,09 | |
+| 121, 122 | 2.3 | 200 × 400 × 0 | 30 | 98 | 1,20 y 1,53 | 2026-11-19 |
+
+Las demás sesiones de esos días (89–91, 95–107, 110–112, 114, 115, 118, 119) se cortaron a propósito o quedaron en 0 lecturas (pruebas de arranque y de Detener). Desde el 2026-11-18 se usan mucho zonas de un solo plano (Z = 0). Las simuladas 84, 87 y 88 (2026-11-13) probaron zonas de 100 × 100 mm en el simulador.
+
+### 0.4 Pruebas al 2026-11-23
+
+| Prueba | Resultado |
+|---|---|
+| `cd server && npm test` | **66/66** (sin base de datos) |
+| `cd firmware/pruebas_pc && python3 -m unittest prueba_logica` | **28/28** (incluye `test_detener_no_se_cuelga`) |
+| `python3 firmware_hall_1d/pruebas_pc/prueba_logica.py` | **21 ok**, «TODO BIEN» |
+| `cd app && npm run typecheck` | Sin errores |
+| `npm run test:integracion` | **10** pruebas (9 declaradas; una corre con los dos modelos de sensor). No se ejecutaron el 2026-11-23 (vacían `tms_db_test`); la última vez que pasaron fue el 2026-11-14 |
+
+### 0.5 Qué está verificado con el hardware
+
+- **Hall 49E con la mesa** (sesiones 59–65), **firmware 2.0 con el QMC5883P** (67–74), **2.2 con el inicio enviado por el servidor** (92–94) y **2.3 en la Pico 2 W** con zonas grandes (103–122): funcionan, según el usuario y la base.
+- **Cierre automático** de las sesiones `hw` al completar la malla: comprobado en todos los barridos completos.
+- **Problema físico resuelto:** reinicios y desconexiones USB a mitad de la medición por el cableado del shield (bus de tierras recableado).
+- Todo con el **backend en la laptop** (`HOST=0.0.0.0`, puerto 4000) y la red Wi-Fi del laboratorio. **La instalación en la Raspberry Pi 5 sigue pendiente.**
+- Sin registro explícito: la prueba de pulsar Detener a mitad de un movimiento con la Pico 2 W después del arreglo de la 2.3 (la nota de la sección 6 la deja pendiente), y la medición numérica del error posicional (±1 mm).
+
+### 0.6 App móvil (`app/`)
+
+- **Qué es:** «TMS Monitor», app Android en React Native + Expo SDK 57 y TypeScript que replica las vistas y funciones de `frontend/` contra la **misma API**, sin cambios en el servidor ni en la web. Ver `app/README.md`. Paquete `mx.ipn.esime.tmsmonitor`.
+- **Pantallas** (`src/screens/`): Acceso (login, cambio de contraseña), Conexion (IP del servidor), Dashboard, Historial y Configuracion (General, Barrido, Sensor con selector de modelo, Simulación, Dispositivo, Visualización, Usuarios). Gráficas propias en SVG (`src/charts/`): LineChart, Mapa3D (como Three.js) y Sabana3D (como Plotly, con exportación SVG). Tokens de `global.css`, fuentes y Bootstrap Icons en TTF (`assets/fonts/`). Menú lateral ☰, tema oscuro/claro/sistema.
+- **Conexión:** HTTP directo al puerto 4000 del servidor (**`HOST=0.0.0.0`** en `server/.env`), porque Android no acepta el certificado autofirmado de Nginx. La cookie `tms_sesion` se lee del `Set-Cookie` y se manda a mano en cada petición (`src/api.ts`); SSE con `react-native-sse`; CSV y SVG se guardan y se comparten con `expo-file-system` y `expo-sharing`.
+- **Modo extra:** «simulación local» en el celular (`src/simulador.ts`, `src/sesionesLocales.ts`): genera datos sin servidor y guarda las últimas 12 sesiones en AsyncStorage.
+- **Compilar:** SDK en `~/Android/Sdk`, JDK 17 en `~/Android/jdk`; `npx expo prebuild --platform android --clean` y `./gradlew assembleRelease --max-workers=4` (solo ARM de 32 y 64 bits, `buildArchs` en `app.json`). Comprobaciones: `npm run typecheck`, `npx expo-doctor`, `npm run export:android`.
+- **Verificación registrada:** vista web de la app (Playwright, 390 × 844) siguiendo en vivo la sesión real 93 y una tanda simulada. No hay registro en el repositorio de una prueba del APK en un teléfono real.
+- **Reglas al trabajar en la app:** cambios solo dentro de `app/`; no definir componentes dentro de otros (se remontan cada segundo por el reloj de la Pico).
+- ⚠ **Choque con la guía de producción:** `COMANDOS.md` deja el backend en `HOST=127.0.0.1` detrás de Nginx; la app necesita el puerto 4000 abierto en la red. Hay que decidirlo al instalar en la Raspberry.
+
+### 0.7 Otras carpetas nuevas (2026-11-14 a 18)
+
+- `capturas-tesis/`, `capturas-faltantes/` y `capturas-tesis-app-movil/`: capturas para la tesis con su `LEEME.md` (Playwright 1.56.1; escritorio 1440 × 900 ×2, teléfono 390 × 844 ×2, tema claro). Tanda simulada el 2026-11-15/16 (contra una copia temporal de la base) y tanda real el 2026-11-17 con la sesión 93. `capturas-faltantes/` son copias de las que faltaban.
+- `docs/tesis/` (19 archivos, del 00 al 18), `docs/tesis.zip` y `docs/prompt-informe-tesis.md`: informe técnico para el revisor de la tesis, escrito el **2026-11-14**. **Hoy está desactualizado en:** el microcontrolador (dice Pico W, hoy Pico 2 W), la versión del firmware (2.2, hoy 2.3 con el arreglo del DMA), las estadísticas (22 sesiones reales y 27 583 lecturas, hoy 56 y 29 745), las pruebas del firmware (27, hoy 28), las pruebas reales (no tiene las 89–122 ni los barridos grandes) y la falta de la app móvil y de las capturas. Su lista de contradicciones (archivo 16) sigue siendo válida.
+
+### 0.8 Auditoría de los README y documentos (2026-11-23; no se modificaron)
+
+| Archivo (última modificación) | Estado | Qué está desactualizado |
+|---|---|---|
+| `README.md` (2026-11-10) | **Desactualizado** | Diagrama con «Pico W + HMC5883L»; «mapa 3D de flechas» y «superficie de \|B\| por plano»; `firmware/` como «ejemplo sin probar en hardware»; placa fija de 60 × 60; no menciona la Pico 2 W, el QMC5883P, la app móvil, `firmware_hall_1d/` ni los documentos nuevos |
+| `COMANDOS.md` (2026-11-18) | Casi al día | Migraciones al día (incluye la 009). Desactualizado: la sección 11 cita «el orden de registros X, Z, Y del HMC5883L» y el ejemplo `pico_w_cliente_ejemplo.py`; el árbol dice «firmware/: ejemplo en MicroPython»; no menciona la Pico 2 W ni cómo entra la app móvil (`HOST=127.0.0.1` frente al puerto 4000 que necesita la app) |
+| `firmware/README.md` (2026-11-23) | Parcial | Al día: la sección 8.1 (Pico W o Pico 2 W desde la 2.3). Desactualizado: la línea de estado (2026-11-12, «todavía no se ha probado en la Pico con la mesa»); la introducción («X e Y están intercambiados», arranque en (0, 410, 88)); la tabla de archivos (`prueba_calibracion.py` «usa los nombres viejos»); la sección 3 y la «Primera prueba» (descanso en (0, 562, 88) frente a (0, 0, 0) del código); la sección 11 (`geometria.js` «todavía recorre en raster»; 27 pruebas, hoy 28); el registro de verificaciones termina el 2026-11-14 |
+| `firmware_hall_1d/README.md` (2026-11-11) | **Desactualizado** | «Sin probar todavía en la Pico con la mesa» (se probó: sesiones 59–65); «las sesiones reales no se cierran solas» (se cierran desde el 2026-11-13). Sigue vigente: exige el modelo HMC5883L en el servidor |
+| `app/README.md` (2026-11-18) | Al día | — |
+| `docs/firmware-pico-w.md` (2026-11-18) | Parcial | La introducción dice «Raspberry Pi Pico W (RP2040)»; la sección 1.3 da el descanso en (0, 562, 88); el ejemplo de respuesta del latido muestra el sensor HMC5883L y el firmware `pico-tms-1.0` |
+| `docs/sensor-qmc5883p.md` (2026-11-13) | Casi al día | La introducción dice «Falta adaptar el servidor» (ya está, lo dice su propia sección 6) |
+| `docs/instructivo-calibracion-y-conexiones.md` (2026-11-18) | Parcial | Recomienda 1/8 de micropaso (200 pulsos/mm), pero el firmware y la calibración usan **50 pulsos/mm** (400 pulsos/vuelta); la tabla DIP de 400 pulsos/vuelta difiere del comentario de `prueba_calibracion.py`; descanso en (0, 562, 88); lista de material con «Pico W» |
+| `docs/fase7-revision-diseno.md` (2026-11-10) | Histórico | La tabla de contraste usa los colores neón de los datos; desde el 2026-11-13 son Okabe–Ito (`#0072B2`, `#D55E00`, `#009E73`) |
+| `docs/prompts-*.md` | Históricos | Prompts de fases ya hechas |
+| `capturas-*/LEEME.md` (2026-11-18) | Al día | Describen sus tandas (llaman a la placa «Pico W» o «Pico 2W» indistintamente) |
+| `docs/tesis/` (2026-11-14) | Desactualizado | Ver 0.7 |
+
+**Textos dentro del código que no coinciden con el código vigente** (sin efecto funcional salvo el primero y el CSV):
+- `frontend/src/pages/ConfiguracionPage.jsx`: `DESCANSO_MM = { x: 0, y: 562, z: 88 }`; la ayuda de Configuración › General le dice al usuario que la mesa descansa ahí.
+- Encabezados de `firmware/main.py` y `firmware/banco.py` y el comentario de `server/migrations/009_inicio_medicion.sql`: descanso en (0, 562, 88).
+- `server/controllers/mediciones.controller.js`: la línea `# unidades` del CSV dice siempre «raw en cuentas del HMC5883L (−4096 = desborde)», también en las sesiones del QMC5883P.
+- Comentarios: `server/setup_db.sql` (mediciones «del HMC5883L», posiciones «0..60 mm», `puntos_esperados` «grid_n² × planos»); `services/simulador.js` y `services/trazabilidad.js` (orden «x → y → z»; es serpentina); `services/geometria.js` (`MAX_PUNTOS_SESION`: «el mapa 3D dibuja una flecha por punto»; ahora son esferas).
+- `visualizacion.escala_superficie` se guarda y se valida, pero la interfaz ya no la usa.
+
+### 0.9 Pendientes vigentes
+
+- Instalar en la Raspberry Pi 5 con `COMANDOS.md` y decidir cómo entra la app móvil (puerto 4000 con `HOST=0.0.0.0`, o no).
+- Unificar la posición de descanso (0, 0, 0) en la página, los README, el instructivo y los comentarios, cuando el usuario lo pida.
+- Actualizar los README de la tabla 0.8 y `docs/tesis/`, cuando el usuario lo pida.
+- Medir numéricamente el error posicional (±1 mm) y la holgura; dejar registrada la prueba de Detener a mitad de un movimiento con la Pico 2 W.
+- Lo que ya estaba pendiente: «Medir cero» (endpoint), qué hacer con `lecturas_por_punto > 1`, la física de la solución salina, los finales de carrera, la migración 001 y probar el APK en un teléfono real.
+
+### 0.10 Punto de restauración
+
+Esta versión es **la base y la referencia** para las modificaciones y mejoras que vienen (decisión del usuario, 2026-11-23). Ante cualquier problema o error, se compara con ella o se regresa a ella.
+
+**Qué forma el punto de restauración:**
+
+| Pieza | Dónde | Estado al escribir esto (2026-11-23) |
+|---|---|---|
+| Código | Commit `232ca28` (el código funcional: `8ad6a0d` + `9b3f81c`) | En git |
+| Este registro (`CLAUDE.md` con la sección 0) | El commit que haga el usuario encima de `232ca28` | **Por hacer** (sin commit) |
+| Etiqueta de git | `base-funcional-2026-11-23`, anotada, sobre ese commit | **Por hacer** (`git tag -l` vacío) |
+| Base de datos | `~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz` (esquema con las migraciones 002 a 009, configuración, 89 sesiones, 29 745 mediciones) | **Por hacer** (solo existen los respaldos viejos de la Fase 4, la Fase 5 y la 009) |
+| APK | `~/tms-respaldos/TMS-Monitor-3.0.0.apk` (copia de `app/dist/`, que git ignora) | **Por hacer** |
+| Firmware de la Pico | `firmware/` de la etiqueta (`pico-tms-2.3`) | En git |
+
+**Sesiones futuras:** antes de dar por existente el punto de restauración, compruébalo (`git tag -l base-funcional-2026-11-23`, `ls ~/tms-respaldos/`). Si ya existe, cambia la columna de estado de esta tabla. Los commits, la etiqueta y el push los hace el usuario; no los hagas sin que lo pida.
+
+**Cómo se crea** (lo ejecuta el usuario):
+
+```bash
+git add CLAUDE.md && git commit -m "Registro de la versión funcional (2026-11-23)"
+git tag -a base-funcional-2026-11-23 -m "Versión funcional en la mesa: Pico 2 W, firmware pico-tms-2.3"
+git push && git push --tags
+mysqldump --single-transaction -u tms_user -p tms_db | gzip > ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz
+cp app/dist/TMS-Monitor-3.0.0.apk ~/tms-respaldos/
+```
+
+**Cómo se usa:**
+
+- **Ver qué cambió desde la base:** `git diff base-funcional-2026-11-23` (todo) o `git diff base-funcional-2026-11-23 -- ruta` (un archivo); `git log base-funcional-2026-11-23..HEAD` lista los commits posteriores.
+- **Probar la base sin perder el trabajo nuevo:** `git stash` (si hay cambios sin commit) y `git switch --detach base-funcional-2026-11-23`; para volver, `git switch main` y `git stash pop`.
+- **Regresar un archivo:** `git restore --source base-funcional-2026-11-23 -- ruta/del/archivo`.
+- **Firmware:** cargar en la Pico los archivos de `firmware/` de la etiqueta (con Thonny) y comprobar que el latido informa `pico-tms-2.3`. `firmware/secretos.py` está fuera de git: las operaciones de git no lo tocan.
+- **Servidor e interfaz:** con el código de la etiqueta, `cd server && npm ci` y `cd frontend && npm ci` (los `package-lock.json` están en git) y volver a compilar el frontend si se usa `dist/`. `server/.env` también está fuera de git y no cambia.
+- **Base de datos:** solo hace falta restaurarla si una mejora cambió el esquema (una migración 010 o posterior) o dañó datos. El código de la base espera exactamente el esquema de la 009. Restaurar **reemplaza** las tablas y borra lo medido después: pide confirmación al usuario y haz antes un respaldo del estado actual. En la laptop: `gunzip -c ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz | mysql -u tms_user -p tms_db`; en la Raspberry, donde `tms_user` no puede crear ni borrar tablas, con `sudo mysql tms_db`.
+- **App:** reinstalar en el teléfono el APK respaldado (`versionCode` 3).
+- **Comprobar que la restauración quedó bien** (los mismos resultados de 0.4): `cd server && npm test` → 66/66; `cd firmware/pruebas_pc && python3 -m unittest prueba_logica` → 28/28; `python3 firmware_hall_1d/pruebas_pc/prueba_logica.py` → «TODO BIEN»; `cd app && npm run typecheck` sin errores; `GET /api/status` → `version` 3.0.0.
+
+**Regla para las mejoras:** cada cambio que se haga a partir de aquí se anota en este `CLAUDE.md` como diferencia frente a esta base (qué cambió, por qué y cómo se verificó), para poder saber en todo momento qué hay de nuevo respecto de la versión que funcionaba.
 
 ---
 
@@ -20,7 +185,7 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 
   Desde el 2026-11-10 el paso es **libre** (en mm, con un decimal; ver 7.0): los de la tabla son solo los más usados. Por ejemplo, 7,5 mm da 9 × 9 × 3 planos = 243 puntos.
 - Por cada punto se guardan las tres componentes Bx, By, Bz (en **µT**) y su módulo |B|.
-- Hoy los datos los genera una **simulación**. Más adelante los mandará una **Raspberry Pi Pico W** por Wi-Fi.
+- Los datos los genera el **simulador del servidor** (modo simulación) o los mide la **Raspberry Pi Pico 2 W** con la mesa y el QMC5883P y los manda por Wi-Fi (modo real, funcionando desde noviembre de 2026; ver la sección 0).
 
 ### Hardware (confirmado por el usuario)
 
@@ -30,7 +195,7 @@ Sistema de adquisición y visualización de datos para la tesis de ingeniería (
 | Microcontrolador | **Raspberry Pi Pico 2 W** (RP2350, MicroPython 1.29) en la mesa desde noviembre de 2026; el firmware también funciona en la **Pico W** (RP2040): `motores.py` detecta el chip (ver la nota «Pico 2 W: cuelgue al detener»). |
 | Sensor magnético (3 ejes) | Módulo **QMC5883P** por I2C, dirección **0x2C** (confirmado y funcionando, 2026-11-12). La tienda lo vendía como HMC5883L, pero **no lo es**: ni HMC5883L (0x1E) ni QMC5883L (0x0D). Rangos de 2, 8, 12 y 30 G; 200 Hz. Ficha completa en [docs/sensor-qmc5883p.md](docs/sensor-qmc5883p.md). |
 | Sensor Hall (1 eje) | **49E** (SS49E) lineal, analógico, en GP26/ADC0 con 3,3 V: unos 9,24 mV/mT y unos 0,09 mT por cuenta del ADC. Lo usa el firmware de prueba [firmware_hall_1d/](firmware_hall_1d/README.md). |
-| Posicionamiento | Mesa cartesiana XY con motores NEMA 17 y husillos T8 (0,04 mm por paso teórico). Requisito: error posicional menor que ±1 mm. Desde el 2026-11-14, en el firmware X es el eje corto (0–410 mm, GP10/GP11), Y el largo (0–562 mm, GP12/GP13) y Z 0–88 mm, como en `prueba_calibracion.py`; la mesa descansa en **X = 0, Y = 562, Z = 88** (sin finales de carrera) y cada medición empieza en el origen **(0, 0, 0)** |
+| Posicionamiento | Mesa cartesiana XY con motores NEMA 17 y husillos T8 (0,04 mm por paso teórico). Requisito: error posicional menor que ±1 mm. Desde el 2026-11-14, en el firmware X es el eje corto (0–410 mm, GP10/GP11), Y el largo (0–562 mm, GP12/GP13) y Z 0–88 mm, como en `prueba_calibracion.py`; sin finales de carrera. **Descanso según el código vigente: (0, 0, 0)** (`POSICION_ARRANQUE_*_MM`; el 2026-11-14 fue X = 0, Y = 562, Z = 88, pero mandaba Y y Z contra su tope) y cada medición empieza en el origen **(0, 0, 0)**. 50 pulsos/mm en los tres ejes |
 | Red | Hotspot de un iPhone, con salida a internet. Varias personas (el director, un ingeniero, el tesista y un compañero) miran el dashboard a la vez desde laptops y teléfonos. |
 
 **Los sensores son solo de prueba.** El usuario sabe que ni el QMC5883P ni el Hall 49E miden el pulso real de la bobina TMS. **No vuelvas a señalarlo** ni lo uses como argumento en contra de nada.
@@ -78,7 +243,7 @@ El sistema trae un acceso **admin / admin**, sin cambio obligatorio de contrase�
    - **No agregues frameworks ni librerías nuevas** (nada de react-router, zod, ajv, express-session, passport, bcrypt, cookie-parser ni Vitest) salvo que el usuario lo apruebe. Usa lo que trae Node: `node:crypto` (`scrypt`, `randomBytes`), `node:test` y `node:assert`.
    - Sí está permitido cambiar a una **variante del mismo paquete**, como `plotly.js-gl3d-dist-min` en lugar de `plotly.js`.
 3. **Los colores del modo oscuro no cambian**: son los de `:root` en `frontend/src/styles/global.css`. Se puede **agregar** un modo claro. **Excepción pedida por el usuario (2026-11-13, trabajo de tesis):** los colores de los *datos* son sobrios: Bx `#0072B2`, By `#D55E00`, Bz `#009E73` (Okabe–Ito) en la gráfica de líneas, la tabla y los ejes del mapa 3D; \|B\| en el color del texto; planos Z en azul pizarra (`--z0`…`--z4`, del más oscuro al más claro); rayas de los indicadores en `--acento-dato` salvo la guinda. Los neón base (`--cyan`, `--emerald`, `--yellow`…) se quedan para los estados (en línea, simulación, real) y la guinda no cambia. La sábana 3D (Plotly) tiene estilo de figura científica desde el 2026-11-13 (ver la nota «Tiempo estimado y sábana 3D»).
-4. **No se quitan gráficas ni datos** del dashboard: la gráfica de líneas Bx/By/Bz, el mapa 3D de flechas (Canvas3D), la superficie de Plotly (Superficie3D), la tabla de lecturas, las tarjetas KPI y el historial. Se pueden reordenar y ajustar (forma, ejes, escalas), pero su uso y sus datos se mantienen.
+4. **No se quitan gráficas ni datos** del dashboard: la gráfica de líneas Bx/By/Bz, el mapa 3D (Canvas3D; desde el 2026-11-13, a pedido del usuario, dibuja puntos medidos en vez de flechas), la sábana 3D de Plotly (Superficie3D), la tabla de lecturas, las tarjetas KPI y el historial. Se pueden reordenar y ajustar (forma, ejes, escalas), pero su uso y sus datos se mantienen.
 5. **Los commits los hace el usuario.** No hagas `git commit` ni `git push`, ni crees ramas, salvo que te lo pida.
 6. Para el frontend, el usuario quiere sus skills: **`web-design-guidelines`** para revisar y **`frontend-design`** para corregir.
 7. Responde en **español**, en prosa completa. Nada de modo caveman.
@@ -100,7 +265,7 @@ PT/
 ├── docs/sensor-qmc5883p.md       ← el magnetómetro real: conexión, registros, rangos, medición; sección 6: lo hecho en el firmware y lo que le falta al servidor
 ├── docs/prompts-qmc5883p-y-serpentina.md ← prompts (2026-11-12): firmware cliente con QMC5883P y serpentina (hecho); servidor y página para el QMC5883P (pendiente)
 ├── firmware/                     ← firmware MicroPython FINAL de la Pico W (2026-11-10; QMC5883P y serpentina 2026-11-12; guía en firmware/README.md):
-│                                    config.py (X↔Y intercambiados, posición de arranque, punto de inicio y sentido), main.py, red.py, cliente.py,
+│                                    versión pico-tms-2.3 (Pico 2 W o Pico W); config.py (X corto, Y largo, descanso (0, 0, 0), punto de inicio y sentido X+, Y+, Z+), main.py, red.py, cliente.py,
 │                                    sensor.py (QMC5883P, dos formatos de envío), motores.py (PIO + DMA, TB6600, holgura por eje, arranque_mm),
 │                                    barrido.py (serpentina; zona desde inicio_medicion), led.py, registro.py, banco.py (prueba de banco y calibración),
 │                                    prueba_calibracion.py (independiente, para Thonny: X/Y/Z en mm y regreso al origen),
@@ -111,6 +276,11 @@ PT/
 ├── firmware_hall_1d/             ← copia del firmware para el Hall 49E de un eje (2026-11-11; guía en su README.md):
 │                                    sensor_hall.py (nuevo), barrido.py y main.py adaptados, el resto copiado sin cambios;
 │                                    secretos.py local (en su propio .gitignore) y pruebas_pc/ (usa los stubs de firmware/)
+├── app/                          ← app Android «TMS Monitor» (Expo SDK 57, React Native 0.86, TypeScript; 2026-11-16): replica la web
+│                                    contra la misma API (HTTP al puerto 4000); guía en app/README.md; APK en app/dist/ (ignorado por git)
+├── capturas-tesis/ · capturas-faltantes/ · capturas-tesis-app-movil/ ← capturas para la tesis con su LEEME.md (2026-11-15 a 17)
+├── docs/tesis/ · docs/tesis.zip  ← informe técnico para el revisor de la tesis (19 archivos, 2026-11-14; desactualizado, ver 0.7)
+├── docs/prompt-informe-tesis.md  ← prompt con que se pidió ese informe
 ├── nginx/tms.conf                ← NO TOCAR
 ├── server/                       ← Node.js + Express (ESM, "type":"module")
 │   ├── server.js                 ← entrada: dotenv, testConnection, iniciarServicios y listen
@@ -320,7 +490,7 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 
 - **Verifica la API con `curl`** contra el servidor real y la MariaDB local, que está activa en 127.0.0.1:3306. **Borra las sesiones de prueba que crees** y deja la base como la encontraste.
 - **Verifica el frontend en el navegador integrado:** levanta el backend y Vite en segundo plano, abre `http://localhost:5173` y revisa la consola. Al terminar, detén los procesos.
-- `cd server && npm test` (= `npm run test:unit`) ejecuta `node --test`, que encuentra solo los `*.test.js`: 53 pruebas sin base de datos. La lógica pura va en módulos que no importan `config/database.js`; `validadores.test.js` pone variables `DB_*` de relleno antes de importar (el pool no se conecta hasta la primera consulta).
+- `cd server && npm test` (= `npm run test:unit`) ejecuta `node --test`, que encuentra solo los `*.test.js`: 66 pruebas sin base de datos (2026-11-23; el firmware tiene 28 en `firmware/pruebas_pc` y 21 en `firmware_hall_1d/pruebas_pc`, y la app se comprueba con `npm run typecheck`). La lógica pura va en módulos que no importan `config/database.js`; `validadores.test.js` pone variables `DB_*` de relleno antes de importar (el pool no se conecta hasta la primera consulta).
 - `npm run test:integracion` levanta `app.js` en un puerto aleatorio contra **`tms_db_test`** (nunca `tms_db`; el helper lo impide), vacía sus tablas y crea admin/operador/observador. Sin la base, las pruebas se omiten con el comando para crearla. Variables: `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_USER`, `TEST_DB_PASSWORD`, `TEST_DB_NAME`.
 - **Sin sudo** (la contraseña de sudo no está disponible para Claude), los tests de integración se pueden correr con una MariaDB temporal del usuario: `mariadb-install-db --no-defaults --datadir=<dir>` y `mariadbd --no-defaults --datadir=<dir> --socket=~/.cache/tmsdb/sock --port=3307` (el socket debe tener una ruta de menos de 108 caracteres), luego `sed 's/CAMBIA_ESTA_CONTRASENA/x/' tests/setup_test_db.sql | mariadb -S ~/.cache/tmsdb/sock -u root` y `TEST_DB_PORT=3307 TEST_DB_PASSWORD=x npm run test:integracion`. Así se verificaron en la Fase 8.
 
@@ -442,6 +612,7 @@ cd frontend && npx vite build --outDir <directorio-temporal> --emptyOutDir
 - **Problema físico resuelto el mismo periodo (no era del firmware):** reinicios y desconexiones USB a mitad de una medición por el cableado del shield (bus de tierras recableado); al corregir el cableado, todo funcionó.
 
 **Descanso en (0, 562, 88) y medición desde el origen (2026-11-14, pedido por el usuario; reemplaza parte de las dos notas siguientes):**
+- ⚠ **Superado en el descanso:** el código vigente (`pico-tms-2.3`) descansa en **(0, 0, 0)**; lo demás de esta nota (nombres de los ejes, inicio, sentidos y orden de los ejes) sigue vigente. Ver la sección 0.
 - **Qué pasaba:** el firmware suponía el arranque en X = 0 (eje largo), Y = 410 (eje corto), pero la mesa real descansa con el eje corto en 0 y el largo en su máximo. Al medir (y en la prueba de banco), el eje corto empujaba contra su tope.
 - **Firmware (`firmware/config.py`, `FIRMWARE = "pico-tms-2.2"`):** se deshizo el intercambio X ↔ Y: **X = eje corto** (GP10/GP11, `LIMITE_X_MM = 410`) e **Y = eje largo** (GP12/GP13, `LIMITE_Y_MM = 562`), los nombres de `prueba_calibracion.py` y del instructivo. `POSICION_ARRANQUE_*` = **(0, 562, 88)** («descanso»), `INICIO_MEDICION_MM` = **(0, 0, 0)**, `SENTIDO_X/Y/Z` = **+1, +1, +1** (el plano z = 0 es el más bajo). Sin inversiones (`"invertir": False` en los tres ejes; se probó invertir Y y Z, pero el usuario había probado sin cargar los archivos nuevos y pidió volver a `False`). Pendiente: la prueba de banco con los archivos de este día cargados.
 - **Orden de los ejes** (`motores.Mesa.mover_a`): si Z baja, primero X e Y y después Z; si Z sube, primero Z. Así, al ir del descanso al origen, la mesa no cruza con el sensor abajo. Prueba nueva `test_orden_de_los_ejes`.
