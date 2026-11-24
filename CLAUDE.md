@@ -135,26 +135,30 @@ Esta versión es **la base y la referencia** para las modificaciones y mejoras q
 
 **Qué forma el punto de restauración:**
 
-| Pieza | Dónde | Estado al escribir esto (2026-11-23) |
+| Pieza | Dónde | Estado (comprobado el 2026-11-24) |
 |---|---|---|
 | Código | Commit `232ca28` (el código funcional: `8ad6a0d` + `9b3f81c`) | En git |
-| Este registro (`CLAUDE.md` con la sección 0) | El commit que haga el usuario encima de `232ca28` | **Por hacer** (sin commit) |
-| Etiqueta de git | `base-funcional-2026-11-23`, anotada, sobre ese commit | **Por hacer** (`git tag -l` vacío) |
-| Base de datos | `~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz` (esquema con las migraciones 002 a 009, configuración, 89 sesiones, 29 745 mediciones) | **Por hacer** (solo existen los respaldos viejos de la Fase 4, la Fase 5 y la 009) |
-| APK | `~/tms-respaldos/TMS-Monitor-3.0.0.apk` (copia de `app/dist/`, que git ignora) | **Por hacer** |
+| Este registro (`CLAUDE.md` con la sección 0) | Commit `51dcb05` «Registro de la versión funcional (2026-11-23)», encima de `232ca28` | **Hecho**, subido a `origin/main` |
+| Etiqueta de git | `base-funcional-2026-11-23`, anotada, sobre `51dcb05` | **Hecho**, subida a GitHub |
+| Base de datos | `~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz` (1,2 MB; hecho con `sudo mysqldump`, «Dump completed on 2026-11-24 12:53:41») | **Hecho**: 6 tablas; 89 sesiones, 29 745 mediciones, 3 usuarios, 8 claves de configuración, 1 dispositivo, 2 sesiones de login |
+| APK | `~/tms-respaldos/TMS-Monitor-3.0.0.apk` (39 MB, copia de `app/dist/`, que git ignora) | **Hecho**, SHA-256 igual al original |
 | Firmware de la Pico | `firmware/` de la etiqueta (`pico-tms-2.3`) | En git |
 
-**Sesiones futuras:** antes de dar por existente el punto de restauración, compruébalo (`git tag -l base-funcional-2026-11-23`, `ls ~/tms-respaldos/`). Si ya existe, cambia la columna de estado de esta tabla. Los commits, la etiqueta y el push los hace el usuario; no los hagas sin que lo pida.
+Los respaldos viven solo en la laptop (`~/tms-respaldos/`, fuera del repositorio): si se cambia de equipo, hay que copiarlos aparte.
 
-**Cómo se crea** (lo ejecuta el usuario):
+**Sesiones futuras:** la etiqueta no se mueve (marca el registro de la base); los cambios posteriores a este `CLAUDE.md` van en commits nuevos. Los commits, las etiquetas y el push los hace el usuario; no los hagas sin que lo pida.
+
+**Cómo se hizo** (2026-11-24, lo ejecutó el usuario; sirve para un punto de restauración futuro):
 
 ```bash
 git add CLAUDE.md && git commit -m "Registro de la versión funcional (2026-11-23)"
 git tag -a base-funcional-2026-11-23 -m "Versión funcional en la mesa: Pico 2 W, firmware pico-tms-2.3"
 git push && git push --tags
-mysqldump --single-transaction -u tms_user -p tms_db | gzip > ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz
+sudo mysqldump --single-transaction tms_db | gzip > ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz
 cp app/dist/TMS-Monitor-3.0.0.apk ~/tms-respaldos/
 ```
+
+Con `-u tms_user -p` el volcado falló (error 1045, contraseña rechazada) y dejó un `.gz` vacío de 20 bytes; con `sudo` funcionó. Un respaldo correcto termina en `-- Dump completed on …` y no pesa unos pocos bytes.
 
 **Cómo se usa:**
 
@@ -163,7 +167,7 @@ cp app/dist/TMS-Monitor-3.0.0.apk ~/tms-respaldos/
 - **Regresar un archivo:** `git restore --source base-funcional-2026-11-23 -- ruta/del/archivo`.
 - **Firmware:** cargar en la Pico los archivos de `firmware/` de la etiqueta (con Thonny) y comprobar que el latido informa `pico-tms-2.3`. `firmware/secretos.py` está fuera de git: las operaciones de git no lo tocan.
 - **Servidor e interfaz:** con el código de la etiqueta, `cd server && npm ci` y `cd frontend && npm ci` (los `package-lock.json` están en git) y volver a compilar el frontend si se usa `dist/`. `server/.env` también está fuera de git y no cambia.
-- **Base de datos:** solo hace falta restaurarla si una mejora cambió el esquema (una migración 010 o posterior) o dañó datos. El código de la base espera exactamente el esquema de la 009. Restaurar **reemplaza** las tablas y borra lo medido después: pide confirmación al usuario y haz antes un respaldo del estado actual. En la laptop: `gunzip -c ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz | mysql -u tms_user -p tms_db`; en la Raspberry, donde `tms_user` no puede crear ni borrar tablas, con `sudo mysql tms_db`.
+- **Base de datos:** solo hace falta restaurarla si una mejora cambió el esquema (una migración 010 o posterior) o dañó datos. El código de la base espera exactamente el esquema de la 009. Restaurar **reemplaza** las tablas y borra lo medido después: pide confirmación al usuario y haz antes un respaldo del estado actual. En la laptop y en la Raspberry: `gunzip -c ~/tms-respaldos/tms_db_base_funcional_2026-11-23.sql.gz | sudo mysql tms_db` (como root, igual que se hizo el volcado; `tms_user` no puede crear ni borrar tablas en la Raspberry).
 - **App:** reinstalar en el teléfono el APK respaldado (`versionCode` 3).
 - **Comprobar que la restauración quedó bien** (los mismos resultados de 0.4): `cd server && npm test` → 66/66; `cd firmware/pruebas_pc && python3 -m unittest prueba_logica` → 28/28; `python3 firmware_hall_1d/pruebas_pc/prueba_logica.py` → «TODO BIEN»; `cd app && npm run typecheck` sin errores; `GET /api/status` → `version` 3.0.0.
 
