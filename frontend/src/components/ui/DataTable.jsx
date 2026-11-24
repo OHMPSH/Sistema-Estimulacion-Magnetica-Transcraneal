@@ -6,6 +6,7 @@
  */
 import React, { memo, useMemo } from 'react';
 import { numero, horaPrecisa } from '../../utils/formato.js';
+import { NOMBRE_EJE } from '../../utils/geometria.js';
 
 export const DataTable = memo(function DataTable({ mediciones, filas, decimales, zona }) {
   const visibles = useMemo(() => mediciones.slice(-filas).reverse(), [mediciones, filas]);
@@ -24,8 +25,8 @@ export const DataTable = memo(function DataTable({ mediciones, filas, decimales,
             <tr>
               <th scope="col">Seq</th>
               <th scope="col">Hora</th>
-              <th scope="col">X (mm)</th>
-              <th scope="col">Y (mm)</th>
+              <th scope="col">{NOMBRE_EJE.y} (mm)</th>
+              <th scope="col">{NOMBRE_EJE.x} (mm)</th>
               <th scope="col">Z (mm)</th>
               <th scope="col">Bx (µT)</th>
               <th scope="col">By (µT)</th>
@@ -41,8 +42,8 @@ export const DataTable = memo(function DataTable({ mediciones, filas, decimales,
               <tr key={r.seq ?? `${r.timestamp}-${i}`} className={i === 0 ? 'new-row' : ''}>
                 <td>{r.seq ?? '—'}</td>
                 <td>{horaPrecisa(r.timestamp, zona)}</td>
-                <td>{numero(r.xMM, 1)}</td>
                 <td>{numero(r.yMM, 1)}</td>
+                <td>{numero(r.xMM, 1)}</td>
                 <td>{numero(r.zMM, 1)}</td>
                 <td className="val-bx">{v(r.bx)}</td>
                 <td className="val-by">{v(r.by)}</td>

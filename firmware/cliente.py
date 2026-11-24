@@ -4,6 +4,7 @@
 # Protocolo: docs/firmware-pico-w.md.
 #   POST /api/dispositivo/latido       cada intervalo_latido_s
 #   POST /api/dispositivo/mediciones   lotes de TAMANO_LOTE lecturas
+#   POST /api/dispositivo/calibracion  lecturas del previsualizador (calibracion.py)
 #
 # El búfer guarda cada lectura con su seq ya asignado. Un lote solo sale del
 # búfer cuando el servidor lo confirma (200); si no hay red, hay timeout o un
@@ -67,9 +68,11 @@ def post(ruta, cuerpo):
 
 def latido(estado=None, error=None):
     """Devuelve (status, respuesta). status None = sin red.
-    `estado` ('espera', 'homing', 'midiendo' o 'error') y `error` se ven en el dashboard."""
+    `estado` ('espera', 'homing', 'midiendo', 'calibrando' o 'error') y `error` se ven en el dashboard.
+    `limites_mm` es el recorrido de la mesa: el previsualizador de la bobina lo usa para sus sliders."""
     cuerpo = {
         "firmware": config.FIRMWARE,
+        "limites_mm": {"x_mm": config.LIMITE_X_MM, "y_mm": config.LIMITE_Y_MM, "z_mm": config.LIMITE_Z_MM},
         "error": error[:300] if error else None,
         "uptime_s": time.ticks_diff(time.ticks_ms(), _inicio) // 1000,
         "ts_dispositivo_ms": red.ahora_ms(),

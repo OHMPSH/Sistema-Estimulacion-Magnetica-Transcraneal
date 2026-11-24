@@ -72,7 +72,7 @@ export const LineChartComponent = memo(function LineChartComponent({ mediciones,
           title: (items) => {
             const p = puntos[items[0]?.dataIndex];
             if (!p) return '';
-            return p.hueco ? `Punto ${p.i}: sin lectura (hueco)` : `Punto ${p.i} · (${p.xMM}, ${p.yMM}, ${p.zMM}) mm${p.seq ? ` · seq ${p.seq}` : ''}`;
+            return p.hueco ? `Punto ${p.i}: sin lectura (hueco)` : `Punto ${p.i} · (${p.yMM}, ${p.xMM}, ${p.zMM}) mm${p.seq ? ` · seq ${p.seq}` : ''}`;
           },
           label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y === null ? 'sin dato' : `${numero(ctx.parsed.y, decimales)} µT`}`,
         },

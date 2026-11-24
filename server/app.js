@@ -19,6 +19,7 @@ import authRouter from './routes/auth.routes.js';
 import usuariosRouter from './routes/usuarios.routes.js';
 import medicionesRouter from './routes/mediciones.routes.js';
 import dispositivoRouter from './routes/dispositivo.routes.js';
+import calibracionRouter from './routes/calibracion.routes.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { rutaNoEncontrada, manejadorErrores } from './middleware/errores.js';
 
@@ -39,7 +40,7 @@ export function crearApp() {
   //   /...      → producción (Nginx, con `proxy_pass http://127.0.0.1:4000/;`,
   //               quita el prefijo /api antes de reenviar)
   // Así funciona en ambos entornos sin modificar la configuración de Nginx.
-  const routers = [authRouter, usuariosRouter, configuracionRouter, medicionesRouter, dispositivoRouter];
+  const routers = [authRouter, usuariosRouter, configuracionRouter, medicionesRouter, dispositivoRouter, calibracionRouter];
   app.use('/api', routers);
   app.use('/', routers);
 

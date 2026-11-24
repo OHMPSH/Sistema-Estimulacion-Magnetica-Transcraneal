@@ -12,11 +12,13 @@
  * Para la Pico (Authorization: Bearer <token>):
  *   latido         — POST /dispositivo/latido
  *   lote           — POST /dispositivo/mediciones
+ *   lecturaCalibracion — POST /dispositivo/calibracion (previsualizador de la bobina)
  * ─────────────────────────────────────────────────────────────
  */
 
 import * as dispositivo from '../services/dispositivo.js';
 import * as sesiones from '../services/sesiones.js';
+import * as calibracion from '../services/calibracion.js';
 import { registrarLoteDispositivo, ultimoSeq, ErrorIngesta } from '../services/ingesta.js';
 import { obtener } from '../services/configuracion.js';
 import { inicioMedicionDe } from '../services/validacionConfiguracion.js';
@@ -77,7 +79,10 @@ export const latido = async (req, res, next) => {
   try {
     await dispositivo.registrarLatido(req.dispositivo, req.latido, req.ip);
     await sesiones.anotarFirmware(req.latido.firmware);
+    calibracion.anotarLimites(req.latido.limites_mm);
     const modo = obtener('modo_operacion');
+    // Previsualizador de la bobina: solo en modo real y sin sesión abierta
+    if (modo !== 'real' || sesiones.sesionAbierta()) calibracion.terminar(modo !== 'real' ? 'modo simulación' : 'sesión abierta');
     const abierta = sesiones.sesionAbierta();
     let sesionActiva = null;
     if (modo === 'real' && abierta && abierta.origen === 'hw') {
@@ -105,6 +110,7 @@ export const latido = async (req, res, next) => {
       ok: true,
       modo_operacion: modo,
       sesion_activa: sesionActiva,
+      calibracion: calibracion.paraPico(),
       intervalo_latido_s: obtener('dispositivo').intervalo_latido_s,
       servidor_ts_ms: Date.now(),
     });
@@ -142,4 +148,15 @@ export const lote = async (req, res, next) => {
     }
     next(err);
   }
+};
+
+/**
+ * POST /dispositivo/calibracion — estado y lectura del previsualizador.
+ * No se guarda nada en la base: se difunde por SSE. La respuesta le
+ * devuelve a la Pico el objetivo vigente (o calibracion: null para que
+ * vuelva al descanso), así no espera al latido.
+ */
+export const lecturaCalibracion = (req, res) => {
+  const errores = calibracion.registrarDePico(req.lecturaCalibracion);
+  res.json({ ok: true, calibracion: calibracion.paraPico(), rechazada: errores.length ? errores : undefined });
 };

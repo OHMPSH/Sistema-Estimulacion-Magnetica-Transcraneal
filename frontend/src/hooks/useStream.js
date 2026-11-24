@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────
  * Un ÚNICO EventSource (/api/stream) para toda la aplicación, que
  * reparte los eventos del servidor a quien se suscriba:
- *   medicion, sesion, configuracion, dispositivo, resincronizar
+ *   medicion, sesion, configuracion, dispositivo, calibracion, resincronizar
  *
  *   useEventoStream('dispositivo', datos => …)
  *
@@ -14,7 +14,7 @@
  */
 import { useEffect, useRef } from 'react';
 
-const EVENTOS = ['medicion', 'sesion', 'configuracion', 'dispositivo', 'resincronizar'];
+const EVENTOS = ['medicion', 'sesion', 'configuracion', 'dispositivo', 'calibracion', 'resincronizar'];
 
 const suscriptores = new Map(EVENTOS.map(e => [e, new Set()]));
 const alConectar = new Set();

@@ -242,8 +242,32 @@ class Limites(unittest.TestCase):
         etapas.clear()
         correr(mesa.mover_a(10, 10, 10))
         etapas.clear()
-        correr(mesa.homing())                    # vuelta al descanso: Z primero
-        self.assertEqual(etapas[0], "Z")
+        correr(mesa.homing())                    # vuelta al descanso (Z abajo): X e Y primero, Z baja al final
+        self.assertEqual((sorted(etapas[:2]), etapas[2:]), (["X", "Y"], ["Z"]))
+        self.assertTrue(mesa.en_arranque())
+
+    def test_z_sube_desde_el_descanso(self):
+        """2.4: Z descansa abajo (0) y mide subiendo; el sentido + de Z da DIR = 0 (invertido)."""
+        self.assertEqual(config.POSICION_ARRANQUE_Z_MM, 0.0)
+        self.assertEqual(config.SENTIDO_Z, 1)
+        self.assertTrue(config.EJE_Z["invertir"])
+        self.assertFalse(config.EJE_X["invertir"] or config.EJE_Y["invertir"], "X e Y no cambian")
+        self.assertEqual((config.EJE_X["paso"], config.EJE_Y["paso"], config.EJE_Z["paso"]), (10, 12, 14))
+        mesa = motores.Mesa()
+        bits = []
+        original = motores.codificar
+        motores.codificar = lambda seg, bit_dir: (bits.append(bit_dir), original(seg, bit_dir))[1]
+        try:
+            mesa.z.mover_pasos(100)               # sube 2 mm
+            mesa.x.mover_pasos(100)
+        finally:
+            motores.codificar = original
+        self.assertEqual(bits, [0, 1], "Z+ con DIR = 0; X+ sigue con DIR = 1")
+        # Los planos de una sesión crecen hacia arriba desde el inicio (z = 0 es el más bajo)
+        s = sesion((20, 20, 20), 10)
+        zs = [barrido.a_maquina(*barrido.punto(s, k))[2] for k in range(barrido.total_puntos(s))]
+        self.assertEqual(sorted(set(zs)), [0.0, 10.0, 20.0])
+        self.assertEqual(zs, sorted(zs), "cada plano nuevo queda más arriba")
 
     def test_detener_no_se_cuelga(self):
         """Si el bit de CHAN_ABORT nunca se borra (la dirección del RP2040 en un RP2350), detener() termina igual."""
@@ -471,6 +495,82 @@ class Bufer(unittest.TestCase):
         for s in range(2, config.TAMANO_LOTE + 1):
             b.agregar(s, 0, 0, 0, (0, 0, 0), 0)
         self.assertTrue(e.toca())
+
+
+class Calibracion(unittest.TestCase):
+    """Previsualizador de la bobina (2.4): ir al punto, medir en bucle y obedecer al servidor."""
+    QMC30 = {"modelo": "QMC5883P", "rango_g": 30, "cuentas_por_g": 1000, "lecturas_por_punto": 1}
+
+    def test_ciclo(self):
+        import calibracion
+        mesa = motores.Mesa()
+        for e in mesa.ejes:
+            e.mover_pasos = (lambda delta, *a, _e=e, **k: setattr(_e, "pos", _e.pos + delta))
+            e.ocupado = lambda: False
+        c = types.SimpleNamespace(mesa=mesa, sensor=qmc(), cal=None)
+        c.cal = {"activa": True, "objetivo": {"x_mm": 100, "y_mm": 200, "z_mm": 10}, "sensor": self.QMC30}
+        enviados, respuestas = [], []
+
+        def post(ruta, cuerpo):
+            self.assertEqual(ruta, "/dispositivo/calibracion")
+            enviados.append(cuerpo)
+            cal = respuestas.pop(0) if respuestas else c.cal
+            return 200, {"ok": True, "calibracion": cal}
+
+        original, cliente.post = cliente.post, post
+        viejo, config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = config.ASENTAMIENTO_MS, 0, 0
+        try:
+            gen = calibracion.ejecutar(c)
+            while not any(e["estado"] == "en_posicion" for e in enviados):
+                next(gen)
+            self.assertEqual(enviados[0]["estado"], "moviendo")
+            self.assertEqual(mesa.posicion_mm(), (100, 200, 10))
+            lectura = [e for e in enviados if e["estado"] == "en_posicion"][0]
+            self.assertEqual(lectura["posicion_mm"], {"x_mm": 100, "y_mm": 200, "z_mm": 10})
+            self.assertEqual(set(lectura["raw"]), {"x", "y", "z"})
+            self.assertIn("saturado", lectura)
+            # El servidor cambia el objetivo en la respuesta: la Pico va al nuevo punto
+            respuestas.append(dict(c.cal, objetivo={"x_mm": 0, "y_mm": 50, "z_mm": 0}))
+            enviados.clear()
+            while mesa.posicion_mm() != (0, 50, 0):
+                next(gen)
+            # Fuera del recorrido: no se mueve y se informa el error
+            c.cal = dict(c.cal, objetivo={"x_mm": 0, "y_mm": 50, "z_mm": 500})
+            enviados.clear()
+            while not any(e["estado"] == "error" for e in enviados):
+                next(gen)
+            self.assertEqual(mesa.posicion_mm(), (0, 50, 0))
+            self.assertIn("fuera del recorrido", [e for e in enviados if e["estado"] == "error"][0]["error"])
+            # calibracion = null en la respuesta: el generador termina
+            respuestas.append(None)
+            c.cal = dict(c.cal, objetivo={"x_mm": 0, "y_mm": 50, "z_mm": 0})
+            correr(gen)
+            self.assertIsNone(c.cal)
+        finally:
+            cliente.post = original
+            config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = viejo, 150
+
+    def test_latido_y_controlador(self):
+        import main
+        cuerpos = []
+        original = cliente.post
+        cliente.post = lambda ruta, cuerpo: (cuerpos.append((ruta, cuerpo)), (None, None))[1]
+        try:
+            cliente.latido("calibrando")
+        finally:
+            cliente.post = original
+        self.assertEqual(cuerpos[0][1]["limites_mm"], {"x_mm": 410.0, "y_mm": 562.0, "z_mm": 88.0})
+        self.assertEqual(cuerpos[0][1]["estado"], "calibrando")
+        c = main.Controlador()
+        c.sensor_ok = True
+        c.revisar_calibracion({"activa": True, "objetivo": {"x_mm": 1, "y_mm": 1, "z_mm": 1}, "sensor": self.QMC30})
+        self.assertEqual((c.fase, c.estado_pico()), ("calibracion", "calibrando"))
+        c.revisar_calibracion(None)              # el servidor la terminó: vuelve al descanso
+        self.assertEqual(c.fase, "cierre")
+        c.fase, c.tarea = None, None
+        c.pendiente = {"id": 7}                  # con una sesión pendiente no se calibra
+        c.revisar_calibracion({"activa": True, "objetivo": {"x_mm": 1, "y_mm": 1, "z_mm": 1}, "sensor": self.QMC30})
+        self.assertIsNone(c.fase)
 
 
 if __name__ == "__main__":

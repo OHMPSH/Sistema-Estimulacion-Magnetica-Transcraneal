@@ -14,6 +14,7 @@
 
 import * as configuracion from '../services/configuracion.js';
 import { sesionAbierta } from '../services/sesiones.js';
+import { terminar as terminarCalibracion } from '../services/calibracion.js';
 import { PASOS_SUGERIDOS_MM, PASO_MIN_MM, MAX_PUNTOS_SESION, MEDIOS } from '../services/geometria.js';
 import { RANGOS_GA, GANANCIAS_HMC5883L, RANGOS_G, RANGOS_QMC5883P, MODELOS_SENSOR, limiteSensorUT } from '../services/validacionConfiguracion.js';
 
@@ -56,6 +57,8 @@ export const putConfiguracion = async (req, res, next) => {
       return res.status(422).json({ ok: false, error: errores.join('; '), errores });
     }
     console.log(`[config] "${req.usuario.usuario}" cambió "${clave}".`);
+    // El previsualizador de la bobina solo existe en modo real
+    if (clave === 'modo_operacion' && valor !== 'real') terminarCalibracion('modo simulación');
     res.json({ ok: true, clave, valor });
   } catch (err) {
     next(err);

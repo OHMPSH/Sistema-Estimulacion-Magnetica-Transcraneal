@@ -44,7 +44,7 @@ export const KpiCards = memo(function KpiCards({ estado, segundos, ultima, zLeve
       <article className="kpi-card acento-bx" aria-labelledby="kpi-pos">
         <h3 id="kpi-pos" className="kpi-label"><i className="bi bi-geo-alt" aria-hidden="true" /> Posición de la última lectura</h3>
         <p className="kpi-value cifra kpi-value-chico">
-          {ultima ? `(${numero(ultima.xMM, 1)}, ${numero(ultima.yMM, 1)})\u00a0mm` : '—'}
+          {ultima ? `(${numero(ultima.yMM, 1)}, ${numero(ultima.xMM, 1)})\u00a0mm` : '—'}
         </p>
         <p className="kpi-unit">En la zona de {etiquetaZona(zona)}{ultima?.seq ? ` · lectura ${ultima.seq}` : ''}</p>
       </article>

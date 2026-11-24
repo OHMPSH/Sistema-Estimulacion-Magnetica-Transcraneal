@@ -26,8 +26,7 @@ const SECCIONES = [
 
 const AVISO_SESION = 'No se puede cambiar con una medición en curso (el servidor responde 409).';
 
-/** Posición de descanso de la mesa (firmware/config.py) y origen, el punto de inicio por defecto */
-const DESCANSO_MM = { x: 0, y: 562, z: 88 };
+/** Origen de la mesa: es el descanso (firmware/config.py, Z abajo desde la 2.4) y el punto de inicio por defecto */
 const ORIGEN_MM = { x: 0, y: 0, z: 0 };
 
 export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }) {
@@ -42,10 +41,11 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
     case 'general':
       contenido = (
         <SeccionFormulario clave="general" titulo="Punto de inicio de la medición" soloLectura={!esAdmin}
-          descripcion={`Dónde empieza la zona de cada medición en la mesa real, en coordenadas de la mesa: X de 0 a 410 mm, Y de 0 a 562 mm y Z de 0 a 88 mm. La mesa descansa en (${DESCANSO_MM.x}, ${DESCANSO_MM.y}, ${DESCANSO_MM.z}): al iniciar una medición va a este punto, desde ahí la zona crece hacia X+, Y+ y Z+ (el plano z = 0 es el más bajo), y al terminar vuelve a descansar. Si la zona no cabe en la mesa, la Pico W rechaza la sesión y el aviso aparece en el dashboard. Se copia en cada sesión al iniciarla. ${sesionAbierta ? AVISO_SESION : ''}`}
+          descripcion={`Dónde empieza la zona de cada medición en la mesa real, en coordenadas de la mesa: X de 0 a 562 mm, Y de 0 a 410 mm y Z de 0 a 88 mm. La mesa descansa en el origen (0, 0, 0), con Z abajo, junto a la bobina: al iniciar una medición va a este punto, desde ahí la zona crece hacia X+, Y+ y Z+ (el plano z = 0 es el más bajo y los demás quedan arriba), y al terminar vuelve a descansar. Si la zona no cabe en la mesa, la Pico W rechaza la sesión y el aviso aparece en el dashboard. Se copia en cada sesión al iniciarla. ${sesionAbierta ? AVISO_SESION : ''}`}
           campos={[
-            { ruta: ['inicio_medicion', 'x_mm'], etiqueta: 'Inicio en X', tipo: 'numero', unidad: 'mm', ayuda: 'Eje corto de la mesa (0–410 mm). La zona avanza hacia X+.' },
-            { ruta: ['inicio_medicion', 'y_mm'], etiqueta: 'Inicio en Y', tipo: 'numero', unidad: 'mm', ayuda: 'Eje largo de la mesa (0–562 mm). La zona avanza hacia Y+.' },
+            // Nombres del asesor (utils/geometria.js, NOMBRE_EJE): y_mm se muestra como X y x_mm como Y
+            { ruta: ['inicio_medicion', 'y_mm'], etiqueta: 'Inicio en X', tipo: 'numero', unidad: 'mm', ayuda: 'Eje largo de la mesa (0–562 mm). La zona avanza hacia X+.' },
+            { ruta: ['inicio_medicion', 'x_mm'], etiqueta: 'Inicio en Y', tipo: 'numero', unidad: 'mm', ayuda: 'Eje corto de la mesa (0–410 mm). La zona avanza hacia Y+.' },
             { ruta: ['inicio_medicion', 'z_mm'], etiqueta: 'Inicio en Z (altura)', tipo: 'numero', unidad: 'mm', ayuda: 'De 0 a 88 mm. Es la altura del plano z = 0; los demás planos quedan arriba.' },
           ]}
           relleno={{
@@ -137,9 +137,10 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
         <SeccionFormulario clave="barrido" titulo="Barrido" soloLectura={!esAdmin}
           descripcion={`Los límites de la base son lo más que puede recorrer la mesa en cada eje. En cada medición el operador elige la zona de muestreo (X × Y × Z) y el sistema no deja que pase de estos límites; si cambias de base, ajústalos aquí. La zona va centrada bajo la bobina. ${sesionAbierta ? AVISO_SESION : ''}`}
           campos={[
-            { ruta: ['limite_x_mm'], etiqueta: 'Límite de la base en X', tipo: 'numero', unidad: 'mm',
+            // Nombres del asesor (utils/geometria.js, NOMBRE_EJE): limite_y_mm se muestra como X y limite_x_mm como Y
+            { ruta: ['limite_y_mm'], etiqueta: 'Límite de la base en X', tipo: 'numero', unidad: 'mm',
               ayuda: 'Recorrido máximo de la mesa en X. Entre 1 y 1000 mm, con un decimal.' },
-            { ruta: ['limite_y_mm'], etiqueta: 'Límite de la base en Y', tipo: 'numero', unidad: 'mm',
+            { ruta: ['limite_x_mm'], etiqueta: 'Límite de la base en Y', tipo: 'numero', unidad: 'mm',
               ayuda: 'Recorrido máximo de la mesa en Y. Entre 1 y 1000 mm, con un decimal.' },
             { ruta: ['limite_z_mm'], etiqueta: 'Límite de la base en Z (altura)', tipo: 'numero', unidad: 'mm',
               ayuda: 'Altura máxima sobre el standoff. Entre 0 y 500 mm; 0 = un solo plano.' },

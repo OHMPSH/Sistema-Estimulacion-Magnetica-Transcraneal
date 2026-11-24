@@ -21,6 +21,7 @@ import { CambiarPasswordPage } from './pages/CambiarPasswordPage.jsx';
 import { DashboardPage } from './pages/DashboardPage.jsx';
 import { HistorialPage } from './pages/HistorialPage.jsx';
 import { ConfiguracionPage } from './pages/ConfiguracionPage.jsx';
+import { CalibracionPage } from './pages/CalibracionPage.jsx';
 
 export default function App() {
   const { usuario, cargando } = useAuth();
@@ -67,6 +68,9 @@ function Shell() {
             <i className="bi bi-exclamation-triangle" aria-hidden="true" />
             <span><strong>La Pico W informa un error:</strong> {dispositivo.estado.errorPico}</span>
           </div>
+        )}
+        {vista === 'calibracion' && (
+          <CalibracionPage usuario={usuario} dispositivo={dispositivo.estado} sesionAbierta={medicion.enCurso} onNavegar={navegar} />
         )}
         {vista === 'dashboard' && <DashboardPage usuario={usuario} medicion={medicion} />}
         {vista === 'historial' && <HistorialPage usuario={usuario} />}

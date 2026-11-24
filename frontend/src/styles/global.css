@@ -570,3 +570,77 @@ html.reducir-movimiento { scroll-behavior: auto; }
 html.reducir-movimiento *, html.reducir-movimiento *::before, html.reducir-movimiento *::after {
   animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important;
 }
+
+/* ── Previsualizar bobina (2026-11-24) ─────────────────────────
+   Lo único llamativo es el medidor de rango: una escala con las zonas
+   «señal baja», «adecuada» y «cerca del tope» y una aguja. Lo demás usa
+   los paneles, botones y colores de datos que ya existen. */
+.cal-intro { max-width: 72ch; margin: 0 0 14px; }
+.cal-aviso { margin: 0 0 12px; }
+.cal-rejilla { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cal-rejilla .cal-panel { margin-bottom: 0; }
+.cal-detalle { margin: -6px 0 14px; }
+
+.cal-estado { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border-bright); color: var(--text-secondary); }
+.cal-estado.estado-en-posicion { color: var(--emerald); border-color: color-mix(in srgb, var(--emerald) 50%, transparent); }
+.cal-estado.estado-moviendo { color: var(--aviso); border-color: color-mix(in srgb, var(--aviso) 50%, transparent); }
+.cal-estado.estado-error { color: var(--peligro); border-color: color-mix(in srgb, var(--peligro) 50%, transparent); }
+
+.cal-ejes { display: flex; flex-direction: column; gap: 18px; }
+.cal-eje-cabecera { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.cal-eje-nombre { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin: 0; }
+.cal-eje-desc { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+.cal-eje-valor { font-family: var(--font-mono); font-size: 1.05rem; }
+.cal-eje-pct { color: var(--text-secondary); margin-left: 6px; }
+.cal-slider { width: 100%; height: 32px; margin: 0; accent-color: var(--guinda-bright); cursor: pointer; touch-action: manipulation; }
+.cal-slider:disabled { cursor: not-allowed; opacity: .5; }
+.cal-slider:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 4px; }
+.cal-marcas, .cal-marcas-mm { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
+.cal-marcas span { display: flex; flex-direction: column; align-items: center; min-width: 3ch; }
+.cal-marcas span::before { content: ''; width: 1px; height: 7px; background: var(--text-secondary); margin-bottom: 2px; }
+.cal-marcas span:first-child { align-items: flex-start; }
+.cal-marcas span:last-child { align-items: flex-end; }
+.cal-marcas-mm { color: var(--text-dim); }
+[data-theme="light"] .cal-marcas-mm { color: var(--text-secondary); }
+.cal-acciones { margin-top: 18px; }
+.cal-ayuda-acciones { margin: 0; }
+
+.cal-valores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+.cal-valor { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.cal-valor dt { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.cal-valor dd { font-family: var(--font-mono); font-size: 1.35rem; margin: 0; overflow-wrap: anywhere; }
+.cal-unidad { font-size: 12px; color: var(--text-secondary); }
+
+.cal-medidor { margin-bottom: 14px; }
+.cal-medidor-titulo { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.cal-medidor-titulo .cifra { font-family: var(--font-mono); font-size: 1rem; color: var(--text-primary); }
+.cal-escala { position: relative; height: 18px; border-radius: 4px; background: var(--bg-surface); border: 1px solid var(--border-bright); }
+.cal-zona { position: absolute; top: 0; bottom: 0; }
+.cal-zona-baja { left: 0; background: color-mix(in srgb, var(--text-secondary) 30%, transparent); border-radius: 3px 0 0 3px; }
+.cal-zona-ok { background: color-mix(in srgb, var(--color-bz) 26%, transparent); }
+.cal-zona-alta { background: color-mix(in srgb, var(--peligro) 28%, transparent); border-radius: 0 3px 3px 0; }
+/* La pista ocupa toda la escala: translateX(p %) de su propio ancho = p % de la escala */
+.cal-aguja-pista { position: absolute; inset: 0; pointer-events: none; transition: transform .25s ease-out; }
+.cal-aguja { position: absolute; left: 0; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-card); }
+.cal-aguja.nivel-saturado, .cal-aguja.nivel-alto { background: var(--peligro); }
+.cal-escala-marcas { position: relative; height: 18px; margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
+.cal-escala-marcas span { position: absolute; top: 0; }
+.cal-escala-marcas span:first-child { left: 0; }
+.cal-escala-marcas span:nth-child(2) { transform: translateX(-50%); }
+.cal-escala-marcas span:last-child { right: 0; }
+
+.cal-diagnostico { border-left: 3px solid var(--border-bright); background: var(--bg-surface); border-radius: 0 6px 6px 0; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; }
+.cal-diagnostico.nivel-ok { border-left-color: var(--color-bz); }
+.cal-diagnostico.nivel-bajo { border-left-color: var(--text-secondary); }
+.cal-diagnostico.nivel-alto { border-left-color: var(--aviso); }
+.cal-diagnostico.nivel-saturado { border-left-color: var(--peligro); }
+
+@media (max-width: 900px) {
+  .cal-rejilla { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .cal-valores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-aguja-pista { transition: none; }
+}

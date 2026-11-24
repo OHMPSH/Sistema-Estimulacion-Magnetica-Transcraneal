@@ -13,9 +13,12 @@
 #   - Cada medición empieza en el punto de inicio de la medición (lo manda
 #     el servidor; por defecto, el origen 0, 0, 0) y la zona crece en el
 #     sentido SENTIDO_* de cada eje: X+, Y+, Z+.
-#   - Para bajar Z, la mesa mueve primero X e Y (con Z arriba) y después
-#     baja; para subir Z, sube primero. Así nunca cruza la mesa con el
-#     sensor abajo (motores.Mesa.mover_a).
+#   - Z descansa ABAJO, en su punto más bajo (el más cercano a la bobina), y
+#     mide subiendo (2026-11-24, pico-tms-2.4: EJE_Z["invertir"] = True,
+#     porque con False el sentido + bajaba el sensor).
+#   - Para bajar Z, la mesa mueve primero X e Y (a la altura en que está) y
+#     después baja; para subir Z, sube primero. Así nunca cruza la mesa con
+#     el sensor más abajo de lo necesario (motores.Mesa.mover_a y homing).
 #
 # Las credenciales (Wi-Fi, token y URL del servidor) NO van aquí: van en
 # secretos.py (ver secretos_ejemplo.py), que no se sube a git.
@@ -23,7 +26,7 @@
 # Unidades: mm, mm/s, mm/s², ms, µT.
 # ═══════════════════════════════════════════════════════════════
 
-FIRMWARE = "pico-tms-2.3"          # se manda en cada latido (máx. 40 caracteres)
+FIRMWARE = "pico-tms-2.4"          # se manda en cada latido (máx. 40 caracteres)
 
 # ── Límites de la mesa (medidos con prueba_calibracion.py) ─────
 # Coordenadas de MÁQUINA: cada eje va de 0 a su límite. La mesa nunca va a
@@ -84,6 +87,7 @@ LECTURAS_FONDO = 100
 RESTAR_FONDO_EN_PICO = False
 ASENTAMIENTO_MS = 300              # espera tras cada movimiento antes de leer
 MOSTRAR_LECTURAS = True            # imprime cada lectura en la consola de Thonny
+CALIBRACION_PAUSA_MS = 150         # previsualizador de la bobina: pausa entre lecturas (calibracion.py)
 
 # ── Motores: NEMA 17 + TB6600 (los de prueba_calibracion.py) ───
 # Factores de prueba_calibracion.py: si allí los corregiste, copia aquí
@@ -120,8 +124,10 @@ EJE_Y = {                          # eje largo (0–562 mm), el Y de prueba_cali
     "final": None,
     "holgura_mm": HOLGURA_MM,
 }
-EJE_Z = {
-    "paso": 14, "dir": 15, "invertir": False,
+EJE_Z = {                          # 0 = abajo (descanso, junto a la bobina); + = sube
+    # True desde la 2.4 (2026-11-24): con False, DIR = 1 bajaba el sensor; en la
+    # mesa, Z descansa abajo y cada plano nuevo debe quedar más arriba.
+    "paso": 14, "dir": 15, "invertir": True,
     "pasos_por_mm": 50.0,
     "recorrido_mm": LIMITE_Z_MM,
     "arranque_mm": POSICION_ARRANQUE_Z_MM,

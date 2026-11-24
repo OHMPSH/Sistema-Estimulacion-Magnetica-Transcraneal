@@ -359,13 +359,18 @@ class Mesa:
                 raise ErrorMovimiento("final de carrera inesperado en %s" % ", ".join(tocados))
 
     def homing(self):
-        """Generador: referencia los ejes (Z primero; X e Y a la vez). Sin finales de
-        carrera, lleva cada eje a su posición de arranque (arranque_mm)."""
+        """Generador: referencia los ejes. Sin finales de carrera, lleva cada eje a su
+        posición de arranque (arranque_mm) con la regla de mover_a: si Z tiene que
+        bajar (el descanso está abajo, junto a la bobina; 2026-11-24), primero X e Y a
+        la altura actual y después baja Z; si no, Z primero."""
         self.referenciada = False
         self.habilitar(True)
-        if self.z:
+        z_baja = self.z is not None and self.z.final is None and self.z.arranque < self.z.pos
+        if self.z and not z_baja:
             yield from self._homing_eje(self.z)
         yield from _en_paralelo(self._homing_eje(self.x), self._homing_eje(self.y))
+        if z_baja:
+            yield from self._homing_eje(self.z)
         self.referenciada = True
         log("Mesa en la posición de arranque X=%.2f Y=%.2f Z=%.2f mm" % self.posicion_mm())
 

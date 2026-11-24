@@ -24,6 +24,7 @@
 
 import * as Medicion from '../models/Medicion.js';
 import * as sesiones from '../services/sesiones.js';
+import { terminar as terminarCalibracion } from '../services/calibracion.js';
 import { ErrorIngesta } from '../services/ingesta.js';
 import { conectar, totalClientes, difundir } from '../services/tiempoReal.js';
 import { obtener } from '../services/configuracion.js';
@@ -68,6 +69,7 @@ export const sseHandler = (req, res) => conectar(req, res);
 export const iniciarSesion = async (req, res, next) => {
   try {
     const sesion = await sesiones.iniciar({ ...req.nuevaSesion, usuarioId: req.usuario.id });
+    terminarCalibracion('se inició la sesión ' + sesion.id);   // la Pico vuelve al descanso y empieza a medir
     // sesionId se mantiene por compatibilidad con el frontend anterior
     res.status(201).json({ ok: true, sesionId: sesion.id, sesion });
   } catch (err) {

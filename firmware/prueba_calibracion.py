@@ -52,7 +52,7 @@ PASOS_POR_MM_Z = 50.0
 # Si un eje se mueve al revés de lo que pides, cambia su False por True
 INVERTIR_X = False
 INVERTIR_Y = False
-INVERTIR_Z = False
+INVERTIR_Z = True         # 2026-11-24: Z descansa abajo y «+» sube (igual que config.py)
 
 # Pines (los mismos que firmware/config.py). PUL = STEP del TB6600.
 PIN_PUL_X, PIN_DIR_X = 10, 11

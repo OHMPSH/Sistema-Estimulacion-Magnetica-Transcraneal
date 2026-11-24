@@ -20,7 +20,7 @@ export const StartModal = forwardRef(function StartModal({ parametros, geometria
     ['Zona (X × Y × Z)', etiquetaZona(parametros.zona)],
     ['Paso (X, Y y Z)', etiquetaPaso(parametros.pasoMM)],
     ['Medio', etiquetaMedio(parametros.medio)],
-    ['Malla', `${geometria.gridNx} × ${geometria.gridNy} puntos · ${geometria.zLevels.length} planos Z (${geometria.zLevels.join(', ')} mm)`],
+    ['Malla', `${geometria.gridNy} × ${geometria.gridNx} puntos · ${geometria.zLevels.length} planos Z (${geometria.zLevels.join(', ')} mm)`],
     ['Total', `${geometria.totalPuntos} puntos`],
     ['Origen de los datos', modoOperacion === 'real' ? 'Pico W (modo real)' : 'Simulador del servidor'],
   ];

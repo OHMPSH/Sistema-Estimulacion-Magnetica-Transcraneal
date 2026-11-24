@@ -39,6 +39,7 @@ import React, { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Plotly from 'plotly.js-gl3d-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import { numero } from '../../utils/formato.js';
+import { NOMBRE_EJE } from '../../utils/geometria.js';
 import { useConfig } from '../../context/ConfigContext.jsx';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -221,7 +222,7 @@ const Superficie3D = memo(function Superficie3D({ mediciones, malla, enCurso = f
       outlinewidth: 1, outlinecolor: FIGURA.linea,
       ticks: 'outside', tickcolor: FIGURA.linea, ticklen: 3,
     },
-    hovertemplate: `X %{x} mm<br>Y %{y} mm<br>${magnitud.hover} %{z:.3f} µT<extra></extra>`,
+    hovertemplate: `${NOMBRE_EJE.x} %{x} mm<br>${NOMBRE_EJE.y} %{y} mm<br>${magnitud.hover} %{z:.3f} µT<extra></extra>`,
   }] : []), [ejeX, ejeY, matriz, magnitud, rango, fuente, FIGURA]);
 
   const plotLayout = useMemo(() => {
@@ -246,8 +247,8 @@ const Superficie3D = memo(function Superficie3D({ mediciones, malla, enCurso = f
       uirevision: 'true',   // la cámara del usuario no se reinicia con cada actualización
       dragmode: 'turntable',
       scene: {
-        xaxis: eje('Posición X [mm]'),
-        yaxis: eje('Posición Y [mm]'),
+        xaxis: eje(`Posición ${NOMBRE_EJE.x} [mm]`),
+        yaxis: eje(`Posición ${NOMBRE_EJE.y} [mm]`),
         zaxis: eje(magnitud.titulo),
         bgcolor: FIGURA.fondo,
         dragmode: 'turntable',

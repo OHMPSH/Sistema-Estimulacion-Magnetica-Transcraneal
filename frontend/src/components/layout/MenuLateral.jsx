@@ -14,6 +14,7 @@ import { ROLES_TEXTO } from '../../utils/formato.js';
 const ENFOCABLES = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const NAVEGACION = [
+  { vista: 'calibracion',   etiqueta: 'Previsualizar bobina', icono: 'bi-sliders' },
   { vista: 'dashboard',     etiqueta: 'Dashboard en vivo',  icono: 'bi-broadcast' },
   { vista: 'historial',     etiqueta: 'Mediciones pasadas', icono: 'bi-archive' },
   { vista: 'configuracion', etiqueta: 'Configuración',      icono: 'bi-gear' },

@@ -28,7 +28,7 @@ import React, { memo, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useTokensTema } from '../../hooks/useTokensTema.js';
 import { numero } from '../../utils/formato.js';
-import { clasePlano, indicePlano, etiquetaZona } from '../../utils/geometria.js';
+import { clasePlano, indicePlano, etiquetaZona, NOMBRE_EJE } from '../../utils/geometria.js';
 
 // Una posición = un punto, aunque tenga varias lecturas
 const claveDe = m => `${m.xMM}|${m.yMM}|${m.zMM}`;
@@ -327,7 +327,8 @@ export const Canvas3D = memo(function Canvas3D({ mediciones, zLevels, zona = ZON
             <div className="z-legend-item escala" ref={etiquetaCuenta}>Sin lecturas</div>
           </div>
           <div className="ejes-3d" aria-hidden="true">
-            <span className="color-bx">X</span> · <span className="color-by">Y</span> · <span className="color-bz">Z ↑</span>
+            {/* La línea del eje x del sistema (color de Bx) se llama «Y» para el usuario (utils/geometria.js) */}
+            <span className="color-by">{NOMBRE_EJE.y}</span> · <span className="color-bx">{NOMBRE_EJE.x}</span> · <span className="color-bz">Z ↑</span>
           </div>
         </div>
       </div>

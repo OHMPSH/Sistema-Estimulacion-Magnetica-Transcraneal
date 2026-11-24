@@ -9,15 +9,18 @@
  *   PATCH  /dispositivo {activo}     admin
  *   POST   /dispositivo/latido       la Pico (Bearer)
  *   POST   /dispositivo/mediciones   la Pico (Bearer)
+ *   POST   /dispositivo/calibracion  la Pico (Bearer): lectura del previsualizador de la bobina
  * ─────────────────────────────────────────────────────────────
  */
 
 import { Router } from 'express';
 import {
-  getEstado, generarToken, revocarToken, patchDispositivo, latido, lote,
+  getEstado, generarToken, revocarToken, patchDispositivo, latido, lote, lecturaCalibracion,
 } from '../controllers/dispositivo.controller.js';
 import { requiereLogin, requiereRol, requiereDispositivo } from '../middleware/auth.js';
-import { validarLatido, validarLoteDispositivo, validarCambiosDispositivo } from '../middleware/validar.js';
+import {
+  validarLatido, validarLoteDispositivo, validarCambiosDispositivo, validarLecturaCalibracion,
+} from '../middleware/validar.js';
 
 const router = Router();
 const soloAdmin = [requiereLogin, requiereRol('admin')];
@@ -28,5 +31,6 @@ router.delete('/dispositivo/token',       soloAdmin,                            
 router.patch ('/dispositivo',             soloAdmin, validarCambiosDispositivo,     patchDispositivo);
 router.post  ('/dispositivo/latido',      requiereDispositivo, validarLatido,       latido);
 router.post  ('/dispositivo/mediciones',  requiereDispositivo, validarLoteDispositivo, lote);
+router.post  ('/dispositivo/calibracion', requiereDispositivo, validarLecturaCalibracion, lecturaCalibracion);
 
 export default router;

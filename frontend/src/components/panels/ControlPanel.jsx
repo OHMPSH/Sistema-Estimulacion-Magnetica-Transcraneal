@@ -8,7 +8,7 @@
  * pudo iniciar otra persona) y no se puede cambiar.
  */
 import React from 'react';
-import { MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo, etiquetaZona } from '../../utils/geometria.js';
+import { MEDIOS, MODOS, etiquetaPaso, etiquetaMedio, etiquetaModo, etiquetaZona, EJES_VISTA } from '../../utils/geometria.js';
 import { entero } from '../../utils/formato.js';
 import { tiempoAproximado } from '../../hooks/useTiempoEstimado.js';
 
@@ -60,7 +60,7 @@ function CampoPaso({ texto, valor, error, malla, onCambio, deshabilitado }) {
       {error
         ? <p id="paso-error" className="texto-error texto-paso mb-0">{error}</p>
         : <p id="paso-malla" className="texto-ayuda texto-paso mb-0 cifra">
-            {malla.gridNx}{'\u00a0'}×{'\u00a0'}{malla.gridNy} · {malla.zLevels.length} {malla.zLevels.length === 1 ? 'plano' : 'planos'} Z = {entero(malla.totalPuntos)}{'\u00a0'}puntos
+            {malla.gridNy}{'\u00a0'}×{'\u00a0'}{malla.gridNx} · {malla.zLevels.length} {malla.zLevels.length === 1 ? 'plano' : 'planos'} Z = {entero(malla.totalPuntos)}{'\u00a0'}puntos
           </p>}
     </fieldset>
   );
@@ -71,7 +71,7 @@ function CampoPaso({ texto, valor, error, malla, onCambio, deshabilitado }) {
  * límites de la base (Configuración › Barrido); por defecto, toda la base.
  */
 function CampoZona({ textos, errores, limites, onCambio, deshabilitado }) {
-  const ejes = [['x', 'X'], ['y', 'Y'], ['z', 'Z']];
+  const ejes = EJES_VISTA;          // se muestran X, Y, Z con los nombres del asesor (utils/geometria.js)
   const hayError = ejes.some(([e]) => errores?.[e]);
   return (
     <fieldset className="grupo-opciones grupo-zona" disabled={deshabilitado}>

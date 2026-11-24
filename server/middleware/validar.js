@@ -24,10 +24,11 @@ import { obtener as obtenerConfiguracion, POR_DEFECTO } from '../services/config
 const barridoActual = () => { try { return obtenerConfiguracion('barrido'); } catch { return POR_DEFECTO.barrido; } };
 import { errorDePassword, LONGITUD_MAXIMA } from '../services/passwords.js';
 import { MAX_LECTURAS_LOTE, tsDispositivoValido } from '../services/conversionSensor.js';
+import { erroresDeObjetivo, ESTADOS_CALIBRACION, LIMITE_MAXIMO_MM } from '../services/calibracion.js';
 
 const MODOS = ['DC', 'AC'];
 /** Lo que la Pico informa en el latido (firmware/main.py) */
-export const ESTADOS_PICO = ['espera', 'homing', 'midiendo', 'error'];
+export const ESTADOS_PICO = ['espera', 'homing', 'midiendo', 'calibrando', 'error'];
 const MAX_ERROR_PICO = 300;
 const ORIGENES = ['sim', 'hw'];
 
@@ -177,8 +178,14 @@ export function validarLatido(req, res, next) {
   if (typeof body !== 'object' || Array.isArray(body)) {
     return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
   }
-  const { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts, estado, error } = body;
+  const { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts, estado, error, limites_mm: limites } = body;
   const errores = [];
+  if (limites !== undefined && limites !== null) {
+    const malos = !esObjeto(limites) ? ['debe ser un objeto'] : erroresDeObjetivo(limites);
+    if (malos.length || ['x_mm', 'y_mm', 'z_mm'].some(e => esObjeto(limites) && limites[e] <= 0)) {
+      errores.push(`limites_mm debe ser {x_mm, y_mm, z_mm} con números entre 0 y ${LIMITE_MAXIMO_MM} mm`);
+    }
+  }
   if (estado !== undefined && !ESTADOS_PICO.includes(estado)) {
     errores.push(`estado debe ser uno de: ${ESTADOS_PICO.join(', ')}`);
   }
@@ -198,7 +205,66 @@ export function validarLatido(req, res, next) {
     errores.push('ts_dispositivo_ms debe ser un epoch en milisegundos (UTC), o 0 si la Pico aún no sincronizó su reloj');
   }
   if (errores.length > 0) return rechazar(res, 422, errores);
-  req.latido = { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts || null, estado, error: error || null };
+  req.latido = { firmware, rssi, uptime_s: uptime, ts_dispositivo_ms: ts || null, estado, error: error || null, limites_mm: limites ?? null };
+  next();
+}
+
+// ── Previsualizador de la bobina (calibración, 2026-11-24) ──────
+
+const CAMPOS_PUNTO = ['x_mm', 'y_mm', 'z_mm'];
+
+/** {x_mm, y_mm, z_mm} → errores 400 (forma) y 422 (valores) */
+function revisarPunto(punto, nombre) {
+  if (!esObjeto(punto)) return { status: 400, errores: [`${nombre} debe ser un objeto {x_mm, y_mm, z_mm}`] };
+  const faltan = CAMPOS_PUNTO.filter(c => punto[c] === undefined);
+  if (faltan.length) return { status: 400, errores: [`Faltan en ${nombre}: ${faltan.join(', ')}`] };
+  const errores = erroresDeObjetivo(punto);
+  return errores.length ? { status: 422, errores } : null;
+}
+
+/** body de PATCH /calibracion {x_mm, y_mm, z_mm} → req.objetivo */
+export function validarObjetivoCalibracion(req, res, next) {
+  const problema = revisarPunto(req.body, 'el cuerpo');
+  if (problema) return rechazar(res, problema.status, problema.errores);
+  req.objetivo = Object.fromEntries(CAMPOS_PUNTO.map(c => [c, req.body[c]]));
+  next();
+}
+
+/** body de POST /calibracion: vacío (empieza en el descanso) o {x_mm, y_mm, z_mm} → req.objetivo */
+export function validarInicioCalibracion(req, res, next) {
+  const body = req.body ?? {};
+  if (!esObjeto(body)) return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
+  if (CAMPOS_PUNTO.every(c => body[c] === undefined)) {
+    req.objetivo = null;
+    return next();
+  }
+  return validarObjetivoCalibracion(req, res, next);
+}
+
+/** body de POST /dispositivo/calibracion (la Pico) → req.lecturaCalibracion */
+export function validarLecturaCalibracion(req, res, next) {
+  const body = req.body;
+  if (!esObjeto(body)) return rechazar(res, 400, ['El cuerpo debe ser un objeto JSON']);
+  const { estado, posicion_mm: posicion, raw, saturado, error } = body;
+  if (estado === undefined) return rechazar(res, 400, ['Falta estado']);
+  const errores = [];
+  if (!ESTADOS_CALIBRACION.includes(estado)) errores.push(`estado debe ser uno de: ${ESTADOS_CALIBRACION.join(', ')}`);
+  if (posicion !== undefined && posicion !== null) {
+    const p = revisarPunto(posicion, 'posicion_mm');
+    if (p) errores.push(...p.errores);
+  }
+  if (raw !== undefined && raw !== null
+      && (!esObjeto(raw) || !['x', 'y', 'z'].every(e => Number.isInteger(raw[e])))) {
+    errores.push('raw debe ser {x, y, z} con enteros');
+  }
+  if (saturado !== undefined && typeof saturado !== 'boolean') errores.push('saturado debe ser true o false');
+  if (error !== undefined && error !== null && (typeof error !== 'string' || error.length > MAX_ERROR_PICO)) {
+    errores.push(`error debe ser un texto de hasta ${MAX_ERROR_PICO} caracteres, o null`);
+  }
+  if (errores.length) return rechazar(res, 422, errores);
+  req.lecturaCalibracion = {
+    estado, posicion_mm: posicion ?? null, raw: raw ?? null, saturado: saturado === true, error: error || null,
+  };
   next();
 }
 

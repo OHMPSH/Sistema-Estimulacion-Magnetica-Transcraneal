@@ -29,6 +29,7 @@ export const ESTADOS_PICO = {
   espera: 'en espera',
   homing: 'volviendo al origen',
   midiendo: 'midiendo',
+  calibrando: 'previsualizando la bobina',
   error: 'con error',
 };
 

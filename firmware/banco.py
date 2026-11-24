@@ -3,7 +3,7 @@
 #
 # Desde la consola de Thonny, con main.py detenido (botón rojo) y la mesa
 # en la posición de arranque (POSICION_ARRANQUE_* de config.py: X=0,
-# Y=562, Z=88). Todas las coordenadas son de MÁQUINA (mm):
+# Y=0, Z=0, con Z abajo). Todas las coordenadas son de MÁQUINA (mm):
 #
 #   >>> import banco
 #   >>> banco.sensor()                  # Chip ID, fondo y 10 lecturas (cuentas, µT, |B|)

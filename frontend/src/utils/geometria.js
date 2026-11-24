@@ -110,7 +110,21 @@ export function mallaDeZona(zona, pasoMM) {
 }
 
 /** "60 × 60 × 20 mm" */
-export const etiquetaZona = z => (z ? `${mm.format(z.x)}\u00a0×\u00a0${mm.format(z.y)}\u00a0×\u00a0${mm.format(z.z)}\u00a0mm` : '—');
+/**
+ * Nombres que VE el usuario para los ejes de posición (2026-11-24, pedido del
+ * asesor): el eje que el sistema llama x (x_mm, zona.x, limite_x_mm; el eje
+ * corto de la mesa, 0–410 mm) se muestra como «Y», y el y (eje largo, 0–562 mm)
+ * como «X». Solo cambian las etiquetas: datos, API, base, firmware, medición y
+ * movimiento siguen igual. Las componentes del campo (Bx, By, Bz) no cambian.
+ * Para mostrar en orden X, Y, Z: EJES_VISTA = [['y','X'], ['x','Y'], ['z','Z']].
+ */
+export const NOMBRE_EJE = { x: 'Y', y: 'X', z: 'Z' };
+export const EJES_VISTA = [['y', 'X'], ['x', 'Y'], ['z', 'Z']];
+/** (a, b, c) de una posición en el orden que ve el usuario: (X, Y, Z) = (y, x, z) */
+export const enOrdenVista = (x, y, z) => [y, x, z];
+
+/** Zona «X × Y × Z» con los nombres que ve el usuario */
+export const etiquetaZona = z => (z ? `${mm.format(z.y)}\u00a0×\u00a0${mm.format(z.x)}\u00a0×\u00a0${mm.format(z.z)}\u00a0mm` : '—');
 
 /**
  * Índice de una lectura en el orden del barrido, o null si no cae en la

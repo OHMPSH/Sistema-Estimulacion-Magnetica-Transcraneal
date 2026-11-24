@@ -15,7 +15,7 @@
 # punto de inicio de 2026-11-13):
 #   - Sensor: magnetómetro QMC5883P de 3 ejes (sensor.py).
 #   - Sin finales de carrera: al arrancar, la mesa está en la POSICIÓN DE
-#     ARRANQUE («descanso») de config.py (X=0, Y=562, Z=88 mm). Antes de ejecutar, deja
+#     ARRANQUE («descanso») de config.py (X=0, Y=0, Z=0 mm; Z abajo). Antes de ejecutar, deja
 #     la mesa ahí.
 #   - La zona de cada sesión empieza en el punto de inicio de la medición
 #     (lo manda el servidor) y se recorre en serpentina (barrido.py).
@@ -44,6 +44,7 @@ import config
 import red
 import cliente
 import barrido
+import calibracion
 from registro import log
 from motores import Mesa, ErrorMovimiento
 from sensor import QMC5883P, ErrorSensor
@@ -67,10 +68,11 @@ class Controlador:
         self.sensor_ok = False
         self.progreso = barrido.Progreso()
         self.sesion = None          # sesión que se está midiendo
-        self.fase = None            # None, "homing", "barrido", "vaciando" o "cierre"
+        self.fase = None            # None, "homing", "barrido", "vaciando", "cierre" o "calibracion"
         self.tarea = None           # generador en curso
         self.homing_al_vaciar = True
         self.pendiente = None       # sesión nueva que espera a que termine la tarea actual
+        self.cal = None             # previsualizador de la bobina: {activa, objetivo, sensor} del servidor
         self.no_medir = None        # id de la sesión ya completada o rechazada
         self.error = None
         self.sin_token = False
@@ -154,6 +156,28 @@ class Controlador:
         if isinstance(intervalo, int) and intervalo > 0:
             self.intervalo_ms = intervalo * 1000
         self.revisar_sesion(datos.get("sesion_activa"))
+        self.revisar_calibracion(datos.get("calibracion"))
+
+    def revisar_calibracion(self, cal):
+        """Previsualizador de la bobina (calibracion.py): empieza en espera y, al
+        terminar, la mesa vuelve al descanso."""
+        if self.sesion or self.pendiente:
+            cal = None                      # una sesión de medición manda sobre la calibración
+        self.cal = cal
+        if cal is None:
+            if self.fase == "calibracion":
+                log("Calibración terminada por el servidor: vuelve a la posición de arranque")
+                self._cerrar_tarea()
+                self.volver_al_arranque()
+            return
+        if self.tarea is not None or self.sin_token:
+            return                          # se empieza en un latido siguiente, ya en espera
+        if not self.sensor_ok and not self.verificar_sensor():
+            return
+        self.error = None
+        log("Calibración (previsualizador de la bobina): empieza")
+        self.fase = "calibracion"
+        self.tarea = calibracion.ejecutar(self)
 
     def revisar_sesion(self, s):
         id_nuevo = s["id"] if s else None
@@ -189,6 +213,8 @@ class Controlador:
                 self.homing_al_vaciar = True
             elif self.fase in ("homing", "cierre"):
                 self.fase = None            # motores.homing() ya escribió la posición
+            elif self.fase == "calibracion":
+                self.volver_al_arranque()   # la respuesta del servidor ya trajo calibracion = null
         except ERRORES_DE_TAREA as e:
             self.fallar(e)
 
@@ -268,6 +294,7 @@ class Controlador:
         self.bufer.vaciar()
         self.sesion = None
         self.pendiente = None
+        self.cal = None
         self.volver_al_arranque()
 
     def estado_pico(self):
@@ -278,6 +305,8 @@ class Controlador:
             return "homing"
         if self.fase in ("barrido", "vaciando"):
             return "midiendo"
+        if self.fase == "calibracion":
+            return "calibrando"
         return "espera"
 
     def actualizar_led(self):

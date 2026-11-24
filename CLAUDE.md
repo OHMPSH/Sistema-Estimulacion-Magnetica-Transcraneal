@@ -2,7 +2,7 @@
 
 Este archivo es la fuente de contexto para cualquier sesión de Claude que trabaje en este repositorio. Léelo completo antes de tocar código. Al terminar una fase, **actualiza la sección "Estado de las fases"** (y lo que haya cambiado en las demás secciones) para que la siguiente sesión parta del estado real.
 
-Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md). **Las 8 fases están hechas** (ver la sección 6). **La versión funcional en la mesa quedó registrada el 2026-11-23 en la sección 0**: empieza por ahí; lo que queda está en 0.9 y en las notas de la Fase 8. **Es la base de referencia para las mejoras: el punto de restauración y cómo regresar a él están en 0.10.**
+Los prompts de cada fase están en [docs/prompts-sesiones.md](docs/prompts-sesiones.md). **Los cambios posteriores a la base (2026-11-24 en adelante) están en la sección 0.11.** **Las 8 fases están hechas** (ver la sección 6). **La versión funcional en la mesa quedó registrada el 2026-11-23 en la sección 0**: empieza por ahí; lo que queda está en 0.9 y en las notas de la Fase 8. **Es la base de referencia para las mejoras: el punto de restauración y cómo regresar a él están en 0.10.**
 
 ---
 
@@ -27,7 +27,7 @@ El usuario confirma que **esta versión funciona en la mesa** y pidió dejarla r
 
 - **Ejes:** X = eje corto 0–410 mm (GP10/GP11), Y = eje largo 0–562 mm (GP12/GP13), Z 0–88 mm (GP14/GP15), ENA común GP16 (0 = habilitado). **50 pulsos/mm** en los tres, sin inversiones; holgura 0,5 mm; 60 mm/s, 300 mm/s², arranque 6 mm/s, tope 15 kHz; asentamiento 300 ms.
 - **⚠ Posición de descanso (`POSICION_ARRANQUE_*_MM`) = (0, 0, 0)**, no (0, 562, 88). El comentario de `config.py` (fechado 2026-11-15) dice que (0, 562, 88) «mandaba Y y Z contra su tope». Inicio de la medición por defecto (0, 0, 0) y sentidos X+, Y+, Z+ (el plano z = 0 es el más bajo). La nota del 2026-11-14 de la sección 6 («Descanso en (0, 562, 88)») queda **superada** en ese punto.
-- `Mesa.mover_a`: si Z baja, primero X e Y y después Z; si sube, primero Z. `Mesa.homing()` (regreso al descanso) mueve primero Z y luego X e Y a la vez; con el descanso en Z = 0 eso **baja** Z primero (la regla se pensó para Z arriba). El usuario reporta que funciona; no hay registro de que se haya revisado ese caso a propósito.
+- `Mesa.mover_a`: si Z baja, primero X e Y y después Z; si sube, primero Z. `Mesa.homing()` (regreso al descanso) mueve primero Z y luego X e Y a la vez; con el descanso en Z = 0 eso **baja** Z primero (la regla se pensó para Z arriba). El usuario reporta que funciona; no hay registro de que se haya revisado ese caso a propósito. **Cambiado en la 2.4 (ver 0.11):** Z invertido (en la 2.3 el sentido + bajaba el sensor) y `homing()` mueve X e Y antes de bajar Z.
 - **Sensor:** QMC5883P en GP0/GP1, 0x2C, 100 kHz; promedio de 10 lecturas; DRDY con límite de 100 ms; fondo con 100 lecturas en 30 G; `RESTAR_FONDO_EN_PICO = False`.
 - **Envío:** lotes de 25 o cuando la lectura más vieja cumple 3 s; búfer de 1000; reintentos de 0,25 a 8 s; timeout HTTP 5 s; tras un 401, latido cada 30 s; NTP `pool.ntp.org` cada hora; sin watchdog ni `machine.reset()`.
 - **Pico 2 W:** `motores.es_rp2350()` elige la dirección de CHAN_ABORT del DMA (0x50000464 en el RP2350, 0x50000444 en el RP2040), con espera máxima de 10 ms (ver la nota «Pico 2 W: cuelgue al detener» en la sección 6).
@@ -123,6 +123,8 @@ Las demás sesiones de esos días (89–91, 95–107, 110–112, 114, 115, 118, 
 
 ### 0.9 Pendientes vigentes
 
+- (2026-11-24) Probar en la mesa la 2.4: Z subiendo, regreso al descanso y el previsualizador (ver 0.11). Adaptar la app móvil a los nombres X ↔ Y y al previsualizador cuando el usuario lo pida.
+
 - Instalar en la Raspberry Pi 5 con `COMANDOS.md` y decidir cómo entra la app móvil (puerto 4000 con `HOST=0.0.0.0`, o no).
 - Unificar la posición de descanso (0, 0, 0) en la página, los README, el instructivo y los comentarios, cuando el usuario lo pida.
 - Actualizar los README de la tabla 0.8 y `docs/tesis/`, cuando el usuario lo pida.
@@ -172,6 +174,35 @@ Con `-u tms_user -p` el volcado falló (error 1045, contraseña rechazada) y dej
 - **Comprobar que la restauración quedó bien** (los mismos resultados de 0.4): `cd server && npm test` → 66/66; `cd firmware/pruebas_pc && python3 -m unittest prueba_logica` → 28/28; `python3 firmware_hall_1d/pruebas_pc/prueba_logica.py` → «TODO BIEN»; `cd app && npm run typecheck` sin errores; `GET /api/status` → `version` 3.0.0.
 
 **Regla para las mejoras:** cada cambio que se haga a partir de aquí se anota en este `CLAUDE.md` como diferencia frente a esta base (qué cambió, por qué y cómo se verificó), para poder saber en todo momento qué hay de nuevo respecto de la versión que funcionaba.
+
+### 0.11 Cambios frente a la base
+
+#### 2026-11-24 — Nombres X ↔ Y, Z de abajo hacia arriba y previsualizador de la bobina (sin commit todavía)
+
+Pedido del usuario. Firmware **`pico-tms-2.4`**. **Sin migraciones ni cambios en la base**: no se tocó `tms_db` (todo se verificó contra una MariaDB temporal). `git diff base-funcional-2026-11-23` muestra todo.
+
+**A. Nombres de los ejes X ↔ Y (solo lo que ve el usuario en la web).**
+- *Por qué:* el asesor pidió que en el mapa lo que salía como X se llame Y y viceversa. La medición estaba bien: solo cambian las letras.
+- *Qué:* `frontend/src/utils/geometria.js` tiene `NOMBRE_EJE = {x: 'Y', y: 'X', z: 'Z'}`, `EJES_VISTA` (orden X, Y, Z en pantalla) y `etiquetaZona` (muestra `y × x × z`). Se usan en la zona del panel (el campo «X» edita `zona.y`, el eje largo), el resumen de la malla (`ny × nx`), el modal de inicio, la tabla (columnas X = `yMM`, Y = `xMM`), el KPI de posición, el tooltip de la gráfica de líneas, los títulos de ejes y el hover de la sábana 3D, la leyenda del mapa 3D, los huecos del historial y Configuración › General y › Barrido (campos reordenados y renombrados; la ayuda de General ya dice descanso (0, 0, 0) con Z abajo, y se quitó `DESCANSO_MM`).
+- *Qué NO cambia:* datos, API, base (`x_mm`, `zona_x_mm`, `limite_x_mm` siguen siendo el eje corto, 0–410), CSV (columnas `x_mm`, `y_mm` con los nombres del sistema), firmware (pines, `EJE_X`/`EJE_Y`, los logs de Thonny y sus mensajes de error siguen con los nombres internos), serpentina, Bx/By/Bz, `firmware_hall_1d/` y la app móvil (se adaptará después). Las sesiones 59–122 quedan como están.
+
+**B. Z mide de abajo hacia arriba.**
+- *Por qué:* en la mesa, con la 2.3, cada plano nuevo bajaba el sensor (el sentido + de Z bajaba). El usuario dejó Z en su punto más bajo (junto a la bobina): ese es el descanso y el inicio.
+- *Qué:* `firmware/config.py`: `EJE_Z["invertir"] = True` (lo único que cambia del movimiento; X e Y igual), `FIRMWARE = "pico-tms-2.4"`. `motores.Mesa.homing()`: si Z tiene que bajar al descanso, primero X e Y a la altura actual y después baja Z (la misma regla de `mover_a`). `prueba_calibracion.py`: `INVERTIR_Z = True`. Comentarios de `main.py` y `banco.py` con el descanso (0, 0, 0). El arreglo de CHAN_ABORT de la 2.3 no se tocó. El procesamiento (z = 0 el plano más cercano a la bobina, standoff del simulador) no cambió.
+
+**C. Previsualizador de la bobina (calibrar la corriente antes de medir).**
+- *Web:* vista nueva `?vista=calibracion` («Previsualizar bobina», primera del menú ☰), `pages/CalibracionPage.jsx` y estilos `.cal-*` al final de `global.css`. Tres sliders (X, Y, Z en mm de máquina, recorrido completo de la mesa, mm y %, marcas 0/50/100 %; la orden sale al soltar, con el evento nativo `change`), estado (moviéndose / en posición / error), Bx/By/Bz/|B| en µT, medidor del uso del rango (componente mayor / fondo de escala nominal: 30 G = ±3000 µT) con avisos: **saturado** (OVFL), **cerca del tope** (≥ 80 %), **señal baja** (|B| < 2 %). Botones «Empezar a previsualizar» y «Terminar y volver al dashboard». Solo modo real y sin sesión abierta; el observador solo mira. Revisada con `web-design-guidelines` (corregido: anuncio del lector de pantalla solo al cambiar de nivel, aguja con `transform`, evento al soltar, mensaje de error con qué hacer) y diseñada con `frontend-design` dentro de los tokens existentes.
+- *Servidor:* `services/calibracion.js` (estado en memoria; **no guarda nada en la base ni crea sesiones**), `controllers/calibracion.controller.js`, `routes/calibracion.routes.js`, validadores `validarInicioCalibracion`, `validarObjetivoCalibracion`, `validarLecturaCalibracion`; evento SSE `calibracion`. El latido acepta `limites_mm` y el estado `calibrando`, y responde `calibracion: {activa, objetivo, sensor} | null`. Iniciar una sesión (`mediciones.controller`), pasar a simulación (`configuracion.controller`) o un latido en simulación o con sesión abierta terminan la calibración.
+- *Firmware:* `firmware/calibracion.py` (generador: va al objetivo con `mover_a`, mide en bucle, manda cada lectura a `POST /dispositivo/calibracion` y toma el objetivo de la respuesta; un objetivo fuera del recorrido se informa como error sin mover nada), `main.py` (fase `calibracion`, estado `calibrando`; al terminar, regreso al descanso; una sesión pendiente manda sobre la calibración), `cliente.latido` manda `limites_mm`, `config.CALIBRACION_PAUSA_MS = 150`.
+
+**Verificación (2026-11-24):**
+- `cd server && npm test` → **71/71** (5 nuevas en `tests/calibracion.test.js`). `npm run test:integracion` contra una MariaDB temporal → **11/11** (nueva: 409 en simulación y con sesión, 403 del observador, latido con la calibración, lectura convertida, 422/401, fin al iniciar una sesión, con DELETE y al pasar a simulación, sin sesiones nuevas).
+- `firmware/pruebas_pc` → **31/31** (nuevas: `test_z_sube_desde_el_descanso`, `Calibracion.test_ciclo`, `Calibracion.test_latido_y_controlador`; `test_orden_de_los_ejes` ahora exige X e Y antes de bajar Z). `firmware_hall_1d` → «TODO BIEN». `vite build` sin errores.
+- Firmware en el PC contra un servidor de prueba en el 4100 (base temporal): barrido 20 × 20 × 20 mm con paso 10 (27 puntos, Z 0 → 10 → 20, cierre solo, sin huecos, regreso a (0, 0, 0)); Detener a mitad de un movimiento de 100 mm (parada y regreso al descanso en 1,8 s); calibración desde la página (sliders con teclado, la mesa fue a X = 280, Y = 205 en nombres nuevos, |B| subió sobre el imán simulado, Z subió y el campo bajó, «Terminar y volver al dashboard» → descanso y dashboard); calibración activa + sesión nueva → la calibración terminó, la mesa volvió al descanso y midió los 9 puntos.
+- En el navegador integrado: menú, sliders, lecturas en vivo, botón, tema claro, ancho de teléfono (sin desbordamiento) y las letras nuevas del dashboard.
+- **Sin probar en la mesa real** (ver la lista de pruebas en la mesa, abajo).
+
+**Pruebas pendientes en la mesa:** con Z abajo, cargar los archivos de `firmware/` (incluido `calibracion.py`) y comprobar el latido `pico-tms-2.4`; un barrido pequeño con 2–3 planos (Z debe **subir**) y regreso al descanso (X e Y primero, Z baja al final); Detener a mitad de un movimiento; el previsualizador (mover cada slider, ver lecturas, terminar); `prueba_calibracion.py` con Z = 5 debe subir.
 
 ---
 
@@ -424,6 +455,11 @@ Roles: **público** = sin sesión; **sesión** = cualquier usuario con login; **
 | `POST /api/dispositivo/latido {firmware?, rssi?, uptime_s?, ts_dispositivo_ms?, estado?, error?}` | Pico (Bearer) | `{modo_operacion, sesion_activa: {id, modo, paso_mm, medio, zona_mm, grid_nx, grid_ny, z_levels_mm, puntos_esperados, ultimo_seq, barrido, sensor, inicio_medicion?: {x_mm, y_mm, z_mm}} \| null, intervalo_latido_s, servidor_ts_ms}`; `sesion_activa` solo en modo real y con sesión `hw`; `inicio_medicion` (mm de máquina) sale de la copia de la sesión y no se manda si la sesión no la tiene | 200, 401, 422 |
 | `POST /api/dispositivo/mediciones {sesionId, lecturas:[{seq,xMM,yMM,zMM,raw:{x,y,z},saturado?,ts_ms}]}` | Pico (Bearer) | Máx. 200 por lote; idempotente por `(sesion_id, seq)`. `raw` según el modelo de la sesión (QMC5883P −32768..32767; HMC5883L −4096..2047). `saturado` opcional; si no es booleano se rechaza esa lectura. `{aceptadas, duplicadas, rechazadas:[{seq,error}]}` | 200, 400, 401, 404, 409 (simulación, sesión cerrada o `sim`), 422 |
 | `GET /api/sesiones/:id/mediciones` | sesión | Mediciones en JSON, con `seq`, crudos y `saturado` | 200, 404 (también si está eliminada) |
+| `GET /api/calibracion` | sesión | Previsualizador de la bobina (2026-11-24): `{calibracion: {activa, objetivo, iniciada_por, iniciada_en, limites_mm, pico: {estado, posicion_mm, error}, ultima_lectura}}` | 200 |
+| `POST /api/calibracion [{x_mm, y_mm, z_mm}]` | op | Activa la calibración (por defecto en el descanso 0, 0, 0; mm de máquina) | 201, 400, 409 (simulación, sesión abierta o ya activa), 422 |
+| `PATCH /api/calibracion {x_mm, y_mm, z_mm}` | op | Nuevo punto; 422 fuera del recorrido que mandó la Pico | 200, 400, 409, 422 |
+| `DELETE /api/calibracion` | op | La termina (la Pico vuelve al descanso) | 200 |
+| `POST /api/dispositivo/calibracion {estado: moviendo\|en_posicion\|error, posicion_mm?, raw?, saturado?, error?}` | Pico (Bearer) | Lectura del previsualizador: no se guarda, se convierte con el sensor vigente y se difunde (`event: calibracion`). Responde `{calibracion: {activa, objetivo, sensor} \| null}` | 200, 400, 401, 422 |
 
 **Detalles del login (Fase 2):**
 - El token es de 32 bytes aleatorios (base64url); en la base solo se guarda su SHA-256. La cookie es `HttpOnly; SameSite=Strict; Path=/`, **sin Max-Age** (cookie de sesión del navegador: se borra al cerrarlo), más `Secure` con `NODE_ENV=production`; la expiración de 12 h la aplica el servidor. Por eso, **en producción solo funciona por HTTPS** (Nginx).

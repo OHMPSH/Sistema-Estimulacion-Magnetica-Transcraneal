@@ -176,7 +176,7 @@ function SesionCard({ sesion, usuario, zona, barrido, onEliminar, onRestaurar, o
             <details className="huecos">
               <summary>Ver las posiciones sin lectura válida ({huecos.total}{huecos.posiciones.length < huecos.total ? `, se listan ${huecos.posiciones.length}` : ''})</summary>
               <ul className="lista-huecos cifra">
-                {huecos.posiciones.map(p => <li key={`${p.xMM}-${p.yMM}-${p.zMM}`}>({p.xMM}, {p.yMM}, {p.zMM}) mm</li>)}
+                {huecos.posiciones.map(p => <li key={`${p.xMM}-${p.yMM}-${p.zMM}`}>({p.yMM}, {p.xMM}, {p.zMM}) mm</li>)}
               </ul>
             </details>
           )}

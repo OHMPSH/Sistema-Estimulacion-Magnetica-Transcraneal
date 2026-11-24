@@ -272,3 +272,65 @@ test('409 por sesión doble y por cambiar el modo con una sesión abierta', asyn
   assert.equal((await op.put(`/sesiones/${primera.datos.sesion.id}`)).status, 200);
   assert.equal((await op.put(`/sesiones/${primera.datos.sesion.id}`)).status, 409);
 });
+
+test('Previsualizador de la bobina: 409 en simulación o con sesión, latido con la calibración, lectura de la Pico y fin al iniciar una sesión', async (t) => {
+  if (omitir(t)) return;
+  // En simulación no se puede
+  assert.equal((await admin.post('/calibracion', {})).status, 409);
+  const obs = cliente(entorno.base);
+  assert.equal((await obs.login('observador', 'observador123')).status, 200);
+  assert.equal((await obs.get('/calibracion')).status, 200);
+  assert.equal((await obs.post('/calibracion', {})).status, 403);
+
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'real' })).status, 200);
+  const token = (await admin.post('/dispositivo/token')).datos.token;
+  const pico = cliente(entorno.base);
+  const bearer = { Authorization: `Bearer ${token}` };
+  const latir = () => pico.post('/dispositivo/latido', { firmware: 'prueba', limites_mm: { x_mm: 410, y_mm: 562, z_mm: 88 } }, bearer);
+
+  assert.equal((await latir()).datos.calibracion, null);
+  assert.deepEqual((await admin.get('/calibracion')).datos.calibracion.limites_mm, { x_mm: 410, y_mm: 562, z_mm: 88 });
+  const ini = await admin.post('/calibracion', {});
+  assert.equal(ini.status, 201);
+  assert.deepEqual(ini.datos.calibracion.objetivo, { x_mm: 0, y_mm: 0, z_mm: 0 });
+  assert.equal((await admin.post('/calibracion', {})).status, 409, 'ya está activa');
+  assert.equal((await admin.patch('/calibracion', { x_mm: 500, y_mm: 0, z_mm: 0 })).status, 422, 'fuera del recorrido');
+  assert.equal((await admin.patch('/calibracion', { x_mm: 205, y_mm: 281 })).status, 400);
+  assert.equal((await admin.patch('/calibracion', { x_mm: 205, y_mm: 281, z_mm: 10 })).status, 200);
+
+  const l = await latir();
+  assert.equal(l.datos.calibracion.activa, true);
+  assert.deepEqual(l.datos.calibracion.objetivo, { x_mm: 205, y_mm: 281, z_mm: 10 });
+  assert.equal(l.datos.calibracion.sensor.modelo, 'QMC5883P');
+
+  // La Pico manda una lectura: no se guarda, se convierte con el sensor vigente y la respuesta trae el objetivo
+  const antes = (await admin.get('/sesiones')).datos.data.length;
+  const r = await pico.post('/dispositivo/calibracion', {
+    estado: 'en_posicion', posicion_mm: { x_mm: 205, y_mm: 281, z_mm: 10 }, raw: { x: 1500, y: -500, z: 0 }, saturado: false,
+  }, bearer);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.datos.calibracion.objetivo, { x_mm: 205, y_mm: 281, z_mm: 10 });
+  const lectura = (await admin.get('/calibracion')).datos.calibracion.ultima_lectura;
+  assert.equal(lectura.bx, 150);
+  assert.equal(lectura.by, -50);
+  assert.equal((await pico.post('/dispositivo/calibracion', { estado: 'bailando' }, bearer)).status, 422);
+  assert.equal((await cliente(entorno.base).post('/dispositivo/calibracion', { estado: 'moviendo' })).status, 401);
+
+  // Iniciar una sesión termina la calibración; con la sesión abierta no se puede volver a empezar
+  const s = await admin.post('/sesiones', { modo: 'AC', paso_mm: 20 });
+  assert.equal(s.status, 201);
+  assert.equal((await admin.get('/calibracion')).datos.calibracion.activa, false);
+  assert.equal((await latir()).datos.calibracion, null);
+  assert.equal((await admin.post('/calibracion', {})).status, 409);
+  assert.equal((await admin.put(`/sesiones/${s.datos.sesion.id}`)).status, 200);
+  const despues = (await admin.get('/sesiones')).datos.data.length;
+  assert.equal(despues, antes + 1, 'la calibración no creó sesiones');
+
+  // Terminar con DELETE y pasar a simulación también la termina
+  assert.equal((await admin.post('/calibracion', {})).status, 201);
+  assert.equal((await admin.del('/calibracion')).datos.terminada, true);
+  assert.equal((await admin.post('/calibracion', {})).status, 201);
+  assert.equal((await admin.put('/configuracion/modo_operacion', { valor: 'simulacion' })).status, 200);
+  assert.equal((await admin.get('/calibracion')).datos.calibracion.activa, false);
+  assert.equal((await admin.del('/dispositivo/token')).status, 200);
+});

@@ -2,13 +2,13 @@
  * hooks/useNavegacion.js
  * ─────────────────────────────────────────────────────────────
  * Navegación en la URL con la History API, sin react-router:
- *   ?vista=dashboard|historial|configuracion&seccion=barrido|sensor|…
+ *   ?vista=calibracion|dashboard|historial|configuracion&seccion=barrido|sensor|…
  * Funcionan el botón de atrás del navegador y los enlaces directos.
  * ─────────────────────────────────────────────────────────────
  */
 import { useState, useEffect, useCallback } from 'react';
 
-export const VISTAS = ['dashboard', 'historial', 'configuracion'];
+export const VISTAS = ['calibracion', 'dashboard', 'historial', 'configuracion'];
 export const SECCIONES = ['general', 'barrido', 'sensor', 'simulacion', 'dispositivo', 'visualizacion', 'usuarios'];
 
 function leer() {
