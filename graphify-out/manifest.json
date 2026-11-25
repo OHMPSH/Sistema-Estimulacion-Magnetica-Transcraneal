@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1795550917.5707886,
-    "seen": 1795550923.0939822,
-    "ast_hash": "4ba33e29ae11ac64dc7f6b880079cd51",
+    "mtime": 1795560883.584246,
+    "seen": 1795560888.8980856,
+    "ast_hash": "706863126f408296e683ae75ac3a78e6",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -438,9 +438,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/ConfigContext.jsx": {
-    "mtime": 1794295958.873873,
-    "seen": 1794297891.0416515,
-    "ast_hash": "86b48d5fedeeb56b8b921cee19c7bed8",
+    "mtime": 1795560763.478267,
+    "seen": 1795560888.89793,
+    "ast_hash": "a4256c4ca9c7cfa55e6b8b730d62ce8a",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useDispositivo.js": {
@@ -456,9 +456,9 @@
     "semantic_hash": ""
   },
   "frontend/src/hooks/useSesionActiva.js": {
-    "mtime": 1794336352.685542,
-    "seen": 1794336467.279722,
-    "ast_hash": "1202ef748e9b4dca45783c2263efdaf3",
+    "mtime": 1795560758.5941863,
+    "seen": 1795560888.897938,
+    "ast_hash": "b9831baf95f0523614e7294adc6a49d5",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useStream.js": {
@@ -474,9 +474,9 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/ConfiguracionPage.jsx": {
-    "mtime": 1795550060.7393467,
-    "seen": 1795550923.093898,
-    "ast_hash": "4fa749b9f050f63b5efc7c7e5eeefefe",
+    "mtime": 1795560796.9828203,
+    "seen": 1795560888.8979504,
+    "ast_hash": "fdbf347bbcc4700e9a99f0fee5623c06",
     "semantic_hash": ""
   },
   "frontend/src/pages/DashboardPage.jsx": {
@@ -486,9 +486,9 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/HistorialPage.jsx": {
-    "mtime": 1795550005.6681743,
-    "seen": 1795550923.0939002,
-    "ast_hash": "c30271ee02abcfde80379e41c6c9a8f3",
+    "mtime": 1795560782.8665872,
+    "seen": 1795560888.8979533,
+    "ast_hash": "723779dba30b16778c847ffe08abb4dd",
     "semantic_hash": ""
   },
   "frontend/src/utils/formato.js": {
@@ -666,9 +666,9 @@
     "semantic_hash": ""
   },
   "firmware/config.py": {
-    "mtime": 1795549675.1483414,
-    "seen": 1795550923.0938199,
-    "ast_hash": "038f27636335efcca77807fd926d28f2",
+    "mtime": 1795557876.7740233,
+    "seen": 1795558170.192841,
+    "ast_hash": "f35d32cae4e12977faee27e65026c651",
     "semantic_hash": ""
   },
   "firmware/led.py": {
@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/prueba_logica.py": {
-    "mtime": 1795549698.9424033,
-    "seen": 1795550923.0938323,
-    "ast_hash": "d8795a5af5f733b5cebcd6188e6a9732",
+    "mtime": 1795557891.2942235,
+    "seen": 1795558170.1928577,
+    "ast_hash": "6ffea5a7353e3ac9626227b488c98621",
     "semantic_hash": ""
   },
   "firmware/pruebas_pc/stubs/_compat.py": {
@@ -1512,15 +1512,15 @@
     "semantic_hash": ""
   },
   "firmware/calibracion.py": {
-    "mtime": 1795549924.0511205,
-    "seen": 1795550923.093817,
-    "ast_hash": "bd93312b6dc13ee4717e76f71575cfd0",
+    "mtime": 1795558021.524022,
+    "seen": 1795558170.1928372,
+    "ast_hash": "5cb93b5f418806058bfb6d83ee5321cc",
     "semantic_hash": ""
   },
   "frontend/src/pages/CalibracionPage.jsx": {
-    "mtime": 1795550732.7845106,
-    "seen": 1795550923.0938957,
-    "ast_hash": "27a166c6e33e42239d7965ce253f1023",
+    "mtime": 1795560777.3824966,
+    "seen": 1795560888.897947,
+    "ast_hash": "a3d28a050423f912cccd510c53d7ce23",
     "semantic_hash": ""
   },
   "server/controllers/calibracion.controller.js": {
@@ -1545,6 +1545,12 @@
     "mtime": 1795549623.603641,
     "seen": 1795550923.093971,
     "ast_hash": "488c189f77a68b3db2f09b1768f28ae9",
+    "semantic_hash": ""
+  },
+  "frontend/src/utils/escalaMM.js": {
+    "mtime": 1795560743.9539442,
+    "seen": 1795560888.8979573,
+    "ast_hash": "69d6b8f36c05846eb9c9f3857b19673c",
     "semantic_hash": ""
   },
   "app/package-lock.json": {

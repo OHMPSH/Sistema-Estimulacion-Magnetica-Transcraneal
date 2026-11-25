@@ -19,6 +19,7 @@ import { apiFetch, enviarJSON, leerJSON } from '../api/cliente.js';
 import { useAlConectarStream, useEventoStream } from '../hooks/useStream.js';
 import { EJES_VISTA } from '../utils/geometria.js';
 import { numero } from '../utils/formato.js';
+import { calibracionAReal, xyzMMASistema } from '../utils/escalaMM.js';
 
 /** Umbrales del medidor, en % del fondo de escala nominal */
 const SENAL_BAJA_PCT = 2;
@@ -108,11 +109,11 @@ export function CalibracionPage({ usuario, dispositivo, sesionAbierta, onNavegar
 
   const cargar = useCallback(async () => {
     const json = await leerJSON(await apiFetch('/api/calibracion'));
-    if (json.ok) setCal(json.calibracion);
+    if (json.ok) setCal(calibracionAReal(json.calibracion));
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
   useAlConectarStream(cargar);
-  useEventoStream('calibracion', datos => { if (datos?.calibracion) setCal(datos.calibracion); });
+  useEventoStream('calibracion', datos => { if (datos?.calibracion) setCal(calibracionAReal(datos.calibracion)); });
 
   // El borrador sigue al objetivo del servidor, salvo mientras el usuario arrastra
   useEffect(() => {
@@ -139,7 +140,7 @@ export function CalibracionPage({ usuario, dispositivo, sesionAbierta, onNavegar
     const json = await leerJSON(res);
     setOcupado(false);
     if (!json.ok) { setError(json.error || 'El servidor no aceptó la orden.'); return false; }
-    if (json.calibracion) setCal(json.calibracion);
+    if (json.calibracion) setCal(calibracionAReal(json.calibracion));
     return true;
   };
 
@@ -155,7 +156,8 @@ export function CalibracionPage({ usuario, dispositivo, sesionAbierta, onNavegar
     ultimo.current = null;
     const o = cal?.objetivo;
     if (!destino || (o && ['x_mm', 'y_mm', 'z_mm'].every(k => o[k] === destino[k]))) return;
-    if (!(await pedir('PATCH', destino))) setBorrador(cal?.objetivo ?? null);
+    // Rieles al doble (utils/escalaMM.js): los sliders van en mm reales
+    if (!(await pedir('PATCH', xyzMMASistema(destino)))) setBorrador(cal?.objetivo ?? null);
   };
 
   const iniciar = () => pedir('POST', {});

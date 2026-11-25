@@ -41,12 +41,12 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
     case 'general':
       contenido = (
         <SeccionFormulario clave="general" titulo="Punto de inicio de la medición" soloLectura={!esAdmin}
-          descripcion={`Dónde empieza la zona de cada medición en la mesa real, en coordenadas de la mesa: X de 0 a 562 mm, Y de 0 a 410 mm y Z de 0 a 88 mm. La mesa descansa en el origen (0, 0, 0), con Z abajo, junto a la bobina: al iniciar una medición va a este punto, desde ahí la zona crece hacia X+, Y+ y Z+ (el plano z = 0 es el más bajo y los demás quedan arriba), y al terminar vuelve a descansar. Si la zona no cabe en la mesa, la Pico W rechaza la sesión y el aviso aparece en el dashboard. Se copia en cada sesión al iniciarla. ${sesionAbierta ? AVISO_SESION : ''}`}
+          descripcion={`Dónde empieza la zona de cada medición en la mesa real, en coordenadas de la mesa: X de 0 a 281 mm, Y de 0 a 205 mm y Z de 0 a 44 mm (mm reales; el sistema guarda el doble). La mesa descansa en el origen (0, 0, 0), con Z abajo, junto a la bobina: al iniciar una medición va a este punto, desde ahí la zona crece hacia X+, Y+ y Z+ (el plano z = 0 es el más bajo y los demás quedan arriba), y al terminar vuelve a descansar. Si la zona no cabe en la mesa, la Pico W rechaza la sesión y el aviso aparece en el dashboard. Se copia en cada sesión al iniciarla. ${sesionAbierta ? AVISO_SESION : ''}`}
           campos={[
             // Nombres del asesor (utils/geometria.js, NOMBRE_EJE): y_mm se muestra como X y x_mm como Y
-            { ruta: ['inicio_medicion', 'y_mm'], etiqueta: 'Inicio en X', tipo: 'numero', unidad: 'mm', ayuda: 'Eje largo de la mesa (0–562 mm). La zona avanza hacia X+.' },
-            { ruta: ['inicio_medicion', 'x_mm'], etiqueta: 'Inicio en Y', tipo: 'numero', unidad: 'mm', ayuda: 'Eje corto de la mesa (0–410 mm). La zona avanza hacia Y+.' },
-            { ruta: ['inicio_medicion', 'z_mm'], etiqueta: 'Inicio en Z (altura)', tipo: 'numero', unidad: 'mm', ayuda: 'De 0 a 88 mm. Es la altura del plano z = 0; los demás planos quedan arriba.' },
+            { ruta: ['inicio_medicion', 'y_mm'], etiqueta: 'Inicio en X', tipo: 'numero', unidad: 'mm', ayuda: 'Eje largo de la mesa (0–281 mm). La zona avanza hacia X+.' },
+            { ruta: ['inicio_medicion', 'x_mm'], etiqueta: 'Inicio en Y', tipo: 'numero', unidad: 'mm', ayuda: 'Eje corto de la mesa (0–205 mm). La zona avanza hacia Y+.' },
+            { ruta: ['inicio_medicion', 'z_mm'], etiqueta: 'Inicio en Z (altura)', tipo: 'numero', unidad: 'mm', ayuda: 'De 0 a 44 mm. Es la altura del plano z = 0; los demás planos quedan arriba.' },
           ]}
           relleno={{
             etiqueta: `Usar el origen (${ORIGEN_MM.x}, ${ORIGEN_MM.y}, ${ORIGEN_MM.z})`,
@@ -139,14 +139,14 @@ export function ConfiguracionPage({ usuario, seccion, onNavegar, sesionAbierta }
           campos={[
             // Nombres del asesor (utils/geometria.js, NOMBRE_EJE): limite_y_mm se muestra como X y limite_x_mm como Y
             { ruta: ['limite_y_mm'], etiqueta: 'Límite de la base en X', tipo: 'numero', unidad: 'mm',
-              ayuda: 'Recorrido máximo de la mesa en X. Entre 1 y 1000 mm, con un decimal.' },
+              ayuda: 'Recorrido máximo de la mesa en X. Entre 0,5 y 500 mm.' },
             { ruta: ['limite_x_mm'], etiqueta: 'Límite de la base en Y', tipo: 'numero', unidad: 'mm',
-              ayuda: 'Recorrido máximo de la mesa en Y. Entre 1 y 1000 mm, con un decimal.' },
+              ayuda: 'Recorrido máximo de la mesa en Y. Entre 0,5 y 500 mm.' },
             { ruta: ['limite_z_mm'], etiqueta: 'Límite de la base en Z (altura)', tipo: 'numero', unidad: 'mm',
-              ayuda: 'Altura máxima sobre el standoff. Entre 0 y 500 mm; 0 = un solo plano.' },
+              ayuda: 'Altura máxima sobre el standoff. Entre 0 y 250 mm; 0 = un solo plano.' },
             { ruta: ['standoff_mm'], etiqueta: 'Separación bobina–sensor (standoff)', tipo: 'numero', unidad: 'mm' },
             { ruta: ['paso_predeterminado_mm'], etiqueta: 'Paso predeterminado', tipo: 'numero', unidad: 'mm',
-              ayuda: 'El que aparece al abrir el dashboard; el operador puede escribir otro en cada medición. Los más usados: 5, 10 y 20 mm. Desde 1 mm, con un decimal.' },
+              ayuda: 'El que aparece al abrir el dashboard; el operador puede escribir otro en cada medición. Los más usados: 5, 10 y 20 mm. Desde 0,5 mm.' },
           ]}
         />
       );

@@ -20,6 +20,7 @@ import { ModalConfirmacion } from '../components/modals/ModalConfirmacion.jsx';
 import { PASOS_SUGERIDOS, MEDIOS, MODOS, mallaDeZona, limitesDeBarrido, etiquetaPaso, etiquetaZona, etiquetaMedio, etiquetaMedioCorta, etiquetaModo } from '../utils/geometria.js';
 import { numero, entero, fechaHora, diaLocal, duracion } from '../utils/formato.js';
 import { LimiteErrores } from '../components/ui/LimiteErrores.jsx';
+import { aSistema, sesionAReal, lecturaAReal } from '../utils/escalaMM.js';
 
 // Plotly pesa: se carga solo si alguien abre una sábana 3D
 const Superficie3D = lazy(() => import('../components/charts/Superficie3D.jsx'));
@@ -46,7 +47,7 @@ function EditorNotas({ sesion, puedeEditar, onGuardada }) {
     setEstado({ guardando: true, mensaje: '', error: '' });
     try {
       const json = await leerJSON(await enviarJSON(`/api/sesiones/${sesion.id}`, { notas: texto }, 'PATCH'));
-      if (json.ok) { setEstado({ guardando: false, mensaje: 'Notas guardadas.', error: '' }); onGuardada(json.sesion); }
+      if (json.ok) { setEstado({ guardando: false, mensaje: 'Notas guardadas.', error: '' }); onGuardada(sesionAReal(json.sesion)); }
       else setEstado({ guardando: false, mensaje: '', error: json.error || 'No se pudieron guardar las notas.' });
     } catch {
       setEstado({ guardando: false, mensaje: '', error: 'No se pudo conectar con el servidor.' });
@@ -71,7 +72,7 @@ function EditorNotas({ sesion, puedeEditar, onGuardada }) {
 }
 
 /** Lecturas de GET /sesiones/:id/mediciones en el formato que usa el dashboard */
-const comoLectura = r => ({
+const comoLectura = r => lecturaAReal({
   seq: r.seq, xMM: r.x_mm, yMM: r.y_mm, zMM: r.z_mm,
   bx: r.bx, by: r.by, bz: r.bz, magnitud: r.magnitud, saturado: r.saturado,
 });
@@ -267,11 +268,14 @@ export function HistorialPage({ usuario }) {
     const idPeticion = ++peticion.current;
     const q = new URLSearchParams();
     for (const k of ['modo', 'paso_mm', 'medio', 'origen']) if (filtros[k]) q.set(k, filtros[k]);
+    // Rieles al doble (utils/escalaMM.js): el filtro de paso se escribe en mm reales
+    if (filtros.paso_mm) q.set('paso_mm', String(aSistema(String(filtros.paso_mm).replace(',', '.'))));
     if (filtros.eliminadas) q.set('incluir_eliminadas', '1');
     try {
       const json = await leerJSON(await apiFetch(`/api/sesiones?${q}`));
       if (idPeticion !== peticion.current) return;
       if (json.ok) {
+        json.data = json.data.map(sesionAReal);
         setSesiones(json.data); setActivaId(json.activa?.id ?? null);
         setPasosConocidos(prev => {
           const todos = new Set([...prev, ...json.data.map(s => Number(s.paso_mm))]);

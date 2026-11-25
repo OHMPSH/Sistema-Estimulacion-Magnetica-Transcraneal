@@ -518,7 +518,9 @@ class Calibracion(unittest.TestCase):
             return 200, {"ok": True, "calibracion": cal}
 
         original, cliente.post = cliente.post, post
-        viejo, config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = config.ASENTAMIENTO_MS, 0, 0
+        viejos = (config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS)
+        config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = 0, 0
+        calibracion._ultima_peticion, calibracion._espera_ms = None, 0
         try:
             gen = calibracion.ejecutar(c)
             while not any(e["estado"] == "en_posicion" for e in enviados):
@@ -548,7 +550,46 @@ class Calibracion(unittest.TestCase):
             self.assertIsNone(c.cal)
         finally:
             cliente.post = original
-            config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = viejo, 150
+            config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS = viejos
+
+    def test_ritmo_de_peticiones(self):
+        """Como mucho una petición por CALIBRACION_PAUSA_MS, y más espera tras un fallo de red
+        (con 150 ms entre peticiones la Pico 2 W se desconectaba y se apagaba)."""
+        import calibracion
+        self.assertGreaterEqual(config.CALIBRACION_PAUSA_MS, 1000)
+        mesa = motores.Mesa()
+        for e in mesa.ejes:
+            e.mover_pasos = (lambda delta, *a, _e=e, **k: setattr(_e, "pos", _e.pos + delta))
+            e.ocupado = lambda: False
+        c = types.SimpleNamespace(mesa=mesa, sensor=qmc(), cal=None)
+        c.cal = {"activa": True, "objetivo": {"x_mm": 0, "y_mm": 0, "z_mm": 0}, "sensor": self.QMC30}
+        horas, sin_red = [], [False]
+
+        def post(ruta, cuerpo):
+            horas.append(time.monotonic())
+            return (None, None) if sin_red[0] else (200, {"ok": True, "calibracion": c.cal})
+
+        original, cliente.post = cliente.post, post
+        viejos = (config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS, config.CALIBRACION_ESPERA_FALLO_MS)
+        config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS, config.CALIBRACION_ESPERA_FALLO_MS = 0, 200, 600
+        calibracion._ultima_peticion, calibracion._espera_ms = None, 0
+        try:
+            gen = calibracion.ejecutar(c)
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 1.0:
+                next(gen)
+            self.assertLessEqual(len(horas), 6, "con 200 ms de pausa, como mucho ~5 peticiones en 1 s")
+            self.assertGreaterEqual(len(horas), 3)
+            self.assertTrue(all(b - a >= 0.19 for a, b in zip(horas, horas[1:])), "nunca dos peticiones seguidas")
+            sin_red[0] = True
+            horas.clear()
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 1.0:
+                next(gen)
+            self.assertLessEqual(len(horas), 3, "sin red espera 600 ms entre intentos")
+        finally:
+            cliente.post = original
+            config.ASENTAMIENTO_MS, config.CALIBRACION_PAUSA_MS, config.CALIBRACION_ESPERA_FALLO_MS = viejos
 
     def test_latido_y_controlador(self):
         import main

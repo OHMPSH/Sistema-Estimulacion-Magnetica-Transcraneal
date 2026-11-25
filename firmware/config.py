@@ -87,7 +87,11 @@ LECTURAS_FONDO = 100
 RESTAR_FONDO_EN_PICO = False
 ASENTAMIENTO_MS = 300              # espera tras cada movimiento antes de leer
 MOSTRAR_LECTURAS = True            # imprime cada lectura en la consola de Thonny
-CALIBRACION_PAUSA_MS = 150         # previsualizador de la bobina: pausa entre lecturas (calibracion.py)
+# Previsualizador de la bobina (calibracion.py): como mucho una petición por
+# CALIBRACION_PAUSA_MS. Con 150 ms la Pico 2 W se desconectaba y se apagaba a
+# los pocos segundos (2026-11-24); 1000 ms es un ritmo parecido al del barrido.
+CALIBRACION_PAUSA_MS = 1000
+CALIBRACION_ESPERA_FALLO_MS = 5000 # tras una petición sin respuesta, no insistir antes
 
 # ── Motores: NEMA 17 + TB6600 (los de prueba_calibracion.py) ───
 # Factores de prueba_calibracion.py: si allí los corregiste, copia aquí

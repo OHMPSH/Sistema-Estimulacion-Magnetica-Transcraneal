@@ -24,6 +24,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch, enviarJSON, leerJSON } from '../api/cliente.js';
 import { useEventoStream, useAlConectarStream } from './useStream.js';
+import { aSistema, zonaASistema, sesionAReal, lecturaAReal } from '../utils/escalaMM.js';
 
 /** Clave para deduplicar: seq, o (si no hay) hora + posición */
 const claveDe = m => (m.seq !== null && m.seq !== undefined ? `s${m.seq}` : `t${m.timestamp}|${m.xMM}|${m.yMM}|${m.zMM}`);
@@ -93,6 +94,9 @@ export function useSesionActiva() {
     try {
       const json = await leerJSON(await apiFetch('/api/sesiones/activa'));
       if (!json.ok) return;
+      // Rieles al doble (utils/escalaMM.js): la página trabaja en mm reales
+      json.sesion = sesionAReal(json.sesion);
+      json.mediciones = (json.mediciones ?? []).map(lecturaAReal);
       if (json.sesion) {
         if (json.sesion.id === datos.current.sesionId) {
           setSesion(s => ({ ...s, ...json.sesion }));
@@ -114,7 +118,7 @@ export function useSesionActiva() {
 
   useEventoStream('medicion', (m) => {
     if (!m) return;
-    if (m.sesionId === datos.current.sesionId) unir([m]);
+    if (m.sesionId === datos.current.sesionId) unir([lecturaAReal(m)]);
     // Lectura de una sesión que no conocemos (se perdió el evento "iniciada"): resincronizar
     else if (!enCursoRef.current) cargarActiva();
   });
@@ -122,10 +126,10 @@ export function useSesionActiva() {
   useEventoStream('sesion', (d) => {
     if (!d) return;
     if (d.tipo === 'iniciada') {
-      seguir(d.sesion, []);
+      seguir(sesionAReal(d.sesion), []);
       setEnCurso(true);
     } else if (d.tipo === 'finalizada' && d.sesion.id === datos.current.sesionId) {
-      setSesion({ ...d.sesion, motivo: d.motivo });
+      setSesion({ ...sesionAReal(d.sesion), motivo: d.motivo });
       setEnCurso(false);
     }
   });
@@ -136,9 +140,9 @@ export function useSesionActiva() {
     setIniciando(true);
     setErrorAccion('');
     try {
-      const json = await leerJSON(await enviarJSON('/api/sesiones', { modo, paso_mm: pasoMM, medio, zona_mm: zona }));
+      const json = await leerJSON(await enviarJSON('/api/sesiones', { modo, paso_mm: aSistema(pasoMM), medio, zona_mm: zonaASistema(zona) }));
       if (json.ok) {
-        if (json.sesion.id !== datos.current.sesionId) seguir(json.sesion, []);
+        if (json.sesion.id !== datos.current.sesionId) seguir(sesionAReal(json.sesion), []);
         setEnCurso(true);
         return true;
       }
@@ -162,7 +166,7 @@ export function useSesionActiva() {
     try {
       const json = await leerJSON(await apiFetch(`/api/sesiones/${id}`, { method: 'PUT' }));
       if (json.ok) {
-        setSesion(s => ({ ...s, ...json.sesion, motivo: 'manual' }));
+        setSesion(s => ({ ...s, ...sesionAReal(json.sesion), motivo: 'manual' }));
         setEnCurso(false);
         return true;
       }

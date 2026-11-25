@@ -22,6 +22,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch, enviarJSON, leerJSON } from '../api/cliente.js';
+import { configAReal, configClaveAReal, configClaveASistema } from '../utils/escalaMM.js';
 import { useAuth } from './AuthContext.jsx';
 import { useEventoStream } from '../hooks/useStream.js';
 
@@ -92,23 +93,25 @@ export function ConfigProvider({ children }) {
   const recargar = useCallback(async () => {
     try {
       const json = await leerJSON(await apiFetch('/api/configuracion'));
-      if (json.ok) setEstado({ config: json.data, opciones: json.opciones });
+      // Rieles al doble (utils/escalaMM.js): límites, paso e inicio se muestran en mm reales
+      if (json.ok) setEstado({ config: configAReal(json.data), opciones: json.opciones });
     } catch { /* servidor apagado: lo indica la Navbar */ }
   }, []);
 
   useEffect(() => { recargar(); }, [recargar]);
 
   useEventoStream('configuracion', (d) => {
-    if (d) setEstado(e => (e.config ? { ...e, config: { ...e.config, [d.clave]: d.valor } } : e));
+    if (d) setEstado(e => (e.config ? { ...e, config: { ...e.config, [d.clave]: configClaveAReal(d.clave, d.valor) } } : e));
   });
 
   const guardarClave = useCallback(async (clave, valor) => {
     try {
-      const res = await enviarJSON(`/api/configuracion/${clave}`, { valor }, 'PUT');
+      const res = await enviarJSON(`/api/configuracion/${clave}`, { valor: configClaveASistema(clave, valor) }, 'PUT');
       const json = await leerJSON(res);
       if (json.ok) {
-        setEstado(e => ({ ...e, config: { ...e.config, [clave]: json.valor } }));
-        return { ok: true, valor: json.valor, status: res.status };
+        const guardado = configClaveAReal(clave, json.valor);
+        setEstado(e => ({ ...e, config: { ...e.config, [clave]: guardado } }));
+        return { ok: true, valor: guardado, status: res.status };
       }
       return { ok: false, error: json.error, errores: json.errores ?? [], status: res.status };
     } catch {
