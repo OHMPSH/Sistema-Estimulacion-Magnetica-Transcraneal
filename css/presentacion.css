@@ -1,0 +1,157 @@
+/* Presentación TMS (v18) en HTML.
+   Lienzo fijo de 960 × 540 px = 10 × 5,625 pulgadas (16:9), igual que el .pptx.
+   Cada pieza lleva su posición en px tomada del original (1 px = 9525 EMU). */
+
+/* Fuentes: Georgia y Calibri vienen con Windows. Gelasio y Carlito (libres y con
+   las mismas medidas) son el respaldo si están en fuentes/; si no, se usa la
+   del sistema. */
+@font-face { font-family: 'Gelasio'; src: url('../fuentes/Gelasio-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
+@font-face { font-family: 'Gelasio'; src: url('../fuentes/Gelasio-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; }
+@font-face { font-family: 'Carlito'; src: url('../fuentes/Carlito-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
+@font-face { font-family: 'Carlito'; src: url('../fuentes/Carlito-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; }
+@font-face { font-family: 'Carlito'; src: url('../fuentes/Carlito-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; }
+@font-face { font-family: 'Carlito'; src: url('../fuentes/Carlito-BoldItalic.woff2') format('woff2'); font-weight: 700; font-style: italic; }
+
+:root {
+  --guinda: #6D1D45;
+  --k: 1; /* escala del lienzo; la calcula presentacion.js */
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+#escenario {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 960px;
+  height: 540px;
+  transform: translate(-50%, -50%) scale(var(--k));
+  transform-origin: 50% 50%;
+  overflow: hidden;
+}
+
+.diapo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: none;
+  color: #000;
+  font-variant-ligatures: none; /* PowerPoint no usa ligaduras como «ti» o «fi» */
+}
+.diapo.activa { display: block; }
+
+/* Piezas del original */
+.f { position: absolute; box-sizing: border-box; margin: 0; }
+img.f { display: block; }
+.t {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.t p { margin: 0; line-height: 1.2; overflow-wrap: break-word; white-space: pre-wrap; flex-shrink: 0; }
+.recorte { overflow: hidden; }
+.recorte img { position: absolute; max-width: none; display: block; }
+math { font-family: 'Cambria Math', Cambria, 'Times New Roman', 'Liberation Serif', serif; }
+math mi { font-style: italic; }
+
+/* Figuras interactivas (se agregan cuando se piden) */
+.figura3d { position: absolute; overflow: hidden; background: #fff; }
+.figura3d iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.figura3d .respaldo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+.figura3d.sin-interactiva iframe { display: none; }
+.figura3d.sin-interactiva .respaldo { display: block; }
+
+/* Pasos dentro de una diapositiva: piezas que entran o salen al avanzar (fundido breve) */
+.diapo [data-desde], .diapo [data-hasta] { transition: opacity .45s ease, visibility .45s; }
+.diapo .oculto-paso { opacity: 0; visibility: hidden; }
+.diapo.sin-transicion [data-desde], .diapo.sin-transicion [data-hasta] { transition: none; }
+@media (prefers-reduced-motion: reduce) { .diapo [data-desde], .diapo [data-hasta] { transition: none; } }
+
+/* Barra de progreso discreta (dentro del lienzo, abajo) */
+#progreso {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 0;
+  background: var(--guinda);
+  opacity: .75;
+  z-index: 10;
+  pointer-events: none;
+}
+.diapo-portada-activa #progreso { background: #D9B8C6; }
+
+/* Número de diapositiva: aparece al moverse por la presentación y se oculta solo */
+#contador {
+  position: fixed;
+  right: 12px;
+  bottom: 10px;
+  font: 600 14px/1 Calibri, 'Carlito', 'Liberation Sans', sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, .55);
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  z-index: 20;
+  visibility: hidden;
+}
+#contador.visible { visibility: visible; }
+
+/* Pantalla en negro (tecla B) */
+#negro { position: fixed; inset: 0; background: #000; z-index: 30; display: none; }
+#negro.visible { display: block; }
+
+/* Ayuda de teclas (tecla H o ?) */
+#ayuda {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .6);
+  font: 16px/1.5 Calibri, 'Carlito', 'Liberation Sans', sans-serif;
+}
+#ayuda.visible { display: flex; }
+#ayuda > div { background: #fff; color: #1b1b1b; padding: 22px 28px; border-radius: 6px; max-width: 520px; }
+#ayuda h2 { margin: 0 0 10px; font: 700 20px Georgia, 'Gelasio', serif; color: var(--guinda); }
+#ayuda table { border-collapse: collapse; }
+#ayuda td { padding: 3px 14px 3px 0; vertical-align: top; }
+#ayuda kbd { font: 600 13px Calibri, 'Carlito', sans-serif; border: 1px solid #bbb; border-bottom-width: 2px; border-radius: 3px; padding: 1px 6px; background: #f6f6f6; }
+
+body.sin-cursor, body.sin-cursor * { cursor: none !important; }
+
+/* Modo miniatura (dentro de la ventana del orador) */
+body.miniatura #contador, body.miniatura #progreso, body.miniatura #ayuda { display: none !important; }
+
+/* ---------- Impresión / PDF: una diapositiva por página de 10 × 5,625 in ---------- */
+@page { size: 10in 5.625in; margin: 0; }
+@media print {
+  html, body { height: auto; overflow: visible; background: #fff; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #escenario { position: static; transform: none; width: 960px; height: auto; overflow: visible; }
+  .diapo {
+    display: block !important;
+    position: relative;
+    width: 960px;
+    height: 540px;
+    break-after: page;
+    page-break-after: always;
+  }
+  .diapo:last-of-type { break-after: auto; page-break-after: auto; }
+  #progreso, #contador, #negro, #ayuda { display: none !important; }
+  .figura3d iframe { display: none !important; }
+  /* en el PDF cada diapositiva sale con todos sus pasos hechos */
+  .diapo [data-hasta] { display: none !important; }
+  .diapo [data-desde] { opacity: 1 !important; visibility: visible !important; }
+  .figura3d .respaldo { display: block !important; }
+}
