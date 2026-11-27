@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1795560883.584246,
-    "seen": 1795560888.8980856,
-    "ast_hash": "706863126f408296e683ae75ac3a78e6",
+    "mtime": 1795631518.8243682,
+    "seen": 1795814657.852057,
+    "ast_hash": "33992f1f43fcd1f0f3bd631f81b09ae0",
     "semantic_hash": ""
   },
   "COMANDOS.md": {
@@ -1551,6 +1551,834 @@
     "mtime": 1795560743.9539442,
     "seen": 1795560888.8979573,
     "ast_hash": "69d6b8f36c05846eb9c9f3857b19673c",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/construir.mjs": {
+    "mtime": 1795633036.2115214,
+    "seen": 1795814657.8517866,
+    "ast_hash": "81e5f9c8c860f6d899850cc3f2985e3b",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/vendor/mermaid.min.js": {
+    "mtime": 1795632818.488414,
+    "seen": 1795814657.8517888,
+    "ast_hash": "def493e96e3915c5dd101c4395d72dfa",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/build.mjs": {
+    "mtime": 1795671116.0830822,
+    "seen": 1795814657.851791,
+    "ast_hash": "fccbdfa2571acc5156f083b5069c50fc",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/datos.json": {
+    "mtime": 1795669922.3185065,
+    "seen": 1795814657.851792,
+    "ast_hash": "6917471929a277419973d4e07c274237",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/live.js": {
+    "mtime": 1795671579.419227,
+    "seen": 1795814657.8517933,
+    "ast_hash": "657c5c36a5c9e4fb404f59d0b7551db7",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/build.mjs": {
+    "mtime": 1795651054.4098306,
+    "seen": 1795814657.8517947,
+    "ast_hash": "011ceb14bd78bd19439b9331d40101e4",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/datos.json": {
+    "mtime": 1795645230.6386368,
+    "seen": 1795814657.8517962,
+    "ast_hash": "5b97660013a7cbe2b19649ba620aeab9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/live.js": {
+    "mtime": 1795650849.3903913,
+    "seen": 1795814657.8517978,
+    "ast_hash": "3e6c77cba0bc7f1b7ce077c58f4a0716",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/comun/medida.js": {
+    "mtime": 1795645328.2087843,
+    "seen": 1795814657.851799,
+    "ast_hash": "f35c7f71e09d67e991dd17d75d07e42d",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/comun/taller.mjs": {
+    "mtime": 1795645222.2224565,
+    "seen": 1795814657.8518002,
+    "ast_hash": "c454fa36697d25b4d6eb80b6b9905e5e",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/build.mjs": {
+    "mtime": 1795649843.4664333,
+    "seen": 1795814657.8518014,
+    "ast_hash": "ba0d5aadc2ac5fc6bb3f60bbe680e1a6",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/live.js": {
+    "mtime": 1795648982.4958124,
+    "seen": 1795814657.851803,
+    "ast_hash": "f249401daecf3fa5aa323cf320a3c7d8",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/build.mjs": {
+    "mtime": 1795650841.8986282,
+    "seen": 1795814657.8518047,
+    "ast_hash": "f7d6a37d3eac9b3185b32536a83bc2c0",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/datos.json": {
+    "mtime": 1795644701.8896778,
+    "seen": 1795814657.851806,
+    "ast_hash": "74c6fe27d26a45b7d1cc6c42fb4212a9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/live.js": {
+    "mtime": 1795650841.9026282,
+    "seen": 1795814657.851807,
+    "ast_hash": "f07c3e4db2dc3158ef9f3665b1fbebf6",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/construir.mjs": {
+    "mtime": 1795633328.3885076,
+    "seen": 1795814657.8518083,
+    "ast_hash": "d7db5581eba9374d308bc402be172bdd",
+    "semantic_hash": ""
+  },
+  "presentacion/js/notas.js": {
+    "mtime": 1795812940.074709,
+    "seen": 1795814657.851944,
+    "ast_hash": "863095cd885a3b93bc90b5f5aca38198",
+    "semantic_hash": ""
+  },
+  "presentacion/js/orador.js": {
+    "mtime": 1795672241.1777873,
+    "seen": 1795814657.8519454,
+    "ast_hash": "ee00741e0a734ad4bf7bb2ec27cbce44",
+    "semantic_hash": ""
+  },
+  "presentacion/js/presentacion.js": {
+    "mtime": 1795812176.5334604,
+    "seen": 1795814657.8519468,
+    "ast_hash": "ce514b848b7a51a7e7631f2cffd936f8",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/00-dossier-proyecto.md": {
+    "mtime": 1795636722.0664365,
+    "seen": 1795814657.8520727,
+    "ast_hash": "52a77acf60f5760c5c3bbc6a7a39198e",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/01-cifras-reales.md": {
+    "mtime": 1795635397.7160404,
+    "seen": 1795814657.8520741,
+    "ast_hash": "21fe44e26da1c8f08361bad5949ece64",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/01-arquitectura.md": {
+    "mtime": 1795633009.6286104,
+    "seen": 1795814657.8520756,
+    "ast_hash": "2a75df85ee2b61d56dcfa8390f7cfb22",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/02-despliegue.md": {
+    "mtime": 1795633467.9770176,
+    "seen": 1795814657.8520768,
+    "ast_hash": "cccad72c78fae7af47e51c63f72d3a10",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/03-secuencia-medicion.md": {
+    "mtime": 1795632979.1858568,
+    "seen": 1795814657.852078,
+    "ast_hash": "8f9baf68928635f519fc3353288a61c4",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/04-estados-pico.md": {
+    "mtime": 1795632979.1858568,
+    "seen": 1795814657.8520794,
+    "ast_hash": "3b6bb579bb22b7f90a94f5993c28ee9a",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/05-serpentina.md": {
+    "mtime": 1795633036.2155213,
+    "seen": 1795814657.8520806,
+    "ast_hash": "d4ceb421d8dd10397c3be6397b8f1f08",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/06-entidad-relacion.md": {
+    "mtime": 1795632979.1858568,
+    "seen": 1795814657.852082,
+    "ast_hash": "fdd43c849b1582a36738a40d63654c32",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/07-conexiones-hardware.md": {
+    "mtime": 1795632979.1858568,
+    "seen": 1795814657.8520832,
+    "ast_hash": "1072d443a6be9b5d119643a6a37e3714",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/08-previsualizador.md": {
+    "mtime": 1795632979.1858568,
+    "seen": 1795814657.8520844,
+    "ast_hash": "0468f8c9be51e0497e5029b004f286aa",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/09-viaje-de-una-lectura.md": {
+    "mtime": 1795633009.6286104,
+    "seen": 1795814657.852086,
+    "ast_hash": "c83a2c225335d21efc2b6136ddb61e89",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/index.html": {
+    "mtime": 1795633468.0050201,
+    "seen": 1795814657.8520873,
+    "ast_hash": "084589e4de3c01768d0df9994f1bf508",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/02-diagramas/vendor/mermaid-LICENSE.txt": {
+    "mtime": 1795632818.488414,
+    "seen": 1795814657.8520887,
+    "ast_hash": "c06d54b935c5ea2158444a214eebef04",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/ESTADO-FIGURA.md": {
+    "mtime": 1795671641.1812997,
+    "seen": 1795814657.8520901,
+    "ast_hash": "f56af898e652023a50f01af779b77f45",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/INSTALAR.md": {
+    "mtime": 1795633641.692431,
+    "seen": 1795814657.8520913,
+    "ast_hash": "a9d688c37504f60e5396cf30efc31821",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/PLAN-FIGURA.md": {
+    "mtime": 1795644297.561797,
+    "seen": 1795814657.8520927,
+    "ast_hash": "c5d77a435d49165b8832474a069c7a64",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/LEEME.txt": {
+    "mtime": 1795670378.083422,
+    "seen": 1795814657.8520942,
+    "ast_hash": "d6eb82e70cdc58804906ea07ad8a1345",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/LEEME.md": {
+    "mtime": 1795671641.1812997,
+    "seen": 1795814657.8520956,
+    "ast_hash": "a3f156ccfc9d2bd817040b7a33f64274",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/PARA-LA-PRESENTACION.md": {
+    "mtime": 1795671641.1772995,
+    "seen": 1795814657.852097,
+    "ast_hash": "2661b40cbf1fc3f5f625f2cf3119b648",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/bobinas.html": {
+    "mtime": 1795671581.287291,
+    "seen": 1795814657.8520982,
+    "ast_hash": "a7398a88f6b5ff912999b329afe342d9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/LEEME.md": {
+    "mtime": 1795651085.3574173,
+    "seen": 1795814657.8520997,
+    "ast_hash": "41f80b21fcc12e3d9300e33793228abc",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/cabezal-bobina.html": {
+    "mtime": 1795651056.413802,
+    "seen": 1795814657.8521008,
+    "ast_hash": "62a83bd95c6b91ec46e680970d895681",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/LEEME.md": {
+    "mtime": 1795649146.2874718,
+    "seen": 1795814657.852102,
+    "ast_hash": "0c2b2576c3b308ba6e940fcfa30272e8",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/pico-driver-motor.html": {
+    "mtime": 1795649893.7684505,
+    "seen": 1795814657.8521035,
+    "ast_hash": "5a1fe7d61e36cfd890609a027e9c7f90",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/LEEME.md": {
+    "mtime": 1795651085.3574173,
+    "seen": 1795814657.852105,
+    "ast_hash": "f99785ba3cebeeba4a430893f7a8da19",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/savd-sistema.html": {
+    "mtime": 1795650853.5702615,
+    "seen": 1795814657.8521063,
+    "ast_hash": "bb7043456a15b2408d1f1756d6426558",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/prompts.md": {
+    "mtime": 1795636722.0664365,
+    "seen": 1795814657.8521075,
+    "ast_hash": "e0e6fec76d7a35a35c3d7973f0a054c3",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/fuentes/LICENSE-inter.txt": {
+    "mtime": 1795633173.760212,
+    "seen": 1795814657.852109,
+    "ast_hash": "2eeb2b3ada55f38ae966db32bcb1f92a",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/fuentes/LICENSE-rajdhani.txt": {
+    "mtime": 1795633173.7642128,
+    "seen": 1795814657.8521104,
+    "ast_hash": "5d67efd8c8543ed5276f1011153aafb9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/fuentes/LICENSE-share-tech-mono.txt": {
+    "mtime": 1795633173.7642128,
+    "seen": 1795814657.8521116,
+    "ast_hash": "5a1ffb4008e3066e6867c1bf5f970152",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/guion.md": {
+    "mtime": 1795633492.2550945,
+    "seen": 1795814657.852113,
+    "ast_hash": "941d06aa24e57474f5573e1fb8c2d320",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/plantilla.html": {
+    "mtime": 1795633433.797749,
+    "seen": 1795814657.8521142,
+    "ast_hash": "1113df42de96db04771e12bd418ff8a8",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/presentacion.html": {
+    "mtime": 1795633468.0330226,
+    "seen": 1795814657.8521154,
+    "ast_hash": "3cc9eb33ad90fd2bea731cb2a13d3586",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/LEEME.md": {
+    "mtime": 1795639046.3995168,
+    "seen": 1795814657.852117,
+    "ast_hash": "525c0baa391b9bc76fa78e6d63c8e9c1",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/PREGUNTAS.md": {
+    "mtime": 1795636722.0664365,
+    "seen": 1795814657.8521183,
+    "ast_hash": "6a7b231b287fd449de12724a14c3d4a3",
+    "semantic_hash": ""
+  },
+  "presentacion/LEEME.md": {
+    "mtime": 1795813786.7507904,
+    "seen": 1795814657.8521612,
+    "ast_hash": "19b637d1ca34beaf55d41c23695d025b",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/bobinas.html": {
+    "mtime": 1795672187.9005027,
+    "seen": 1795814657.8521628,
+    "ast_hash": "bdebfd0a72fdd3f3b539fa907eda8f96",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/sistema.html": {
+    "mtime": 1795812865.9630096,
+    "seen": 1795814657.852164,
+    "ast_hash": "460c88685c2770fef9ad6bcf75612cc7",
+    "semantic_hash": ""
+  },
+  "presentacion/fuentes/LICENCIA-Carlito-OFL.txt": {
+    "mtime": 1795654774.9901543,
+    "seen": 1795814657.8521657,
+    "ast_hash": "267b84c986def0f4a0ae41adfa791261",
+    "semantic_hash": ""
+  },
+  "presentacion/fuentes/LICENCIA-Gelasio-OFL.txt": {
+    "mtime": 1795654774.9901543,
+    "seen": 1795814657.852167,
+    "ast_hash": "554604c998db0d02d4cae953aaa66502",
+    "semantic_hash": ""
+  },
+  "presentacion/index.html": {
+    "mtime": 1795813762.4589097,
+    "seen": 1795814657.8521686,
+    "ast_hash": "c43b577fdc2b10dcb814a2705c7b8d32",
+    "semantic_hash": ""
+  },
+  "presentacion/orador.html": {
+    "mtime": 1795655125.248161,
+    "seen": 1795814657.8521698,
+    "ast_hash": "17353b3206da64219543e5b8f6e0c498",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-completa.png": {
+    "mtime": 1795671166.2697937,
+    "seen": 1795814657.8522458,
+    "ast_hash": "a4fc95828c8d08a6b2cad94ddfca29ff",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-dobled-bz.png": {
+    "mtime": 1795671175.3022645,
+    "seen": 1795814657.8522472,
+    "ast_hash": "8de85c255a32bf20589b0a8b68e9c1c9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-en8-bz-bajada.png": {
+    "mtime": 1795671173.4341676,
+    "seen": 1795814657.8522491,
+    "ast_hash": "d53f54bdcd972c74060c5ccf701829a8",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-en8-sin-sabana.png": {
+    "mtime": 1795671171.6220734,
+    "seen": 1795814657.8522506,
+    "ast_hash": "9dea232f5d3f068875e8311719524c66",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-pantalla-completa.png": {
+    "mtime": 1795671177.8983989,
+    "seen": 1795814657.852252,
+    "ast_hash": "c47343b442952d16faefc2e7781b99f5",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-respaldo.png": {
+    "mtime": 1795671171.2020514,
+    "seen": 1795814657.8522532,
+    "ast_hash": "32cced7d7fd054805e032a629874894a",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/d3-solo-3d.png": {
+    "mtime": 1795671616.8684957,
+    "seen": 1795814657.8522544,
+    "ast_hash": "c9c989179f57d50408a27a9ed76a4c9e",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/bobinas/shots/lines.png": {
+    "mtime": 1795671166.5458083,
+    "seen": 1795814657.8522558,
+    "ast_hash": "12900eff66798ae13abcc64861f6d0c0",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/shots/d1-completa.png": {
+    "mtime": 1795651076.7015266,
+    "seen": 1795814657.852257,
+    "ast_hash": "165b0502f546a40ef554283bc3021d2b",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/shots/d1-medicion.png": {
+    "mtime": 1795651046.6419442,
+    "seen": 1795814657.8522582,
+    "ast_hash": "bcd08a0ba6cb41e8957451f936ab70a0",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/cabezal-bobina/shots/lines.png": {
+    "mtime": 1795651077.069522,
+    "seen": 1795814657.8522596,
+    "ast_hash": "b88e0fd67c7aee19b31d65ae9ba90061",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/shots/d2-pulsos.png": {
+    "mtime": 1795649086.6554608,
+    "seen": 1795814657.8522608,
+    "ast_hash": "ff6855ca9a30aaa1afa74b60045465ba",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/pico-driver-motor/shots/lines.png": {
+    "mtime": 1795649087.0154858,
+    "seen": 1795814657.8522625,
+    "ast_hash": "0708a04a4727752977bff5065ce15d1a",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/capas-separadas.png": {
+    "mtime": 1795651030.9261866,
+    "seen": 1795814657.8522637,
+    "ast_hash": "2f3d54990ae424b3db22e71367c39cd2",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/etapa1-movimiento.png": {
+    "mtime": 1795651009.162551,
+    "seen": 1795814657.852265,
+    "ast_hash": "a4a6ea19ce26dd70e0e7dacd3d4c1461",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/etapa2-adquisicion.png": {
+    "mtime": 1795651018.950383,
+    "seen": 1795814657.8522663,
+    "ast_hash": "52b5ec1c9501f615428bbd259837ce78",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/etapa3-envio.png": {
+    "mtime": 1795651025.206279,
+    "seen": 1795814657.8522675,
+    "ast_hash": "cd1345c535859c444c7610a15c255139",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/etapa4-sabanas.png": {
+    "mtime": 1795649042.676338,
+    "seen": 1795814657.8522687,
+    "ast_hash": "ae4e5ba080a455aba584cbccc5ad05cf",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/etapa4-telefono-390.png": {
+    "mtime": 1795649062.6177723,
+    "seen": 1795814657.8522701,
+    "ast_hash": "4e42b88497945300aeb4c3b5cb0c3689",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/lines.png": {
+    "mtime": 1795651034.0261374,
+    "seen": 1795814657.8522713,
+    "ast_hash": "cc00f61b6e58153b458a7c976dee623a",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/figuras/sistema/shots/telefono-390.png": {
+    "mtime": 1795649058.9735126,
+    "seen": 1795814657.8522727,
+    "ast_hash": "9a9d9d65cbb841510030d00850512740",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/01-sistema-frente.webp": {
+    "mtime": 1795636336.6258485,
+    "seen": 1795814657.8522742,
+    "ast_hash": "ae8c385244e38d2e57f51333323097dd",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/02-sistema-lateral-izquierdo.webp": {
+    "mtime": 1795636336.6298487,
+    "seen": 1795814657.8522806,
+    "ast_hash": "9aaf60428fb76a93609d9614e1278237",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/03-sistema-perspectiva.webp": {
+    "mtime": 1795636336.6298487,
+    "seen": 1795814657.8522818,
+    "ast_hash": "c1ff5fc4d8aee2c3252b2a1694dd9b9c",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/04-sistema-cenital.webp": {
+    "mtime": 1795636336.6298487,
+    "seen": 1795814657.8522832,
+    "ast_hash": "6e40a1a497c484e9d6343f8ac3171a13",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/05-bobina-doble-d-por-debajo.webp": {
+    "mtime": 1795636336.6298487,
+    "seen": 1795814657.8522847,
+    "ast_hash": "2f8a0ef0675721175e32e0d6719aa87c",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/06-cabezal-frente-pieza-roja.webp": {
+    "mtime": 1795636336.633849,
+    "seen": 1795814657.8522859,
+    "ast_hash": "ee02b4c1cd3e2b0e5750f46c0b9da884",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/07-eje-z-sin-pieza-roja.webp": {
+    "mtime": 1795636336.633849,
+    "seen": 1795814657.8522873,
+    "ast_hash": "ecfe428c3e0f0f1f3676cfcd6fac0223",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/08-piezas-mdf-de-la-caja.webp": {
+    "mtime": 1795636336.633849,
+    "seen": 1795814657.8522885,
+    "ast_hash": "58284083841bab3e55e074bf021d9456",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/09-base-3018-dentro-de-la-caja.webp": {
+    "mtime": 1795636336.6378489,
+    "seen": 1795814657.8522894,
+    "ast_hash": "c0b62b93ec0e3ac0e5b8b5114b934ace",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/10-caja-mdf-cerrada.webp": {
+    "mtime": 1795636336.6378489,
+    "seen": 1795814657.8522909,
+    "ast_hash": "290fb1e56fd4b8a89689db9960d8131c",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/03-anatomy/fotos/11-cama-metal-3018-eje-corto.png": {
+    "mtime": 1795636696.5620034,
+    "seen": 1795814657.852292,
+    "ast_hash": "33390011a360fe971c8ffd74f4078fb9",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap3_config_sensor.png": {
+    "mtime": 1795633170.9034147,
+    "seen": 1795814657.8522935,
+    "ast_hash": "c7c9c539666311852d1a2b8772b1a334",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap3_dashboard_control.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.852295,
+    "ast_hash": "b48b5daeefccc82f1edd119064c45b38",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap3_historial.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.852296,
+    "ast_hash": "6def35ada6417a272e1aba7929cf7168",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap3_lineas_vivo.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.8522978,
+    "ast_hash": "a01126d26d1f2ca4e1fe5a784835563e",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap3_mapa3d.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.852299,
+    "ast_hash": "4c05623b34a7d7e848e3a176f1fcf30c",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap4_app_movil.png": {
+    "mtime": 1795633170.9074159,
+    "seen": 1795814657.8523004,
+    "ast_hash": "7fd725be95aa50431a662938db3bc7f0",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap4_dashboard_vivo_movil.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.8523016,
+    "ast_hash": "6d1366d5f90b7dd26af1bec1b5717775",
+    "semantic_hash": ""
+  },
+  "docs/presentacion/04-presentacion-base/img/cap4_sabana74.png": {
+    "mtime": 1795633170.8554013,
+    "seen": 1795814657.8523028,
+    "ast_hash": "768323c6b1f2ff39da41327f0f3b3ac9",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/bobinas-bz.png": {
+    "mtime": 1795672365.3887005,
+    "seen": 1795814657.8523045,
+    "ast_hash": "33ad085951b00f7523c5a46830c8ee10",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/sistema-armado.png": {
+    "mtime": 1795813008.006424,
+    "seen": 1795814657.8523057,
+    "ast_hash": "39817cf618a23f0ffd4221aa62af09d8",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/sistema-etapa2.png": {
+    "mtime": 1795813008.1344235,
+    "seen": 1795814657.8523068,
+    "ast_hash": "f3760ad40f6f8f9146dff153d3b3267d",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/sistema-etapa3.png": {
+    "mtime": 1795813008.222423,
+    "seen": 1795814657.8523083,
+    "ast_hash": "6e3e13ab71d484dc473ca5786d4816de",
+    "semantic_hash": ""
+  },
+  "presentacion/figuras/sistema-etapa4.png": {
+    "mtime": 1795813008.2944229,
+    "seen": 1795814657.8523095,
+    "ast_hash": "3eb66818770eaf0d9526a2db82b5040c",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d01-logo-esime.png": {
+    "mtime": 1795655007.7394876,
+    "seen": 1795814657.852311,
+    "ast_hash": "90b0a1b806e250cf0fc3d89ef10ab171",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d01-logo-ipn.png": {
+    "mtime": 1795655007.7394876,
+    "seen": 1795814657.852312,
+    "ast_hash": "2666ba5f62af5624a7aee7b1d0fc8110",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d03-tms-cabeza.png": {
+    "mtime": 1795655007.7514877,
+    "seen": 1795814657.8523133,
+    "ast_hash": "c53a8c97f04268c52ef5bfd41c417bb1",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d04-tms-cerebro.jpg": {
+    "mtime": 1795655007.7554877,
+    "seen": 1795814657.852315,
+    "ast_hash": "0a7f6ef3cc4c3332e254563bb9fcbfc7",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d05-tms-campo.jpg": {
+    "mtime": 1795655007.7594879,
+    "seen": 1795814657.8523161,
+    "ast_hash": "f6ee5df7ccb0d55caba52c8a6c23d17d",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image15.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.8523173,
+    "ast_hash": "cd0be24a5c6e4d4acd913377119deaa6",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image16.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.8523188,
+    "ast_hash": "6e447a5b1c5aa56b20a2fbaac6344b51",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image17.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.85232,
+    "ast_hash": "b4a2e82d0c62a13f05e802adb047583d",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image18.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.8523214,
+    "ast_hash": "a162d68b8057984537f76479067e4acc",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image19.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.8523226,
+    "ast_hash": "8a1c701307d4ed7161408d3747b14a1a",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d15-image20.png": {
+    "mtime": 1795655007.795488,
+    "seen": 1795814657.8523238,
+    "ast_hash": "850cec0fc3c03bfee2c3d4983194b01d",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image21.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.8523252,
+    "ast_hash": "c13a779ee0884f71144201ec7132fb41",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image22.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.8523266,
+    "ast_hash": "ae15f09a881615784600c8e6a52ba1ae",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image23.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.8523276,
+    "ast_hash": "cdf70c820c84ba2cfdfd7004b660862c",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image24.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.852329,
+    "ast_hash": "d96a7cd7e8ad335555b4866919a57f70",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image25.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.8523302,
+    "ast_hash": "713710a39f303b4f11f22c9c5cbbbf8e",
+    "semantic_hash": ""
+  },
+  "presentacion/img/d16-image26.png": {
+    "mtime": 1795655007.803488,
+    "seen": 1795814657.8523316,
+    "ast_hash": "b1808577f9ec447a6c1b6d8fb2c457a5",
+    "semantic_hash": ""
+  },
+  "presentacion/img/n09-dashboard-3d.png": {
+    "mtime": 1795812469.5283594,
+    "seen": 1795814657.852333,
+    "ast_hash": "8259127210f211cfa8fef11ffda0e452",
+    "semantic_hash": ""
+  },
+  "presentacion/img/n09-dashboard-control.png": {
+    "mtime": 1795812468.844361,
+    "seen": 1795814657.8523343,
+    "ast_hash": "a75c29c5bd9435e6a7de5d4b2c6fc67b",
+    "semantic_hash": ""
+  },
+  "presentacion/img/n09-dashboard-lineas.png": {
+    "mtime": 1795812469.1203604,
+    "seen": 1795814657.8523357,
+    "ast_hash": "a740a0e2f5a4de86003f6d0c3ee9ad48",
+    "semantic_hash": ""
+  },
+  "presentacion/img/n10-historial-lista.png": {
+    "mtime": 1795812398.368536,
+    "seen": 1795814657.852337,
+    "ast_hash": "63d093ac3ba1e98d022bc8ad9ca102d5",
+    "semantic_hash": ""
+  },
+  "presentacion/img/n10-historial-sabana.png": {
+    "mtime": 1795812688.6556761,
+    "seen": 1795814657.852338,
+    "ast_hash": "cc9498ee60b554089c79e34d4ec17675",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d06-mesa-cnc.jpg": {
+    "mtime": 1795655007.7634878,
+    "seen": 1795814657.8523395,
+    "ast_hash": "8cb96fe4efc72dc59e3c0a0fc3132ea7",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d07-iot.jpg": {
+    "mtime": 1795655007.7674878,
+    "seen": 1795814657.8523407,
+    "ast_hash": "b4eff765d0484a362a600d19dff18bec",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d08-dashboard-monitoreo.png": {
+    "mtime": 1795655007.771488,
+    "seen": 1795814657.8523421,
+    "ast_hash": "3616a2675705649c2b422b2b2f0395f3",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d09-dashboard-historial.png": {
+    "mtime": 1795655007.775488,
+    "seen": 1795814657.8523433,
+    "ast_hash": "12076ff8e23b3b39b3274d59fd3247bd",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d10-diagrama-flujo.png": {
+    "mtime": 1795655007.7794878,
+    "seen": 1795814657.8523445,
+    "ast_hash": "376d16ba2b9a612fe542209474594c61",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d11-diagrama-1.png": {
+    "mtime": 1795655007.783488,
+    "seen": 1795814657.852346,
+    "ast_hash": "a439d14508951c41efd31ae94e07becf",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d12-diagrama-2.png": {
+    "mtime": 1795655007.783488,
+    "seen": 1795814657.8523471,
+    "ast_hash": "3c94db30545e974a31a336d1f9dfa59d",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d13-diagrama-3.png": {
+    "mtime": 1795655007.787488,
+    "seen": 1795814657.8523486,
+    "ast_hash": "c96400dfd16c5bb1870c908d2a019595",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d14-diagrama-4.png": {
+    "mtime": 1795655007.791488,
+    "seen": 1795814657.85235,
+    "ast_hash": "74e31b7009a68bfc9c57b24e09dd362d",
+    "semantic_hash": ""
+  },
+  "presentacion/img/reemplazadas/d17-diagrama-er.jpg": {
+    "mtime": 1795655007.8114882,
+    "seen": 1795814657.8523512,
+    "ast_hash": "3191727f218a6d49e2a85a4105a9c980",
     "semantic_hash": ""
   },
   "app/package-lock.json": {
