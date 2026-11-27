@@ -1,0 +1,26 @@
+/* D3: sábanas, guías y textos (nada menor de 11 px CSS a 864 px de ancho: 1 unidad ≈ 0,79 px) */
+.iso .d3-guia path{fill:none;stroke:var(--anatomy-mid);stroke-width:1;stroke-dasharray:4 4}
+.iso .d3-guia .d3-zona{stroke:var(--anatomy-hi);stroke-dasharray:none;stroke-width:1;opacity:.55}
+.iso .d3-guia .d3-plano{fill:#3e63dd0d;stroke:var(--anatomy-mid);stroke-dasharray:6 4}
+.iso .d3-sup path{stroke-width:.5;stroke-linejoin:round}
+.iso .d3-barra{fill:none;stroke:var(--anatomy-mid);stroke-width:.8}
+.iso .d3-t{fill:var(--anatomy-strong);font:600 15px var(--anatomy-mono)}
+.iso .d3-s{fill:var(--anatomy-text);font:14px var(--anatomy-mono)}
+.iso .d3-nombre{fill:var(--anatomy-strong);font:600 17px var(--anatomy-mono)}
+.iso .sv-grupo{display:inline-flex;flex-wrap:wrap;gap:6px;padding-right:8px;margin-right:2px;border-right:1px solid var(--anatomy-faint)}
+.iso .sv-grupo:last-child{border-right:none}
+.iso .sv-bar button[data-foco],.iso .sv-bar button[data-comp]{min-width:0}
+/* Modo diapositiva (?diapo=1): sin la tarjeta; la diapositiva pone el título y el pie */
+html:has(body.diapo){overflow:hidden;color-scheme:light}
+body.diapo{background:var(--anatomy-card);overflow:hidden}
+body.diapo .iso-page{width:100%;margin:0}
+.iso.diapo .iso-plate{padding:0;box-shadow:none;background:transparent}
+body.diapo .iso-plate-corner[data-corner="fig"],body.diapo .iso-plate-corner[data-corner="title"],body.diapo .iso-plate-corner[data-corner="hint"],body.diapo .iso-legend,body.diapo .sv-nav{display:none}
+body.diapo .iso-plate-corner[data-corner="readout"]{position:static;display:block;max-width:none;text-align:center;font-size:11px;line-height:1.3;padding-top:2px}
+body.diapo .sv-bar{justify-content:center;gap:4px;margin:0 0 2px}
+body.diapo .sv-bar button{font-size:11px;padding:4px 7px}
+body.diapo .sv-grupo{gap:4px;padding-right:6px}
+body.diapo .sv-stage svg{display:block;width:100%;height:calc(100vh - 62px);max-height:calc(100vh - 62px)}
+body.diapo .sv-stage:focus-visible{outline:none}
+body.diapo.solo .sv-bar,body.diapo.solo .iso-plate-corners{display:none}
+body.diapo.solo .sv-stage svg{height:100vh;max-height:100vh}

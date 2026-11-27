@@ -1,0 +1,5 @@
+/* D1: las etiquetas de las flechas a la escala de esta figura (sin acercamiento) */
+.iso .sv-zt{font:600 6.5px var(--anatomy-mono)}
+.iso text.sv-lab-x,.iso text.sv-lab-y,.iso text.sv-lab-z{stroke-width:2px}
+.iso .sv-eje{stroke-width:1.6}
+.iso .sv-campo{stroke-width:.9;stroke-dasharray:3 3}

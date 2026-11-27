@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagramas del SAVD</title>
+<style>
+  :root { --fondo:#0d0d0f; --tarjeta:#1a1a20; --texto:#eef0f5; --tenue:#a9adb8; --borde:#2c2c36; --guinda:#c0233f; --lienzo:#121217; }
+  :root[data-theme="light"] { --fondo:#f4f5f7; --tarjeta:#ffffff; --texto:#1b1d23; --tenue:#5c6273; --borde:#d9dce3; --guinda:#8b1a2f; --lienzo:#fbfbfc; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--fondo); color:var(--texto); font:15px/1.55 system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+  .contenedor { max-width:1180px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.6rem; margin:0 0 4px; }
+  .sub { color:var(--tenue); margin:0 0 16px; }
+  nav ol { columns:2; gap:24px; padding-left:20px; margin:0 0 24px; }
+  nav a, a { color:inherit; }
+  .barra { display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  button { background:var(--tarjeta); color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:6px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--guinda); }
+  .diagrama { background:var(--tarjeta); border:1px solid var(--borde); border-left:4px solid var(--guinda); border-radius:8px; padding:16px; margin:0 0 24px; }
+  .diagrama header { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
+  .diagrama h2 { font-size:1.2rem; margin:0 0 8px; }
+  .acciones { display:flex; gap:10px; align-items:center; }
+  .archivo { color:var(--tenue); font-size:.85rem; font-family:ui-monospace, Consolas, monospace; }
+  .diagrama p { margin:0 0 8px; color:var(--texto); max-width:80ch; }
+  code { font-family:ui-monospace, Consolas, monospace; font-size:.9em; }
+  .lienzo { background:var(--lienzo); border:1px solid var(--borde); border-radius:6px; padding:12px; overflow-x:auto; margin-top:8px; }
+  .lienzo svg { max-width:100%; height:auto; }
+  pre.mermaid { margin:0; white-space:pre; }
+  @media (max-width:700px) { nav ol { columns:1; } }
+</style>
+</head>
+<body>
+<div class="contenedor">
+  <h1>Diagramas del SAVD</h1>
+  <p class="sub">Sistema de adquisición y visualización del campo magnético (tesis TMS, IPN ESIME Zacatenco). Generado con <code>node construir.mjs</code>; funciona sin conexión.</p>
+  <div class="barra">
+    <button type="button" id="tema">Cambiar a tema claro</button>
+  </div>
+  <nav aria-label="Índice"><ol><li><a href="#01-arquitectura">01 · Arquitectura general</a></li><li><a href="#02-despliegue">02 · Despliegue</a></li><li><a href="#03-secuencia-medicion">03 · Secuencia de una medición completa</a></li><li><a href="#04-estados-pico">04 · Máquina de estados de la Pico</a></li><li><a href="#05-serpentina">05 · Recorrido en serpentina (3 × 2 puntos, 2 planos)</a></li><li><a href="#06-entidad-relacion">06 · Modelo entidad-relación</a></li><li><a href="#07-conexiones-hardware">07 · Conexiones de hardware</a></li><li><a href="#08-previsualizador">08 · Flujo del previsualizador de la bobina</a></li><li><a href="#09-viaje-de-una-lectura">09 · El viaje de una lectura</a></li></ol></nav>
+  
+  <section class="diagrama" id="01-arquitectura">
+    <header>
+      <h2>01 · Arquitectura general</h2>
+      <div class="acciones">
+        <button type="button" data-svg="01-arquitectura">Descargar SVG</button>
+        <span class="archivo">01-arquitectura.md</span>
+      </div>
+    </header>
+    <p>Bloques del sistema y por dónde viajan los datos. La Pico mide y mueve la mesa; el servidor valida, convierte, guarda y difunde; la web y la app solo dibujan lo que llega por SSE. El simulador entra por la misma ingesta que la Pico, así que los datos simulados y reales siguen el mismo camino (y se distinguen por <code>origen</code>).</p>
+    <p><strong>Fuente:</strong> <code>firmware/main.py</code>, <code>server/app.js</code>, <code>server/services/ingesta.js</code>, <code>server/services/tiempoReal.js</code>; CLAUDE.md §3.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="01-arquitectura">flowchart TB
+  subgraph MESA["Mesa de medición"]
+    BOB["Bobina TMS sobre el phantom"]
+    QMC["Magnetómetro QMC5883P&lt;br/&gt;I2C 0x2C · 200 Hz · ±30 G"]
+    MOT["3 × NEMA 17 + husillos T8"]
+    TB["3 × TB6600&lt;br/&gt;STEP / DIR / ENA"]
+  end
+  subgraph PICO["Raspberry Pi Pico 2 W · pico-tms-2.4"]
+    FW["Bucle cooperativo&lt;br/&gt;barrido · latido · lotes · previsualizador"]
+    PIO["PIO + DMA&lt;br/&gt;pulsos con resolución de 1 µs"]
+  end
+  subgraph SRV["Servidor Node.js + Express · MVC"]
+    API["Rutas → middleware → controladores"]
+    ING["Ingesta&lt;br/&gt;valida · cuentas → µT · abs B"]
+    SIM["Simulador&lt;br/&gt;espira exacta"]
+    SSE["SSE /api/stream"]
+    DB[("MariaDB tms_db")]
+  end
+  NGX["Nginx · HTTPS"]
+  WEB["Web React&lt;br/&gt;dashboard · historial · previsualizador"]
+  APP["App Android&lt;br/&gt;TMS Monitor"]
+  BOB -. campo magnético .-&gt; QMC
+  QMC -- I2C --&gt; FW
+  FW --&gt; PIO --&gt; TB --&gt; MOT
+  MOT -. posiciona .-&gt; QMC
+  FW -- "Wi-Fi · HTTP + token Bearer" --&gt; API
+  API --&gt; ING
+  SIM --&gt; ING
+  ING --&gt; DB
+  ING --&gt; SSE
+  SSE --&gt; NGX --&gt; WEB
+  SSE -- "HTTP :4000" --&gt; APP
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="02-despliegue">
+    <header>
+      <h2>02 · Despliegue</h2>
+      <div class="acciones">
+        <button type="button" data-svg="02-despliegue">Descargar SVG</button>
+        <span class="archivo">02-despliegue.md</span>
+      </div>
+    </header>
+    <p>Dónde corre cada pieza y por qué puerto se habla. La red es la Wi-Fi del laboratorio (o el hotspot de un iPhone). La Pico y la app móvil van directo al puerto 4000 de Express; los navegadores entran por Nginx (HTTPS), que quita el prefijo <code>/api</code>. Hoy el servidor es la laptop de desarrollo; la Raspberry Pi 5 está prevista y, al instalarla, hay que decidir si el puerto 4000 queda abierto a la red (lo necesitan la Pico y la app).</p>
+    <p><strong>Fuente:</strong> <code>nginx/tms.conf</code> (no se toca), <code>server/.env.example</code>, <code>COMANDOS.md</code>; CLAUDE.md §0.5, §0.6 y §2.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="02-despliegue">flowchart LR
+  subgraph RED["Red Wi-Fi"]
+    PICO["Pico 2 W&lt;br/&gt;cliente HTTP"]
+    subgraph HOST["Servidor"]
+      NGX["Nginx :443&lt;br/&gt;HTTPS · quita /api"]
+      EXP["Express :4000&lt;br/&gt;HOST 0.0.0.0 en las pruebas"]
+      DB[("MariaDB :3306&lt;br/&gt;solo 127.0.0.1")]
+    end
+    LAP["Laptops&lt;br/&gt;navegador"]
+    TEL["Teléfonos&lt;br/&gt;navegador o app"]
+  end
+  PICO -- "POST /api/dispositivo/... :4000" --&gt; EXP
+  LAP -- HTTPS --&gt; NGX
+  TEL -- HTTPS --&gt; NGX
+  NGX -- "proxy_pass 127.0.0.1:4000" --&gt; EXP
+  TEL -- "app TMS Monitor · HTTP :4000" --&gt; EXP
+  EXP --&gt; DB
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="03-secuencia-medicion">
+    <header>
+      <h2>03 · Secuencia de una medición completa</h2>
+      <div class="acciones">
+        <button type="button" data-svg="03-secuencia-medicion">Descargar SVG</button>
+        <span class="archivo">03-secuencia-medicion.md</span>
+      </div>
+    </header>
+    <p>De que el operador pulsa «Iniciar medición» a que la mesa vuelve al descanso. La Pico se entera de la sesión por el latido (no hay otra vía de entrada al microcontrolador). Las lecturas salen en lotes mientras la mesa sigue moviéndose. El servidor cierra la sesión solo cuando tiene todos los <code>seq</code> esperados.</p>
+    <p><strong>Fuente:</strong> <code>server/controllers/mediciones.controller.js</code>, <code>server/controllers/dispositivo.controller.js</code>, <code>server/services/ingesta.js</code>, <code>firmware/main.py</code>, <code>firmware/barrido.py</code>, <code>firmware/cliente.py</code>.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="03-secuencia-medicion">sequenceDiagram
+  autonumber
+  actor OP as Operador
+  participant S as Servidor
+  participant DB as MariaDB
+  participant P as Pico 2 W
+  participant N as Navegadores y app
+  OP-&gt;&gt;S: POST /api/sesiones (modo, paso, medio, zona)
+  S-&gt;&gt;DB: INSERT sesión hw con copias de la configuración
+  S--&gt;&gt;N: SSE sesion iniciada
+  P-&gt;&gt;S: POST /dispositivo/latido (estado espera) cada 5 s
+  S--&gt;&gt;P: sesion_activa (malla, sensor, inicio, ultimo_seq)
+  P-&gt;&gt;P: valida que la zona cabe en la mesa
+  loop cada punto de la serpentina
+    P-&gt;&gt;P: mover (PIO + DMA), asentar 300 ms, promediar 10 lecturas
+    P-&gt;&gt;P: guardar en el búfer con su seq
+    opt 25 lecturas o 3 s
+      P-&gt;&gt;S: POST /dispositivo/mediciones (lote)
+      S-&gt;&gt;DB: INSERT en transacción, UNIQUE sesion_id + seq
+      S--&gt;&gt;P: aceptadas, duplicadas, rechazadas
+      S--&gt;&gt;N: SSE medicion (µT y módulo)
+    end
+  end
+  Note over S,DB: seq guardados = puntos esperados
+  S-&gt;&gt;DB: cerrar sesión, puntos recibidos y huecos
+  S--&gt;&gt;N: SSE sesion finalizada (completa)
+  P-&gt;&gt;P: búfer vacío, vuelve al descanso (0, 0, 0)
+  P-&gt;&gt;S: latido
+  S--&gt;&gt;P: sesion_activa = null
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="04-estados-pico">
+    <header>
+      <h2>04 · Máquina de estados de la Pico</h2>
+      <div class="acciones">
+        <button type="button" data-svg="04-estados-pico">Descargar SVG</button>
+        <span class="archivo">04-estados-pico.md</span>
+      </div>
+    </header>
+    <p>Estados que la Pico informa en cada latido (<code>espera</code>, <code>homing</code>, <code>midiendo</code>, <code>calibrando</code>, <code>error</code>). Internamente, «midiendo» agrupa las fases <code>barrido</code> y <code>vaciando</code> (mandar lo que queda en el búfer) y «homing» agrupa el arranque y el regreso al descanso (<code>cierre</code>). Un 401 (token inválido) detiene todo desde cualquier estado y manda la mesa al descanso.</p>
+    <p><strong>Fuente:</strong> <code>firmware/main.py</code> (<code>Controlador.estado_pico</code>, <code>avanzar_tarea</code>, <code>fallar</code>, <code>abortar_sesion</code>, <code>revisar_calibracion</code>).</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="04-estados-pico">stateDiagram-v2
+  [*] --&gt; homing: encender, la posición actual es el descanso
+  homing --&gt; espera: mesa en (0, 0, 0)
+  espera --&gt; espera: BOOTSEL vuelve a medir el fondo
+  espera --&gt; midiendo: el latido trae sesion_activa
+  espera --&gt; calibrando: el latido trae calibracion
+  state midiendo {
+    [*] --&gt; barrido
+    barrido --&gt; vaciando: malla completa
+    vaciando --&gt; [*]: búfer confirmado
+  }
+  midiendo --&gt; homing: terminó, o el operador detuvo
+  midiendo --&gt; error: zona fuera del recorrido, sensor o movimiento
+  calibrando --&gt; homing: calibracion = null
+  calibrando --&gt; homing: llegó una sesión, que manda
+  error --&gt; homing: manda lo ya medido y vuelve al descanso
+  homing --&gt; espera
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="05-serpentina">
+    <header>
+      <h2>05 · Recorrido en serpentina (3 × 2 puntos, 2 planos)</h2>
+      <div class="acciones">
+        <button type="button" data-svg="05-serpentina">Descargar SVG</button>
+        <span class="archivo">05-serpentina.md</span>
+      </div>
+    </header>
+    <p>El vector de prueba del contrato: <code>nx = 3</code>, <code>ny = 2</code>, dos planos, k = 0…11, en índices (ix, iy); en cada plano, la fila de abajo es iy = 0, y el plano de arriba es el más alejado de la bobina. Rojo: primer punto; azul: último. Entre dos puntos seguidos solo cambia un índice en ±1: la mesa nunca regresa en vacío. Z empieza junto a la bobina y <strong>sube</strong> un paso por plano; el plano siguiente arranca donde quedó la mesa, así que Y también va y viene. Con una lectura por punto, <code>seq = k + 1</code>.</p>
+    <p><strong>Fuente:</strong> <code>firmware/barrido.py</code> (contrato), <code>server/services/geometria.js</code> (<code>indicesDeSerpentina</code>), <code>docs/firmware-pico-w.md</code> §7 (vector de prueba), prueba <code>test_mismo_conjunto_que_el_servidor</code>.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="05-serpentina">block-beta
+  columns 3
+  t1["Plano z = 1 paso · Z subió"]:3
+  k6["k6 · (0,1)"] k7["k7 · (1,1)"] k8["k8 · (2,1)"]
+  k11["k11 · (0,0)"] k10["k10 · (1,0)"] k9["k9 · (2,0)"]
+  space:3
+  t0["Plano z = 0 · junto a la bobina"]:3
+  k5["k5 · (0,1)"] k4["k4 · (1,1)"] k3["k3 · (2,1)"]
+  k0["k0 · (0,0)"] k1["k1 · (1,0)"] k2["k2 · (2,0)"]
+  k0 --&gt; k1
+  k1 --&gt; k2
+  k2 --&gt; k3
+  k3 --&gt; k4
+  k4 --&gt; k5
+  k5 -- "Z + 1 paso" --&gt; k6
+  k6 --&gt; k7
+  k7 --&gt; k8
+  k8 --&gt; k9
+  k9 --&gt; k10
+  k10 --&gt; k11
+  style k0 fill:#c0233f,color:#fff
+  style k11 fill:#0072B2,color:#fff
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="06-entidad-relacion">
+    <header>
+      <h2>06 · Modelo entidad-relación</h2>
+      <div class="acciones">
+        <button type="button" data-svg="06-entidad-relacion">Descargar SVG</button>
+        <span class="archivo">06-entidad-relacion.md</span>
+      </div>
+    </header>
+    <p>Las seis tablas de <code>tms_db</code> (esquema de la migración 009). <code>mediciones</code> cuelga de <code>sesiones</code> con borrado en cascada y la restricción <code>UNIQUE(sesion_id, seq)</code>, que hace idempotentes los lotes de la Pico. <code>dispositivos</code> no tiene llaves foráneas: la Pico se autentica con su token (se guarda su SHA-256). Posiciones en mm del sistema, campo en µT, horas en UTC.</p>
+    <p><strong>Fuente:</strong> <code>server/setup_db.sql</code>, <code>server/migrations/002</code> a <code>009</code>.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="06-entidad-relacion">erDiagram
+  usuarios ||--o{ sesiones_login : "abre"
+  usuarios |o--o{ sesiones : "inicia"
+  usuarios |o--o{ configuracion : "actualiza"
+  sesiones ||--o{ mediciones : "contiene"
+  usuarios {
+    int id PK
+    varchar usuario UK
+    varchar nombre
+    enum rol "admin, operador, observador"
+    varchar hash_password "scrypt"
+    bool activo
+    bool debe_cambiar_password
+    json preferencias
+  }
+  sesiones_login {
+    char id PK "SHA-256 del token"
+    int usuario_id FK
+    datetime expira_en
+    datetime ultimo_uso
+    varchar ip
+  }
+  sesiones {
+    int id PK
+    int usuario_id FK
+    enum modo "DC, AC"
+    enum origen "sim, hw"
+    decimal paso_mm
+    enum medio
+    decimal zona_x_mm
+    decimal zona_y_mm
+    decimal zona_z_mm
+    datetime iniciada_en
+    datetime terminada_en
+    int puntos_esperados
+    int puntos_recibidos
+    json huecos
+    json config_sensor "copia al iniciar"
+    json config_general "punto de inicio"
+    varchar version_firmware
+    datetime eliminada_en "borrado lógico"
+  }
+  mediciones {
+    int id PK
+    int sesion_id FK
+    int seq "UNIQUE con sesion_id"
+    double x_mm
+    double y_mm
+    double z_mm
+    double bx "µT"
+    double by "µT"
+    double bz "µT"
+    double magnitud "µT"
+    smallint raw_x "cuentas crudas"
+    smallint raw_y
+    smallint raw_z
+    bool saturado
+    datetime timestamp "servidor, UTC"
+    datetime ts_dispositivo "Pico, UTC"
+  }
+  configuracion {
+    varchar clave PK
+    json valor
+    datetime actualizado_en
+    int actualizado_por FK
+  }
+  dispositivos {
+    int id PK
+    varchar nombre UK
+    char token_hash UK "SHA-256"
+    bool activo
+    datetime ultimo_latido
+    varchar firmware
+    smallint rssi
+  }
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="07-conexiones-hardware">
+    <header>
+      <h2>07 · Conexiones de hardware</h2>
+      <div class="acciones">
+        <button type="button" data-svg="07-conexiones-hardware">Descargar SVG</button>
+        <span class="archivo">07-conexiones-hardware.md</span>
+      </div>
+    </header>
+    <p>Pines de la Pico 2 W según <code>firmware/config.py</code> (GPIO) y el instructivo (pin físico). Los TB6600 tienen entradas con optoacoplador; ENA es común a los tres y en 0 los habilita. Recorridos en mm del sistema y, entre paréntesis, en mm reales (÷ 2). La fuente de los motores, cómo se alimenta la Pico y cómo quedó el recableado de tierras del <em>shield</em> están <strong>por confirmar</strong>.</p>
+    <p><strong>Fuente:</strong> <code>firmware/config.py</code>, <code>firmware_hall_1d/config.py</code>, <code>docs/instructivo-calibracion-y-conexiones.md</code> (pines físicos).</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="07-conexiones-hardware">flowchart LR
+  subgraph PICO["Raspberry Pi Pico 2 W"]
+    direction TB
+    I2C["GP0 SDA · pin 1&lt;br/&gt;GP1 SCL · pin 2&lt;br/&gt;3V3 OUT · pin 36&lt;br/&gt;GND · pin 38"]
+    PX["GP10 PUL · pin 14&lt;br/&gt;GP11 DIR · pin 15"]
+    PY["GP12 PUL · pin 16&lt;br/&gt;GP13 DIR · pin 17"]
+    PZ["GP14 PUL · pin 19&lt;br/&gt;GP15 DIR · pin 20"]
+    PE["GP16 ENA · pin 21&lt;br/&gt;0 = habilitado"]
+    PA["GP26 ADC0 · pin 31&lt;br/&gt;solo firmware del Hall"]
+  end
+  QMC["QMC5883P&lt;br/&gt;0x2C · I2C0 100 kHz"]
+  HALL["Hall 49E&lt;br/&gt;sensor de prueba de 1 eje"]
+  TX["TB6600 · eje corto"]
+  TY["TB6600 · eje largo"]
+  TZ["TB6600 · eje Z"]
+  MX["NEMA 17 + T8&lt;br/&gt;0–410 mm sistema (0–205 reales)"]
+  MY["NEMA 17 + T8&lt;br/&gt;0–562 mm sistema (0–281 reales)"]
+  MZ["NEMA 17 + T8&lt;br/&gt;0–88 mm sistema (0–44 reales)"]
+  FUENTE["Fuente de motores&lt;br/&gt;12–24 V CC · por confirmar"]
+  I2C --- QMC
+  PA --- HALL
+  PX --&gt; TX --&gt; MX
+  PY --&gt; TY --&gt; MY
+  PZ --&gt; TZ --&gt; MZ
+  PE --&gt; TX
+  PE --&gt; TY
+  PE --&gt; TZ
+  FUENTE --&gt; TX
+  FUENTE --&gt; TY
+  FUENTE --&gt; TZ
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="08-previsualizador">
+    <header>
+      <h2>08 · Flujo del previsualizador de la bobina</h2>
+      <div class="acciones">
+        <button type="button" data-svg="08-previsualizador">Descargar SVG</button>
+        <span class="archivo">08-previsualizador.md</span>
+      </div>
+    </header>
+    <p>Para ajustar la corriente de la bobina antes de medir: el operador mueve un slider, la mesa va a ese punto y la página muestra el campo en vivo y cuánto del rango del sensor se está usando. Nada se guarda en la base ni se crean sesiones. La Pico manda como mucho una petición por segundo (con 150 ms se apagaba). La página trabaja en mm reales y manda mm del sistema (× 2).</p>
+    <p><strong>Fuente:</strong> <code>firmware/calibracion.py</code>, <code>server/services/calibracion.js</code>, <code>server/controllers/calibracion.controller.js</code>, <code>frontend/src/pages/CalibracionPage.jsx</code>; CLAUDE.md §0.11.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="08-previsualizador">sequenceDiagram
+  autonumber
+  actor OP as Operador
+  participant W as Página Previsualizar bobina
+  participant S as Servidor
+  participant P as Pico 2 W
+  OP-&gt;&gt;W: Empezar a previsualizar
+  W-&gt;&gt;S: POST /api/calibracion (descanso 0, 0, 0)
+  P-&gt;&gt;S: latido (estado espera)
+  S--&gt;&gt;P: calibracion activa con objetivo y sensor
+  loop mientras la calibración está activa
+    OP-&gt;&gt;W: suelta un slider X, Y o Z
+    W-&gt;&gt;S: PATCH /api/calibracion (objetivo en mm del sistema)
+    P-&gt;&gt;S: POST /dispositivo/calibracion (moviendo)
+    S--&gt;&gt;P: objetivo vigente
+    P-&gt;&gt;P: mover_a con límites y orden de ejes, asentar 300 ms
+    P-&gt;&gt;S: POST /dispositivo/calibracion (en posición, cuentas, saturado) máximo 1 por segundo
+    S-&gt;&gt;S: cuentas a µT con el sensor vigente, sin guardar
+    S--&gt;&gt;W: SSE calibracion (Bx, By, Bz, módulo)
+    W--&gt;&gt;OP: medidor del rango con avisos saturado, cerca del tope y señal baja
+  end
+  OP-&gt;&gt;W: Terminar y volver al dashboard
+  W-&gt;&gt;S: DELETE /api/calibracion
+  P-&gt;&gt;S: siguiente petición
+  S--&gt;&gt;P: calibracion = null
+  P-&gt;&gt;P: vuelve al descanso (X e Y primero, Z al final)
+</pre></div>
+  </section>
+
+  <section class="diagrama" id="09-viaje-de-una-lectura">
+    <header>
+      <h2>09 · El viaje de una lectura</h2>
+      <div class="acciones">
+        <button type="button" data-svg="09-viaje-de-una-lectura">Descargar SVG</button>
+        <span class="archivo">09-viaje-de-una-lectura.md</span>
+      </div>
+    </header>
+    <p>Qué le pasa a un número desde el registro del QMC5883P hasta la gráfica. La Pico manda <strong>cuentas crudas</strong> (el dato tal como lo midió el chip); la conversión a µT se hace en el servidor con la copia de la configuración del sensor guardada con la sesión, así una sesión se puede reinterpretar después. Ejemplo con 30 G: 1000 cuentas/G, 1 cuenta = 0,1 µT.</p>
+    <p><strong>Fuente:</strong> <code>firmware/sensor.py</code>, <code>firmware/cliente.py</code>, <code>server/middleware/validar.js</code>, <code>server/services/conversionSensor.js</code>, <code>server/services/ingesta.js</code>, <code>server/services/tiempoReal.js</code>, <code>frontend/src/utils/escalaMM.js</code>.</p>
+    <div class="lienzo"><pre class="mermaid" data-fuente="09-viaje-de-una-lectura">flowchart TB
+  R["Registros 0x01–0x06&lt;br/&gt;X, Y, Z · 16 bits · byte bajo primero"] --&gt; A["Promedio de 10&lt;br/&gt;DRDY · OVFL"]
+  A --&gt; B["Búfer de la Pico&lt;br/&gt;seq · posición · cuentas · saturado · hora"]
+  B --&gt; L["Lote JSON&lt;br/&gt;25 lecturas o 3 s"]
+  L --&gt; H["HTTP POST /api/dispositivo/mediciones&lt;br/&gt;Authorization Bearer"]
+  H --&gt; V["Validación&lt;br/&gt;formato 400 · valores 422 · posición en la malla"]
+  V --&gt; C["Conversión&lt;br/&gt;µT = cuentas ÷ cuentas por G × 100 − offset"]
+  C --&gt; M["Módulo&lt;br/&gt;raíz de Bx² + By² + Bz²"]
+  M --&gt; D[("INSERT en mediciones&lt;br/&gt;transacción · UNIQUE sesión + seq")]
+  D --&gt; E["SSE event medicion&lt;br/&gt;id para reconectar"]
+  E --&gt; F["Navegador: mm ÷ 2 · nombres X ↔ Y&lt;br/&gt;la app todavía no los aplica"]
+  F --&gt; G["Gráfica de líneas · mapa 3D · sábana 3D · tabla"]
+</pre></div>
+  </section>
+</div>
+<script src="vendor/mermaid.min.js"></script>
+<script>
+  const fuentes = {};
+  document.querySelectorAll('pre.mermaid').forEach(p => { fuentes[p.dataset.fuente] = p.textContent; });
+  let claro = false;
+  try { claro = localStorage.getItem('savd-diagramas-tema') === 'claro'; } catch (e) {}
+  async function dibujar() {
+    document.documentElement.dataset.theme = claro ? 'light' : 'dark';
+    document.getElementById('tema').textContent = claro ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro';
+    mermaid.initialize({ startOnLoad: false, theme: claro ? 'default' : 'dark', securityLevel: 'loose',
+      fontFamily: 'system-ui, "Segoe UI", Roboto, Arial, sans-serif', flowchart: { htmlLabels: true }, er: { layoutDirection: 'TB' } });
+    const nodos = [];
+    document.querySelectorAll('pre.mermaid').forEach(p => { p.removeAttribute('data-processed'); p.textContent = fuentes[p.dataset.fuente]; nodos.push(p); });
+    await mermaid.run({ nodes: nodos });
+  }
+  document.getElementById('tema').addEventListener('click', () => {
+    claro = !claro;
+    try { localStorage.setItem('savd-diagramas-tema', claro ? 'claro' : 'oscuro'); } catch (e) {}
+    dibujar();
+  });
+  document.addEventListener('click', e => {
+    const id = e.target.dataset && e.target.dataset.svg;
+    if (!id) return;
+    const svg = document.getElementById(id).querySelector('.lienzo svg');
+    if (!svg) return;
+    const texto = new XMLSerializer().serializeToString(svg);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([texto], { type: 'image/svg+xml' }));
+    a.download = id + (claro ? '-claro' : '-oscuro') + '.svg';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  dibujar();
+</script>
+</body>
+</html>

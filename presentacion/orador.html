@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vista del orador · Presentación TMS</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #16161a; color: #eceaf0; font: 16px/1.4 Calibri, 'Carlito', 'Liberation Sans', sans-serif; }
+  body { display: grid; grid-template-columns: 1.55fr 1fr; grid-template-rows: auto 1fr auto; gap: 14px; padding: 14px; box-sizing: border-box; }
+  header { grid-column: 1 / 3; display: flex; align-items: baseline; gap: 28px; }
+  header .reloj, header .crono { font: 700 30px/1 'Liberation Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  header .crono { color: #f0c6d8; }
+  header .num { font-size: 22px; margin-left: auto; }
+  header button { font: inherit; font-size: 14px; background: #2a2a31; color: inherit; border: 1px solid #44444d; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .marco { position: relative; background: #000; border: 1px solid #333; aspect-ratio: 16 / 9; width: 100%; }
+  .marco iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .etiqueta { font-size: 13px; color: #a9a6b2; margin: 0 0 4px; text-transform: none; }
+  .izq { min-height: 0; }
+  .der { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  #notas { flex: 1; overflow: auto; background: #202026; border: 1px solid #33333b; border-radius: 4px; padding: 12px 14px; font-size: 20px; line-height: 1.45; white-space: pre-wrap; }
+  #notas.vacias { color: #8a8794; font-style: italic; font-size: 16px; }
+  footer { grid-column: 1 / 3; font-size: 13px; color: #8a8794; }
+  kbd { border: 1px solid #555; border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="reloj" id="reloj">--:--</span>
+  <span class="crono" id="crono" title="Tiempo transcurrido">00:00</span>
+  <button type="button" id="btn-crono">Pausar</button>
+  <button type="button" id="btn-reiniciar">Reiniciar</button>
+  <span class="num" id="num">– / –</span>
+</header>
+<div class="izq">
+  <p class="etiqueta">Diapositiva actual</p>
+  <div class="marco"><iframe id="actual" title="Diapositiva actual" tabindex="-1"></iframe></div>
+</div>
+<div class="der">
+  <p class="etiqueta">Siguiente</p>
+  <div class="marco"><iframe id="siguiente" title="Diapositiva siguiente" tabindex="-1"></iframe></div>
+  <p class="etiqueta">Notas</p>
+  <div id="notas"></div>
+</div>
+<footer>Las flechas, el espacio, Inicio y Fin funcionan también en esta ventana. Las notas se escriben en <code>js/notas.js</code>. El público no ve esta ventana: muévela a la pantalla de la laptop.</footer>
+<script src="js/notas.js"></script>
+<script src="js/orador.js"></script>
+</body>
+</html>

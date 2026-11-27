@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAVD · Exposición</title>
+<!--
+  Esqueleto de la exposición (base). Se edita ESTE archivo (plantilla.html) y se genera
+  presentacion.html con:   node construir.mjs
+  (inserta los diagramas de ../02-diagramas/*.md donde dice @@ DIAGRAMA:nombre @@).
+  Teclas: ← → (o espacio, RePág, AvPág), Inicio, Fin, N = notas del orador, F = pantalla completa.
+  Imprimir a PDF: Ctrl+P, horizontal, sin márgenes, con «gráficos de fondo».
+  Los huecos [TESIS: …] son para la parte formal del trabajo escrito.
+-->
+<style>
+  @font-face { font-family: "Rajdhani"; font-weight: 700; src: url("fuentes/rajdhani-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("fuentes/inter-latin-400-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Inter"; font-weight: 500; src: url("fuentes/inter-latin-500-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url("fuentes/inter-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Share Tech Mono"; font-weight: 400; src: url("fuentes/share-tech-mono-latin-400-normal.woff2") format("woff2"); font-display: swap; }
+
+  /* Tokens: los del tema oscuro de la web (frontend/src/styles/global.css) */
+  :root {
+    --fondo: #0d0d0f; --tarjeta: #1a1a20; --tarjeta-2: #22222a; --texto: #eef0f5; --tenue: #a9adb8;
+    --borde: #2c2c36; --guinda: #c0233f; --bx: #0072B2; --by: #D55E00; --bz: #009E73; --aviso: #e0a526;
+    --titulo: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+    --cuerpo: "Inter", "Segoe UI", system-ui, sans-serif;
+    --cifra: "Share Tech Mono", ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #050506; color: var(--texto); font-family: var(--cuerpo); overflow: hidden; }
+
+  .escenario { position: fixed; inset: 0; }
+  .mazo { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform: translate(-50%, -50%); transform-origin: center center; }
+  body.cargando .mazo { opacity: 0; }
+  .diapo {
+    position: absolute; inset: 0; background: var(--fondo); padding: 48px 64px 40px;
+    display: flex; flex-direction: column; visibility: hidden; overflow: hidden;
+    border-top: 6px solid var(--guinda);
+  }
+  .diapo.activa { visibility: visible; }
+  .seccion { font: 500 14px/1 var(--cuerpo); color: var(--tenue); letter-spacing: .02em; margin-bottom: 10px; }
+  .seccion b { color: var(--guinda); font-weight: 700; }
+  h1, h2 { font-family: var(--titulo); font-weight: 700; margin: 0; line-height: 1.05; }
+  h1 { font-size: 64px; }
+  h2 { font-size: 44px; margin-bottom: 22px; }
+  p, li { font-size: 21px; line-height: 1.45; }
+  ul { margin: 0; padding-left: 1.1em; }
+  li { margin: 0 0 8px; }
+  li::marker { color: var(--guinda); }
+  .cuerpo { flex: 1; min-height: 0; display: flex; gap: 32px; }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .col.ancha { flex: 1.5; }
+  .fuente { margin-top: auto; padding-top: 10px; font-size: 13px; color: var(--tenue); }
+  .num { font-family: var(--cifra); font-variant-numeric: tabular-nums; }
+  code { font-family: var(--cifra); font-size: .92em; color: #d7dbe5; }
+  .pie { position: absolute; right: 24px; bottom: 14px; font: 13px var(--cifra); color: var(--tenue); }
+
+  /* Huecos para el trabajo escrito */
+  .tesis {
+    border: 2px dashed var(--aviso); border-radius: 10px; padding: 14px 18px; color: var(--aviso);
+    background: rgba(224, 165, 38, .06); font-size: 19px; line-height: 1.4;
+  }
+  .tesis::before { content: "TESIS · "; font-weight: 700; }
+  .confirmar { color: var(--aviso); font-weight: 500; white-space: nowrap; }
+  .foto {
+    flex: 1; min-height: 180px; border: 2px dashed var(--borde); border-radius: 10px; display: grid; place-items: center;
+    color: var(--tenue); font-size: 18px; text-align: center; padding: 16px;
+  }
+
+  /* Tarjetas de cifras */
+  .cifras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cifra { background: var(--tarjeta); border: 1px solid var(--borde); border-left: 4px solid var(--guinda); border-radius: 10px; padding: 16px 18px; }
+  .cifra .valor { font: 400 44px/1 var(--cifra); color: var(--texto); }
+  .cifra .etq { font-size: 16px; color: var(--tenue); margin-top: 8px; line-height: 1.3; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 17px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--borde); }
+  th { color: var(--tenue); font-weight: 500; }
+  td.n { font-family: var(--cifra); text-align: right; }
+
+  .lienzo { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #121217; border: 1px solid var(--borde); border-radius: 10px; padding: 12px; overflow: hidden; }
+  .lienzo > svg { max-width: 100%; max-height: 100%; height: auto; }
+  .lienzo pre.mermaid { position: absolute; inset: 12px; margin: 0; display: flex; align-items: center; justify-content: center; }
+  .lienzo pre.mermaid > svg { width: 100%; height: 100%; max-width: 100% !important; }
+  .capturas { display: grid; gap: 12px; flex: 1; min-height: 0; }
+  .capturas figure { margin: 0; background: #121217; border: 1px solid var(--borde); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; min-height: 0; }
+  .capturas img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+  .capturas figcaption { font-size: 13px; color: var(--tenue); padding-top: 4px; }
+
+  /* Portada */
+  .portada { justify-content: center; background: radial-gradient(1200px 600px at 85% 110%, rgba(192,35,63,.22), transparent 60%), var(--fondo); }
+  .portada .sub { font-size: 26px; color: var(--tenue); margin: 18px 0 36px; max-width: 900px; }
+  .portada .datos { display: grid; gap: 10px; max-width: 760px; }
+
+  /* Serpentina */
+  .serp .punto { fill: var(--tarjeta-2); stroke: var(--tenue); stroke-width: 2; }
+  .serp .ini { fill: var(--guinda); stroke: none; }
+  .serp .fin { fill: var(--bx); stroke: none; }
+  .serp text { fill: var(--texto); font: 15px var(--cifra); }
+  .serp .rotulo { fill: var(--tenue); font: 500 16px var(--cuerpo); }
+  .serp .camino { fill: none; stroke: var(--guinda); stroke-width: 3; stroke-dasharray: 8 6; animation: avanza 1.2s linear infinite; }
+  .serp .salto { fill: none; stroke: var(--aviso); stroke-width: 2.5; stroke-dasharray: 5 5; }
+  @keyframes avanza { to { stroke-dashoffset: -28; } }
+  @media (prefers-reduced-motion: reduce) { .serp .camino { animation: none; } }
+
+
+  /* Arquitectura en HTML */
+  .arq { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 0; }
+  .arq-col { flex: 1; display: flex; flex-direction: column; gap: 12px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 14px; }
+  .arq-tit { font: 700 22px/1.1 var(--titulo); color: var(--texto); border-bottom: 2px solid var(--guinda); padding-bottom: 8px; }
+  .arq-caja { flex: 1; display: flex; flex-direction: column; justify-content: center; background: var(--tarjeta-2); border: 1px solid var(--borde); border-radius: 8px; padding: 8px 12px; font-size: 18px; line-height: 1.25; }
+  .arq-caja small { font-size: 14px; color: var(--tenue); }
+  .arq-caja.dato { border-left: 4px solid var(--bx); }
+  .arq-caja.sim { border-style: dashed; }
+  .arq-flecha { width: 92px; display: grid; place-items: center; position: relative; }
+  .arq-flecha::before { content: ""; position: absolute; left: 6px; right: 12px; top: 50%; height: 2px; background: var(--guinda); }
+  .arq-flecha::after { content: ""; position: absolute; right: 4px; top: calc(50% - 7px); border: 7px solid transparent; border-left: 10px solid var(--guinda); border-right: 0; }
+  .arq-flecha span { position: relative; background: var(--fondo); padding: 4px 2px; font: 12px/1.3 var(--cifra); color: var(--tenue); text-align: center; z-index: 1; }
+
+  /* Notas del orador */
+  .notas { display: none; }
+  #panel-notas {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 34vh; overflow: auto; background: rgba(13,13,15,.96);
+    border-top: 2px solid var(--guinda); padding: 14px 24px; font-size: 16px; line-height: 1.5; display: none; z-index: 5;
+  }
+  #panel-notas.visible { display: block; }
+  #panel-notas h3 { margin: 0 0 6px; font: 700 14px var(--cuerpo); color: var(--tenue); }
+
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { overflow: visible; background: var(--fondo); }
+    .escenario { position: static; display: block; }
+    .mazo { position: static; transform: none !important; width: 1280px; height: auto; opacity: 1 !important; }
+    .diapo { position: relative; visibility: visible; width: 1280px; height: 720px; break-after: page; }
+    #panel-notas { display: none !important; }
+  }
+</style>
+</head>
+<body class="cargando">
+<div class="escenario">
+<div class="mazo" id="mazo">
+
+  <!-- 1 · Título -->
+  <section class="diapo portada" data-titulo="Título">
+    <div class="seccion"><b>IPN · ESIME Zacatenco</b></div>
+    <h1>[TESIS: título exacto de la tesis]</h1>
+    <p class="sub">SAVD: sistema de adquisición y visualización del campo magnético para un montaje de estimulación magnética transcraneal (TMS)</p>
+    <div class="datos">
+      <div class="tesis">nombre del autor · carrera</div>
+      <div class="tesis">asesor(es) de la tesis</div>
+      <div class="tesis">fecha y lugar de la exposición</div>
+    </div>
+    <aside class="notas">Presentarse. Una frase: «construí un sistema que mueve un sensor por una malla de puntos alrededor de una bobina TMS y muestra el campo en vivo».</aside>
+  </section>
+
+  <!-- 2 · Problema -->
+  <section class="diapo" data-titulo="Problema">
+    <div class="seccion"><b>01</b> · Problema</div>
+    <h2>¿Cómo es el campo alrededor de la bobina?</h2>
+    <div class="cuerpo">
+      <div class="col ancha">
+        <div class="tesis">contexto de la TMS, por qué importa conocer la distribución del campo sobre el phantom de solución salina, referencias</div>
+        <ul>
+          <li>Medir <b>Bx, By, Bz</b> en muchos puntos del espacio, con la posición conocida.</li>
+          <li>Que sea <b>repetible</b>: la misma malla, el mismo orden, la configuración guardada.</li>
+          <li>Que <b>no se pierda ninguna lectura</b> aunque falle el Wi-Fi.</li>
+          <li>Que <b>varias personas</b> lo sigan en vivo, en laptop o teléfono.</li>
+        </ul>
+      </div>
+      <div class="col"><div class="foto">[TESIS: foto de la bobina TMS y del phantom]</div></div>
+    </div>
+    <div class="fuente">Fuente: dossier §1. Los sensores actuales son de prueba: el sistema está hecho para cambiar de sensor.</div>
+    <aside class="notas">Aclarar desde el principio que el QMC5883P y el Hall 49E son sensores de prueba y no miden el pulso TMS; el aporte es el sistema de adquisición.</aside>
+  </section>
+
+  <!-- 3 · Objetivos -->
+  <section class="diapo" data-titulo="Objetivos">
+    <div class="seccion"><b>02</b> · Objetivos</div>
+    <h2>Objetivos</h2>
+    <div class="cuerpo">
+      <div class="col ancha">
+        <div class="tesis">objetivo general, tal como está en el trabajo escrito</div>
+        <div class="tesis">objetivos específicos</div>
+      </div>
+      <div class="col">
+        <p style="color:var(--tenue);margin:0">Evidencia en el sistema</p>
+        <ul>
+          <li>Malla y paso configurables por sesión</li>
+          <li>Tiempo real para varios usuarios</li>
+          <li>Trazabilidad de cada sesión</li>
+          <li>Precisión posicional ±1 mm: <span class="confirmar">sin medir</span></li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notas">Relacionar cada objetivo específico con una diapositiva de resultados.</aside>
+  </section>
+
+  <!-- 4 · Metodología -->
+  <section class="diapo" data-titulo="Metodología">
+    <div class="seccion"><b>03</b> · Metodología</div>
+    <h2>Metodología</h2>
+    <div class="cuerpo">
+      <div class="col ancha">
+        <div class="tesis">metodología formal: enfoque, etapas, criterios de diseño, instrumentos de medición y validación</div>
+      </div>
+      <div class="col">
+        <ul>
+          <li><b>8 fases</b> incrementales del software</li>
+          <li>Firmware <b>2.0 → 2.4</b> iterado con la mesa real</li>
+          <li>Pruebas en capas: unitarias, firmware en el PC, integración y <span class="num">64</span> sesiones con hardware</li>
+          <li>Simulador físico para probar sin la mesa</li>
+        </ul>
+      </div>
+    </div>
+    <div class="fuente">Fuente: dossier §7–8; CLAUDE.md §6.</div>
+    <aside class="notas">Aquí entra la metodología del trabajo escrito. Lo de la derecha es solo el respaldo verificable del desarrollo.</aside>
+  </section>
+
+  <!-- 5 · Arquitectura (en HTML para que se lea en el proyector; el diagrama Mermaid completo es 02-diagramas/01-arquitectura.md) -->
+  <section class="diapo" data-titulo="Arquitectura">
+    <div class="seccion"><b>04</b> · Arquitectura</div>
+    <h2>Arquitectura general</h2>
+    <div class="arq">
+      <div class="arq-col">
+        <div class="arq-tit">Mesa de medición</div>
+        <div class="arq-caja">Bobina TMS + phantom</div>
+        <div class="arq-caja dato">QMC5883P · 3 ejes<br><small>I2C 0x2C · 200 Hz · ±30 G</small></div>
+        <div class="arq-caja">3 × NEMA 17 + T8<br><small>3 × TB6600</small></div>
+      </div>
+      <div class="arq-flecha"><span>I2C<br>pulsos</span></div>
+      <div class="arq-col">
+        <div class="arq-tit">Pico 2 W · firmware 2.4</div>
+        <div class="arq-caja">Bucle cooperativo<br><small>barrido · latido · lotes</small></div>
+        <div class="arq-caja">PIO + DMA<br><small>pulsos de 1 µs</small></div>
+        <div class="arq-caja">Búfer de 1000<br><small>seq por lectura</small></div>
+      </div>
+      <div class="arq-flecha"><span>Wi-Fi · HTTP<br>token Bearer<br>latido 5 s<br>lotes de 25</span></div>
+      <div class="arq-col">
+        <div class="arq-tit">Servidor · Node + Express</div>
+        <div class="arq-caja">Ingesta<br><small>valida · cuentas → µT · |B|</small></div>
+        <div class="arq-caja">MariaDB<br><small>sesiones · mediciones</small></div>
+        <div class="arq-caja sim">Simulador<br><small>espira exacta · misma ingesta</small></div>
+      </div>
+      <div class="arq-flecha"><span>SSE<br>en vivo</span></div>
+      <div class="arq-col">
+        <div class="arq-tit">Pantallas</div>
+        <div class="arq-caja">Web React<br><small>por Nginx (HTTPS)</small></div>
+        <div class="arq-caja">App Android<br><small>TMS Monitor</small></div>
+        <div class="arq-caja">Varios usuarios<br><small>a la vez</small></div>
+      </div>
+    </div>
+    <p style="margin:18px 0 0;color:var(--tenue)">Nadie genera datos en el navegador: todos dibujan lo que llega por SSE.</p>
+    <div class="fuente">Diagrama completo: 02-diagramas/01-arquitectura.md · alternativa: figura Anatomy (a), sistema completo.</div>
+    <aside class="notas">Recorrer de izquierda a derecha: bobina → sensor → Pico → Wi-Fi → servidor → pantallas. El simulador entra por la misma puerta que la Pico.</aside>
+  </section>
+
+  <!-- 6 · Hardware: la mesa -->
+  <section class="diapo" data-titulo="Hardware: mesa">
+    <div class="seccion"><b>05</b> · Hardware</div>
+    <h2>La mesa de medición</h2>
+    <div class="cuerpo">
+      <div class="col">
+        <table>
+          <tr><th>Recorrido (X × Y × Z)</th><td class="n">281 × 205 × 44 mm</td></tr>
+          <tr><th>Resolución</th><td class="n">100 pulsos/mm</td></tr>
+          <tr><th>Crucero / aceleración</th><td class="n">30 mm/s · 150 mm/s²</td></tr>
+          <tr><th>Holgura compensada</th><td class="n">0,25 mm</td></tr>
+          <tr><th>Asentamiento</th><td class="n">300 ms</td></tr>
+          <tr><th>Motores · drivers</th><td>NEMA 17 + T8 · TB6600</td></tr>
+          <tr><th>Control</th><td>Pico 2 W (RP2350)</td></tr>
+        </table>
+        <p style="font-size:16px;color:var(--tenue);margin:0">Medidas reales = mm del sistema ÷ 2. Recorridos físicos: <span class="confirmar">por confirmar</span>. Sin finales de carrera; descanso en (0, 0, 0) con Z abajo.</p>
+      </div>
+      <div class="col"><div class="foto">[FOTO del montaje real]<br>o figura Anatomy (a)</div></div>
+    </div>
+    <div class="fuente">Fuente: firmware/config.py; frontend/src/utils/escalaMM.js (FACTOR_MM = 2).</div>
+    <aside class="notas">Explicar la corrección de escala: el sistema creía avanzar el doble; se midió y se corrigió en la web. La causa mecánica (micropasos o avance del husillo) está por confirmar.</aside>
+  </section>
+
+  <!-- 7 · Hardware: conexiones -->
+  <section class="diapo" data-titulo="Hardware: conexiones">
+    <div class="seccion"><b>05</b> · Hardware</div>
+    <h2>Conexiones</h2>
+    <div class="cuerpo">
+      <div class="lienzo"><pre class="mermaid">@@DIAGRAMA:07-conexiones-hardware@@</pre></div>
+    </div>
+    <div class="fuente">Diagrama 07 · fuente de motores y recableado de tierras del shield: por confirmar.</div>
+    <aside class="notas">Mencionar el problema de tierras del shield (reinicios a mitad de la medición), resuelto el 2026-11-18.</aside>
+  </section>
+
+  <!-- 8 · Sensor -->
+  <section class="diapo" data-titulo="Sensor">
+    <div class="seccion"><b>05</b> · Hardware</div>
+    <h2>El magnetómetro QMC5883P</h2>
+    <div class="cuerpo">
+      <div class="col">
+        <ul>
+          <li>I2C, dirección <code>0x2C</code>, <span class="num">200 Hz</span></li>
+          <li>Rango <span class="num">±30 G</span> (±3000 µT): <span class="num">1 cuenta = 0,1 µT</span></li>
+          <li>Promedio de <span class="num">10</span> lecturas por punto</li>
+          <li>Saturación: bit <code>OVFL</code> del registro <code>0x09</code></li>
+        </ul>
+        <div class="cifra"><div class="etq">Conversión (en el servidor)</div><div class="valor" style="font-size:26px;margin-top:8px">µT = cuentas ÷ cuentas/G × 100 − offset</div></div>
+      </div>
+      <div class="col capturas"><figure><img src="img/cap3_config_sensor.png" alt="Configuración del sensor en la web"><figcaption>Configuración › Sensor (captura del 2026-11-15)</figcaption></figure></div>
+    </div>
+    <div class="fuente">Fuente: firmware/sensor.py; server/services/conversionSensor.js.</div>
+    <aside class="notas">Anécdota: lo vendían como HMC5883L; no respondía porque era un QMC5883P en otra dirección.</aside>
+  </section>
+
+  <!-- 9 · Firmware -->
+  <section class="diapo" data-titulo="Firmware">
+    <div class="seccion"><b>06</b> · Firmware</div>
+    <h2>Firmware: un bucle, cinco estados</h2>
+    <div class="cuerpo">
+      <div class="col" style="flex:.8">
+        <ul>
+          <li>MicroPython, <b>bucle cooperativo</b> con generadores, sin hilos</li>
+          <li><b>PIO a 1 MHz + DMA</b>: la mesa se mueve en hardware mientras sale un lote por Wi-Fi</li>
+          <li>Rampa trapezoidal; Z se mueve después o antes según suba o baje</li>
+          <li>Vuelve al descanso al terminar, detener, fallar o con Ctrl+C</li>
+        </ul>
+      </div>
+      <div class="lienzo"><pre class="mermaid">@@DIAGRAMA:04-estados-pico@@</pre></div>
+    </div>
+    <div class="fuente">Fuente: firmware/main.py, firmware/motores.py · versión pico-tms-2.4.</div>
+    <aside class="notas">Explicar por qué PIO + DMA: el Wi-Fi no detiene los motores ni los motores detienen el Wi-Fi.</aside>
+  </section>
+
+  <!-- 10 · Serpentina -->
+  <section class="diapo" data-titulo="Serpentina">
+    <div class="seccion"><b>06</b> · Firmware</div>
+    <h2>Recorrido en serpentina y reanudación</h2>
+    <div class="cuerpo">
+      <div class="lienzo">
+        <svg class="serp" viewBox="0 0 760 330" role="img" aria-label="Serpentina de 3 por 2 puntos en dos planos">
+          <text class="rotulo" x="40" y="30">Plano z = 0 · junto a la bobina</text>
+          <text class="rotulo" x="430" y="30">Plano z = 1 paso · Z subió</text>
+          <polyline class="camino" points="70,260 170,260 270,260 270,120 170,120 70,120"/>
+          <polyline class="camino" points="460,120 560,120 660,120 660,260 560,260 460,260"/>
+          <path class="salto" d="M70,120 C70,40 460,40 460,120"/>
+          <text class="rotulo" x="215" y="62">Z + 1 paso</text>
+          <g>
+            <circle class="punto ini" cx="70" cy="260" r="22"/><text x="58" y="265">k0</text>
+            <circle class="punto" cx="170" cy="260" r="22"/><text x="158" y="265">k1</text>
+            <circle class="punto" cx="270" cy="260" r="22"/><text x="258" y="265">k2</text>
+            <circle class="punto" cx="270" cy="120" r="22"/><text x="258" y="125">k3</text>
+            <circle class="punto" cx="170" cy="120" r="22"/><text x="158" y="125">k4</text>
+            <circle class="punto" cx="70" cy="120" r="22"/><text x="58" y="125">k5</text>
+            <circle class="punto" cx="460" cy="120" r="22"/><text x="448" y="125">k6</text>
+            <circle class="punto" cx="560" cy="120" r="22"/><text x="548" y="125">k7</text>
+            <circle class="punto" cx="660" cy="120" r="22"/><text x="648" y="125">k8</text>
+            <circle class="punto" cx="660" cy="260" r="22"/><text x="648" y="265">k9</text>
+            <circle class="punto" cx="560" cy="260" r="22"/><text x="543" y="265">k10</text>
+            <circle class="punto fin" cx="460" cy="260" r="22"/><text x="443" y="265">k11</text>
+          </g>
+          <text class="rotulo" x="40" y="315">iy = 0 abajo · iy = 1 arriba · seq = k + 1</text>
+        </svg>
+      </div>
+      <div class="col" style="flex:.7">
+        <ul>
+          <li>Entre dos puntos solo cambia <b>un índice en ±1</b>: nunca regresa en vacío</li>
+          <li>Z <b>sube</b> un plano a la vez, alejándose de la bobina</li>
+          <li>El mismo contrato en el firmware, el servidor y el simulador</li>
+          <li>Tras un reinicio sigue en <code>ultimo_seq + 1</code>; <code>UNIQUE(sesión, seq)</code> evita duplicados</li>
+        </ul>
+      </div>
+    </div>
+    <div class="fuente">Vector de prueba del contrato (docs/firmware-pico-w.md §7) · figura Anatomy (b).</div>
+    <aside class="notas">Señalar k5 → k6: el plano siguiente empieza donde quedó la mesa.</aside>
+  </section>
+
+  <!-- 11 · Comunicación -->
+  <section class="diapo" data-titulo="Comunicación">
+    <div class="seccion"><b>07</b> · Software</div>
+    <h2>Una medición, de punta a punta</h2>
+    <div class="cuerpo">
+      <div class="lienzo" style="flex:1.6"><pre class="mermaid">@@DIAGRAMA:03-secuencia-medicion@@</pre></div>
+      <div class="col" style="flex:.6">
+        <ul>
+          <li>Latido cada <span class="num">5 s</span></li>
+          <li>Lotes de <span class="num">25</span> lecturas o <span class="num">3 s</span></li>
+          <li>Reintento del mismo lote: <span class="num">0,25 → 8 s</span></li>
+          <li>Cierre automático con todos los seq</li>
+          <li>SSE con id: se recupera lo perdido</li>
+        </ul>
+      </div>
+    </div>
+    <div class="fuente">Diagrama 03 · figura Anatomy (c), viaje de una lectura.</div>
+    <aside class="notas">La Pico no recibe órdenes: pregunta en cada latido. Por eso funciona detrás de cualquier red.</aside>
+  </section>
+
+  <!-- 12 · Servidor y BD -->
+  <section class="diapo" data-titulo="Servidor y base de datos">
+    <div class="seccion"><b>07</b> · Software</div>
+    <h2>Servidor y base de datos</h2>
+    <div class="cuerpo">
+      <div class="col">
+        <ul>
+          <li><b>Node.js + Express</b>, patrón MVC; <b>MariaDB</b> (6 tablas); <b>Nginx</b> con HTTPS</li>
+          <li>Roles: administrador, operador, observador; contraseñas con scrypt</li>
+          <li>Token de la Pico guardado como SHA-256</li>
+          <li>Cada sesión guarda su configuración, versiones, puntos y huecos</li>
+          <li>Simulador con la espira exacta (integrales elípticas por AGM)</li>
+        </ul>
+      </div>
+      <div class="lienzo"><pre class="mermaid">@@DIAGRAMA:02-despliegue@@</pre></div>
+    </div>
+    <div class="fuente">Diagramas 02 y 06 (entidad-relación, en 02-diagramas/index.html) · dossier §4–5.</div>
+    <aside class="notas">Si preguntan por el modelo de datos, abrir el diagrama 06.</aside>
+  </section>
+
+  <!-- 13 · Interfaz -->
+  <section class="diapo" data-titulo="Interfaz">
+    <div class="seccion"><b>07</b> · Software</div>
+    <h2>Web y app en vivo</h2>
+    <div class="capturas" style="grid-template-columns: 1.6fr 1fr .8fr; grid-template-rows: 1fr 1fr;">
+      <figure><img src="img/cap3_dashboard_control.png" alt="Panel de control del dashboard"><figcaption>Control de la medición</figcaption></figure>
+      <figure style="grid-row: span 2"><img src="img/cap4_dashboard_vivo_movil.png" alt="Dashboard en un teléfono"><figcaption>Navegador del teléfono</figcaption></figure>
+      <figure style="grid-row: span 2"><img src="img/cap4_app_movil.png" alt="App Android TMS Monitor"><figcaption>App Android</figcaption></figure>
+      <figure><img src="img/cap3_lineas_vivo.png" alt="Gráfica de líneas Bx, By, Bz en vivo"><figcaption>Bx, By, Bz en vivo</figcaption></figure>
+    </div>
+    <div class="fuente">Capturas reales del 2026-11-17 (sesión 93), anteriores a la escala ×2 y al cambio de nombres X ↔ Y. Otras: img/cap3_mapa3d.png, img/cap3_historial.png.</div>
+    <aside class="notas">Varias personas miraron la sesión 93 a la vez: escritorio, teléfono y app.</aside>
+  </section>
+
+  <!-- 14 · Previsualizador -->
+  <section class="diapo" data-titulo="Previsualizador">
+    <div class="seccion"><b>07</b> · Software</div>
+    <h2>Previsualizador de la bobina</h2>
+    <div class="cuerpo">
+      <div class="col" style="flex:.75">
+        <ul>
+          <li>Tres sliders llevan la mesa a un punto</li>
+          <li>Campo en vivo y <b>medidor del rango</b>: saturado · cerca del tope (≥ 80 %) · señal baja (&lt; 2 %)</li>
+          <li>Sirve para ajustar la corriente antes de medir; <b>no guarda nada</b></li>
+          <li>Con 150 ms entre peticiones la Pico se apagaba: ahora <span class="num">1</span> por segundo</li>
+        </ul>
+        <p style="font-size:16px;color:var(--tenue);margin:0">Prueba en la mesa: <span class="confirmar">por confirmar</span> · falta una captura.</p>
+      </div>
+      <div class="lienzo"><pre class="mermaid">@@DIAGRAMA:08-previsualizador@@</pre></div>
+    </div>
+    <div class="fuente">Diagrama 08 · figura Anatomy (d).</div>
+    <aside class="notas">Es la función más nueva (firmware 2.4, 2026-11-24).</aside>
+  </section>
+
+  <!-- 15 · Resultados: cifras -->
+  <section class="diapo" data-titulo="Resultados: cifras">
+    <div class="seccion"><b>08</b> · Resultados</div>
+    <h2>Resultados con la mesa real</h2>
+    <div class="cifras">
+      <div class="cifra"><div class="valor">64</div><div class="etq">sesiones reales (y 33 simuladas)</div></div>
+      <div class="cifra"><div class="valor">5 402</div><div class="etq">lecturas reales guardadas (30 667 en total)</div></div>
+      <div class="cifra"><div class="valor">26</div><div class="etq">barridos reales completos</div></div>
+      <div class="cifra"><div class="valor">777</div><div class="etq">puntos en el barrido más grande, en 9 min 26 s</div></div>
+      <div class="cifra"><div class="valor">0,97 s</div><div class="etq">por punto (mediana; de 0,72 a 1,53 s)</div></div>
+      <div class="cifra"><div class="valor">0</div><div class="etq">puntos perdidos desde la sesión 70</div></div>
+    </div>
+    <table style="margin-top:18px;font-size:16px">
+      <tr><th>Sesión</th><th>Firmware</th><th>Zona real (mm)</th><th>Paso</th><th>Puntos</th><th>Duración</th><th>s/punto</th></tr>
+      <tr><td class="n">93</td><td>2.2</td><td class="n">25 × 25 × 15</td><td class="n">5 mm</td><td class="n">144</td><td class="n">2 min 25 s</td><td class="n">0,95</td></tr>
+      <tr><td class="n">113</td><td>2.3</td><td class="n">90 × 50 × 0</td><td class="n">2,5 mm</td><td class="n">777</td><td class="n">9 min 26 s</td><td class="n">0,73</td></tr>
+      <tr><td class="n">124</td><td>2.4</td><td class="n">100 × 200 × 5</td><td class="n">10 mm</td><td class="n">231</td><td class="n">4 min 23 s</td><td class="n">1,09</td></tr>
+      <tr><td class="n">126</td><td>2.4</td><td class="n">125 × 200 × 15</td><td class="n">15 mm</td><td class="n">252</td><td class="n">5 min 36 s</td><td class="n">1,34</td></tr>
+    </table>
+    <div class="fuente">Fuente: consultas SELECT a tms_db del 2026-11-25 (01-cifras-reales.md §6). Zona como eje corto × eje largo × Z (mm del sistema ÷ 2). Los 92 huecos anteriores fueron saturaciones con el firmware 2.0.</div>
+    <aside class="notas">Subrayar que hubo pausas de Wi-Fi de hasta 33 s y aun así no se perdió ninguna lectura: el lote se reenvía y el servidor descarta duplicados.</aside>
+  </section>
+
+  <!-- 16 · Resultados: campo -->
+  <section class="diapo" data-titulo="Resultados: campo">
+    <div class="seccion"><b>08</b> · Resultados</div>
+    <h2>El campo medido</h2>
+    <div class="cuerpo" style="flex-direction:column">
+      <div class="capturas" style="flex:1"><figure><img src="img/cap4_sabana74.png" alt="Sábana 3D de una sesión real"><figcaption>Sábana 3D de la sesión real 74</figcaption></figure></div>
+      <div class="tesis">análisis físico del campo medido: forma, máximos, comparación con el modelo de la espira, incertidumbre</div>
+    </div>
+    <aside class="notas">Elegir aquí la sesión que mejor apoye el análisis de la tesis (por ejemplo la 124 o la 126, con 2.4).</aside>
+  </section>
+
+  <!-- 17 · Pruebas -->
+  <section class="diapo" data-titulo="Pruebas">
+    <div class="seccion"><b>09</b> · Pruebas</div>
+    <h2>Pruebas y problemas resueltos</h2>
+    <div class="cuerpo">
+      <div class="col">
+        <table>
+          <tr><th>Unitarias del servidor</th><td class="n">71/71</td></tr>
+          <tr><th>Firmware en el PC</th><td class="n">32/32</td></tr>
+          <tr><th>Integración (base de prueba)</th><td class="n">11/11</td></tr>
+          <tr><th>Firmware del Hall</th><td class="n">TODO BIEN</td></tr>
+          <tr><th>Sesiones con hardware</th><td class="n">64</td></tr>
+        </table>
+      </div>
+      <div class="col">
+        <ul>
+          <li><b>Cuelgue del DMA en el RP2350:</b> dirección de CHAN_ABORT del RP2040</li>
+          <li><b>Reinicios por tierras</b> del shield: recableado</li>
+          <li><b>Apagones al previsualizar:</b> 6 peticiones/s → 1 por segundo</li>
+        </ul>
+      </div>
+    </div>
+    <div class="fuente">Fuente: pruebas ejecutadas el 2026-11-25 (integración: 2026-11-24) · dossier §7 y §9.</div>
+    <aside class="notas">El caso del DMA es buen ejemplo de diagnóstico: la misma dirección de memoria es otra cosa en el chip nuevo.</aside>
+  </section>
+
+  <!-- 18 · Limitaciones -->
+  <section class="diapo" data-titulo="Limitaciones">
+    <div class="seccion"><b>10</b> · Limitaciones</div>
+    <h2>Limitaciones</h2>
+    <ul>
+      <li><b>Apagones esporádicos de la Pico 2 W, sin diagnóstico.</b> Sospechas: alimentación o contacto del shield, picos del radio Wi-Fi, ruido de los TB6600.</li>
+      <li>Escala ×2 corregida solo en la web; la causa mecánica, por confirmar.</li>
+      <li>Sin finales de carrera: la referencia es la posición al encender.</li>
+      <li>Error posicional (requisito ±1 mm) todavía sin medir.</li>
+      <li>Sensores de prueba: no miden el pulso de la bobina TMS.</li>
+      <li>Servidor en la laptop; la app sin los cambios del 2026-11-24.</li>
+    </ul>
+    <div class="fuente">Fuente: CLAUDE.md §0.9 · dossier §10.</div>
+    <aside class="notas">Decirlo con honestidad: es lo primero que preguntaría un sinodal.</aside>
+  </section>
+
+  <!-- 19 · Conclusiones -->
+  <section class="diapo" data-titulo="Conclusiones">
+    <div class="seccion"><b>11</b> · Conclusiones</div>
+    <h2>Conclusiones</h2>
+    <div class="cuerpo">
+      <div class="col ancha"><div class="tesis">conclusiones formales del trabajo escrito, una por objetivo</div></div>
+      <div class="col">
+        <ul>
+          <li>El sistema mide, guarda y muestra en vivo sin perder lecturas</li>
+          <li>Funciona con la mesa real desde la versión 2.0</li>
+          <li>Simulación y realidad comparten el mismo camino de datos</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notas">Las de la derecha son solo un borrador apoyado en los datos.</aside>
+  </section>
+
+  <!-- 20 · Trabajo futuro -->
+  <section class="diapo" data-titulo="Trabajo futuro">
+    <div class="seccion"><b>12</b> · Trabajo futuro</div>
+    <h2>Trabajo futuro</h2>
+    <ul>
+      <li>Diagnosticar los apagones (voltaje de la Pico con osciloscopio durante el Wi-Fi y los movimientos; alimentación separada)</li>
+      <li>Corregir la escala en el firmware o en la mecánica</li>
+      <li>Finales de carrera y homing real; medir el error posicional</li>
+      <li>Un sensor adecuado al pulso TMS</li>
+      <li>Instalación en la Raspberry Pi 5; actualizar la app</li>
+    </ul>
+    <div class="tesis">trabajo futuro que proponga el escrito</div>
+  </section>
+
+  <!-- 21 · Cierre -->
+  <section class="diapo portada" data-titulo="Cierre">
+    <h1>Gracias</h1>
+    <p class="sub">Preguntas</p>
+    <div class="tesis" style="max-width:760px">agradecimientos y contacto</div>
+  </section>
+
+</div>
+</div>
+<div class="pie" id="pie"></div>
+<div id="panel-notas" aria-live="polite"><h3>Notas del orador</h3><div id="texto-notas"></div></div>
+
+<script src="../02-diagramas/vendor/mermaid.min.js"></script>
+<script>
+  const mazo = document.getElementById('mazo');
+  const diapos = [...mazo.querySelectorAll('.diapo')];
+  const pie = document.getElementById('pie');
+  const panel = document.getElementById('panel-notas');
+  let actual = 0;
+
+  function escalar() {
+    const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    mazo.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  function mostrar(i) {
+    actual = Math.max(0, Math.min(diapos.length - 1, i));
+    diapos.forEach((d, k) => d.classList.toggle('activa', k === actual));
+    pie.textContent = (actual + 1) + ' / ' + diapos.length;
+    const n = diapos[actual].querySelector('.notas');
+    document.getElementById('texto-notas').textContent = n ? n.textContent : '(sin notas)';
+    if (location.hash !== '#' + (actual + 1)) history.replaceState(null, '', '#' + (actual + 1));
+  }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); mostrar(actual + 1); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); mostrar(actual - 1); }
+    else if (e.key === 'Home') mostrar(0);
+    else if (e.key === 'End') mostrar(diapos.length - 1);
+    else if (e.key === 'n' || e.key === 'N') panel.classList.toggle('visible');
+    else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen(); }
+  });
+  document.addEventListener('click', e => { if (!panel.contains(e.target)) mostrar(actual + (e.clientX < window.innerWidth / 3 ? -1 : 1)); });
+  mostrar((parseInt(location.hash.slice(1), 10) || 1) - 1);
+
+  // Mermaid mide el texto con getBoundingClientRect: hay que dibujar ANTES de escalar el mazo.
+  function listo() { escalar(); window.addEventListener('resize', escalar); document.body.classList.remove('cargando'); }
+  if (!window.mermaid) listo();
+  else {
+    mermaid.initialize({
+      startOnLoad: false, theme: 'dark', securityLevel: 'loose', fontFamily: 'Inter, "Segoe UI", system-ui, sans-serif',
+      themeVariables: { background: '#121217', primaryColor: '#22222a', primaryTextColor: '#eef0f5', primaryBorderColor: '#c0233f', lineColor: '#a9adb8', secondaryColor: '#1a1a20', tertiaryColor: '#1a1a20', fontSize: '15px' }
+    });
+    document.fonts.ready.then(() => mermaid.run({ querySelector: '.diapo pre.mermaid' })).catch(e => console.error(e)).finally(listo);
+  }
+</script>
+</body>
+</html>

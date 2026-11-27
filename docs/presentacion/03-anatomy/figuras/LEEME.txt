@@ -1,0 +1,8 @@
+Figuras de Anatomy del SAVD (solo tema claro, sin conexión).
+
+- sistema/            Figura 1: el sistema físico completo (savd-sistema.html). Ver sistema/LEEME.md.
+                      Arriba de cada página hay enlaces a las otras dos figuras (copia las tres carpetas juntas).
+- cabezal-bobina/     Figura D1: el sensor sobre la bobina en doble D (cabezal-bobina.html). Ver su LEEME.md.
+- pico-driver-motor/  Figura D2: Pico 2 W, TB6600 y NEMA 17 (pico-driver-motor.html). Ver su LEEME.md.
+- bobinas/            Figura D3: bobinas anular, en 8 y doble D con la sábana de su campo (bobinas.html; ?diapo=1 para la presentación). Ver su LEEME.md.
+- comun/              Piezas y dibujo de la medición que comparten D1 y D2.

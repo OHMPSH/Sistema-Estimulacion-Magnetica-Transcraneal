@@ -1,0 +1,5 @@
+/* D2: colores de los cables de señal y partes vivas */
+.iso .t-amarilloCable{--anatomy-top:#f2c230;--anatomy-shade-0:#a07a08;--anatomy-shade-2:#c99a14}
+.iso .t-verdeCable{--anatomy-top:#45a866;--anatomy-shade-0:#1d6a39;--anatomy-shade-2:#2d844b}
+.iso .sv-pulso{fill:#e0a800;stroke:#7a5a00;stroke-width:.4}
+.iso .sv-marca{stroke:#ffffff;stroke-width:1.6;stroke-linecap:round}

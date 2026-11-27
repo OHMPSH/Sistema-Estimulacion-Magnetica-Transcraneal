@@ -123,6 +123,7 @@ Las demás sesiones de esos días (89–91, 95–107, 110–112, 114, 115, 118, 
 
 ### 0.9 Pendientes vigentes
 
+- **(2026-11-25) Apagones esporádicos de la Pico 2 W — pendiente de trabajar.** El usuario confirmó que la 2.4, la corrección del ritmo del previsualizador y la escala ×2 del frontend funcionan (ya con commit). Pero a veces la Pico se apaga sola sin motivo aparente; a veces vuelve a prender sola, y si no, al sacarla del shield prende y al volver a conectarla funciona otra vez. Pasa seguido. Sospechas a revisar después (sin diagnóstico todavía): alimentación o contacto del shield (ya hubo un problema de tierras el 2026-11-18), picos de consumo del radio Wi-Fi y ruido de los TB6600.
 - (2026-11-24) Probar en la mesa la 2.4: Z subiendo, regreso al descanso y el previsualizador (ver 0.11). Adaptar la app móvil a los nombres X ↔ Y y al previsualizador cuando el usuario lo pida.
 
 - Instalar en la Raspberry Pi 5 con `COMANDOS.md` y decidir cómo entra la app móvil (puerto 4000 con `HOST=0.0.0.0`, o no).
